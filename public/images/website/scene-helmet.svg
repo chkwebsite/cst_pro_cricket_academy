@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#009688"/><stop offset="1" stop-color="#4db6ac"/></linearGradient>
+<linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a6b45"/><stop offset="1" stop-color="#0d3b26"/></linearGradient></defs>
+<rect width="800" height="600" fill="url(#sky)"/>
+<circle cx="640" cy="130" r="150" fill="#fff" opacity=".07"/><circle cx="640" cy="130" r="90" fill="#fff" opacity=".08"/>
+<rect y="430" width="800" height="170" fill="url(#gr)"/>
+<path d="M0,430 H800" stroke="#fff" stroke-opacity=".25" stroke-width="3"/>
+<path d="M300,430 L500,430 L560,600 L240,600Z" fill="#c9a66b" opacity=".35"/>
+<path d="M0,440 q100,-14 200,0 t200,0 t200,0 t200,0" stroke="#fff" stroke-opacity=".08" stroke-width="30" fill="none"/>
+<g transform="translate(300,330) scale(2.0)">
+<path d="M-70,0 A70,66 0 0 1 70,0 L70,22 L-70,22Z" fill="#062f38"/>
+<path d="M-70,22 L70,22 L96,34 L-52,34Z" fill="#04222a"/>
+<path d="M-62,26 Q-70,80 -30,92 L40,92 Q74,84 70,26Z" fill="none" stroke="#e8edf5" stroke-width="5"/>
+<path d="M-30,30 V90 M0,30 V92 M30,30 V90 M-62,52 H70 M-58,72 H66" stroke="#e8edf5" stroke-width="4"/>
+<path d="M-50,-20 Q0,-50 50,-20" stroke="#00bcd4" stroke-width="6" fill="none" stroke-linecap="round"/></g><g transform="translate(580,360) rotate(14) scale(1.7)">
+<path d="M-44,40 L-52,-20 Q-54,-44 -34,-46 Q-24,-46 -22,-30 L-18,-62 Q-16,-78 0,-76 Q12,-74 12,-60 L14,-70 Q20,-82 32,-76 Q42,-70 38,-56 L40,-48 Q54,-52 56,-36 L50,30 Q40,60 0,64 Q-34,62 -44,40Z" fill="#f4f1ea"/>
+<path d="M-40,30 Q0,46 48,26" stroke="#d7263d" stroke-width="8" fill="none"/><rect x="-46" y="56" width="98" height="26" rx="8" fill="#062f38"/></g><g><circle cx="742" cy="478" r="32" fill="#d7263d"/>
+<path d="M721.2,458.8 Q746.8,478 721.2,497.2" stroke="#fff" stroke-width="2.24" fill="none" stroke-dasharray="4.48 3.2" stroke-linecap="round"/>
+<path d="M762.8,458.8 Q737.2,478 762.8,497.2" stroke="#fff" stroke-width="2.24" fill="none" stroke-dasharray="4.48 3.2" stroke-linecap="round"/>
+<circle cx="730.8" cy="465.2" r="7.04" fill="#fff" opacity=".28"/></g></svg>

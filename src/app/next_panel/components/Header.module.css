@@ -1,0 +1,365 @@
+/* ==========================================================
+   Header Styles - CST Pro Cricket Academy Management
+   Website Color Scheme: #062f38 (Navy) | #d7263d (Red) | #00bcd4 (Cyan)
+   ========================================================== */
+
+.header {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 260px;
+    z-index: 30;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    border-bottom: 1px solid rgba(6, 47, 56, 0.08);
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 14px rgba(6, 47, 56, 0.04);
+    transition: left 0.25s ease, padding 0.25s ease;
+}
+
+.leftSection {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+/* Hamburger toggle for mobile & tablet */
+.hamburgerBtn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(6, 47, 56, 0.12);
+    border-radius: 8px;
+    color: #062f38;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.hamburgerBtn:hover {
+    background: #f0f4f6;
+    color: #062f38;
+}
+
+/* Header brand logo */
+.headerBrand {
+    display: none;
+    align-items: center;
+    text-decoration: none;
+}
+
+.headerLogo {
+    height: 38px;
+    width: auto;
+    object-fit: contain;
+    display: block;
+}
+
+.headerTagline {
+    display: flex;
+    flex-direction: column;
+}
+
+.academyName {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #062f38;
+    letter-spacing: -0.01em;
+}
+
+.portalTag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #00bcd4;
+}
+
+/* Right side actions */
+.rightSection {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.websiteBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #062f38;
+    background: rgba(6, 47, 56, 0.05);
+    border: 1px solid rgba(6, 47, 56, 0.12);
+    border-radius: 50px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.websiteBtn:hover {
+    background: #062f38;
+    color: #ffffff;
+    border-color: #062f38;
+    box-shadow: 0 4px 12px rgba(6, 47, 56, 0.15);
+}
+
+/* User dropdown trigger */
+.userMenu {
+    position: relative;
+}
+
+.userButton {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(6, 47, 56, 0.1);
+    border-radius: 10px;
+    padding: 5px 12px 5px 6px;
+    color: #1d2433;
+    background: #ffffff;
+    font: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.userButton:hover,
+.userButton:focus-visible {
+    background: #f8fafc;
+    border-color: rgba(6, 47, 56, 0.2);
+    outline: none;
+}
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid #00bcd4;
+}
+
+.avatarFallback {
+    color: #062f38;
+    display: flex;
+    align-items: center;
+}
+
+.userMeta {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    max-width: 140px;
+}
+
+.userName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #062f38;
+}
+
+.userRoleBadge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #d7263d;
+    text-transform: capitalize;
+}
+
+.chevron {
+    color: #64748b;
+    transition: transform 0.2s ease;
+}
+
+.chevronOpen {
+    transform: rotate(180deg);
+}
+
+/* User Dropdown */
+.dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 290px;
+    padding: 10px;
+    border: 1px solid rgba(6, 47, 56, 0.12);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 16px 40px rgba(6, 47, 56, 0.14);
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.userSummary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 6px 10px;
+}
+
+.largeAvatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #00bcd4;
+}
+
+.largeAvatarFallback {
+    color: #062f38;
+}
+
+.userDetails {
+    min-width: 0;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.detailName {
+    overflow: hidden;
+    color: #062f38;
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detailEmail {
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.74rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detailRole {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 3px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #d7263d;
+}
+
+.closeButton {
+    display: inline-flex;
+    border: 0;
+    color: #64748b;
+    background: transparent;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.closeButton:hover {
+    color: #1d2433;
+    background: #f1f5f9;
+}
+
+.divider {
+    height: 1px;
+    margin: 6px 0;
+    background: rgba(6, 47, 56, 0.08);
+}
+
+.dropdownLink {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 8px;
+    padding: 9px 10px;
+    color: #062f38;
+    font-size: 0.84rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s ease;
+}
+
+.dropdownLink:hover {
+    background: #f0f4f6;
+    color: #062f38;
+}
+
+.logoutButton {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 8px;
+    padding: 9px 10px;
+    color: #d7263d;
+    background: transparent;
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.logoutButton:hover {
+    background: rgba(215, 38, 61, 0.08);
+}
+
+/* ==========================================================
+   Responsive Tablet & Mobile Rules (< 992px)
+   ========================================================== */
+@media (max-width: 991.98px) {
+    .header {
+        left: 0;
+        padding: 0 16px;
+    }
+
+    .hamburgerBtn {
+        display: flex;
+    }
+
+    .headerBrand {
+        display: flex;
+    }
+
+    .headerTagline {
+        display: none;
+    }
+
+    .websiteBtnText {
+        display: none;
+    }
+
+    .websiteBtn {
+        padding: 7px 9px;
+    }
+
+    .userMeta {
+        display: none;
+    }
+
+    .userButton {
+        padding: 4px 6px;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .dropdown {
+        right: -8px;
+        width: 270px;
+    }
+
+    .headerLogo {
+        height: 32px;
+    }
+}

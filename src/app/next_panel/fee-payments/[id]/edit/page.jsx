@@ -1,0 +1,28 @@
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { Suspense } from "react";
+import FeePaymentForm from "../../FeePaymentForm";
+
+export default async function FeePaymentEdit({ params }) {
+    const { id } = await params;
+    return (
+        <div className="container-fluid">
+            <div className="row g-4">
+                <div className="col-12">
+                    <div className="bg-white rounded-4 shadow-sm p-4 mb-4">
+                        <Link href="/next_panel/fee-payments" className="btn btn-sm btn-outline-secondary mb-3">
+                            <ArrowLeft size={16} className="me-2" /> Back to Fee Payments
+                        </Link>
+                        <h1 className="h4 mb-0">Edit Payment</h1>
+                        <p className="text-muted mb-0">Correct a payment, or mark it Refunded / Cancelled.</p>
+                    </div>
+                </div>
+                <div className="col-sm-12">
+                    <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
+                        <FeePaymentForm id={id} />
+                    </Suspense>
+                </div>
+            </div>
+        </div>
+    );
+}
