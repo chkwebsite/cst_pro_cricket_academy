@@ -211,9 +211,8 @@ function ProfileContent() {
               </Link>
               <button
                 type="button"
-                onClick={() => {
-                  logout();
-                  window.location.href = "/";
+                onClick={async () => {
+                  await logout("/");
                 }}
                 className="btn btn-outline-danger btn-sm rounded-pill px-3 py-1.5 fw-semibold"
               >

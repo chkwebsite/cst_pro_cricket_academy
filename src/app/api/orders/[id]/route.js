@@ -107,11 +107,8 @@ function validateOrder(body) {
     const customerId = normalizeNullableId(body.customer_user_id);
     const publicId = normalizeNullableId(body.public_user_id);
 
-    if (
-        (customerId === null && publicId === null) ||
-        (customerId !== null && publicId !== null)
-    ) {
-        return "Provide either customer_user_id or public_user_id, not both.";
+    if (customerId !== null && publicId !== null) {
+        return "Cannot provide both customer_user_id and public_user_id.";
     }
 
     if (
@@ -273,6 +270,37 @@ export async function PUT(request, context) {
             }
         }
 
+        // Business rule: Cannot cancel an order if it is already Dispatched or Delivered
+        if (
+            updated.order_status === "Cancelled" &&
+            (existing.order_status === "Dispatched" || existing.order_status === "Delivered")
+        ) {
+            await connection.rollback();
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Cannot cancel an order that is already ${existing.order_status.toLowerCase()}.`,
+                },
+                { status: 400 }
+            );
+        }
+
+        // Business rule: Once Delivered, order cannot be reverted to earlier stages
+        if (
+            existing.order_status === "Delivered" &&
+            updated.order_status !== "Delivered" &&
+            updated.order_status !== "Returned"
+        ) {
+            await connection.rollback();
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Order is already Delivered and cannot be modified.",
+                },
+                { status: 400 }
+            );
+        }
+
         // Normalize nullable customer IDs.
         updated.customer_user_id = normalizeNullableId(
             updated.customer_user_id
@@ -394,6 +422,22 @@ export async function PUT(request, context) {
             `UPDATE cst_orders SET ${setParts.join(", ")} WHERE id = ? `,
             values
         );
+
+        // Record status change in cst_order_status_history
+        if (updated.order_status !== existing.order_status) {
+            const actorType = body.actor_type || "System";
+            const actorId = body.actor_id || null;
+            const historyNotes = body.notes || `Order status updated to ${updated.order_status}`;
+            try {
+                await connection.execute(
+                    `INSERT INTO cst_order_status_history (order_id, old_status, new_status, remarks, actor_type, actor_id, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+                    [Number(id), existing.order_status, updated.order_status, historyNotes, actorType, actorId]
+                );
+            } catch (histErr) {
+                console.warn("Status history insert warning:", histErr.message);
+            }
+        }
 
         await connection.commit();
 

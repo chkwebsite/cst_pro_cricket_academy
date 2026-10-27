@@ -31,7 +31,9 @@ SELECT
     o.*,
     COALESCE(a.academy_name, ba.academy_name) AS academy_name,
     b.branch_name,
-    COALESCE(o.estimated_delivery_date, DATE(DATE_ADD(o.created_at, INTERVAL (CASE WHEN o.fulfillment_type = 'Pickup' THEN 2 ELSE 12 END) DAY))) AS estimated_delivery_date
+    COALESCE(o.estimated_delivery_date, DATE(DATE_ADD(o.created_at, INTERVAL (CASE WHEN o.fulfillment_type = 'Pickup' THEN 2 ELSE 12 END) DAY))) AS estimated_delivery_date,
+    (SELECT COUNT(*) FROM cst_order_items oi WHERE oi.order_id = o.id) AS item_count,
+    (SELECT GROUP_CONCAT(oi.product_name SEPARATOR ', ') FROM cst_order_items oi WHERE oi.order_id = o.id) AS item_summary
             FROM cst_orders o
             LEFT JOIN cst_academy a
                 ON a.id = o.academy_id

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUser } from "@/app/next_panel/components/UserContext";
@@ -29,8 +29,47 @@ export default function Header({
   const [navOpen, setNavOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const userDropdownRef = useRef(null);
 
   const displayName = getDisplayName(user);
+
+  // Close user dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        userDropdownRef.current &&
+        !userDropdownRef.current.contains(event.target)
+      ) {
+        setUserDropdownOpen(false);
+      }
+    }
+    if (userDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [userDropdownOpen]);
+
+  // Robust single-click logout handler
+  const handleLogout = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setUserDropdownOpen(false);
+    setNavOpen(false);
+    try {
+      await logout();
+    } catch (err) {
+      console.error("Logout failed:", err);
+    } finally {
+      window.location.href = "/";
+    }
+  };
 
   // Monitor scroll for fixed header on scroll
   useEffect(() => {
@@ -106,14 +145,20 @@ export default function Header({
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    logout();
-                    window.location.href = "/";
-                  }}
+                  onClick={handleLogout}
+                  disabled={loggingOut}
                   className="btn btn-link text-white-50 p-0 text-decoration-none small hover-white"
                   title="Logout"
                 >
-                  <i className="bi bi-box-arrow-right text-white"></i>
+                  {loggingOut ? (
+                    <span
+                      className="spinner-border spinner-border-sm text-white"
+                      role="status"
+                      style={{ width: "12px", height: "12px" }}
+                    ></span>
+                  ) : (
+                    <i className="bi bi-box-arrow-right text-white"></i>
+                  )}
                 </button>
               </div>
             ) : (
@@ -335,38 +380,25 @@ export default function Header({
 
               {isLoggedIn && user ? (
                 <li
-                  className={`nav-item dropdown user-nav-dropdown ${userDropdownOpen ? "show" : ""}`}
-                  onMouseEnter={() => {
-                    if (typeof window !== "undefined" && window.innerWidth >= 992) {
-                      setUserDropdownOpen(true);
-                    }
-                  }}
-                  onMouseLeave={() => {
-                    if (typeof window !== "undefined" && window.innerWidth >= 992) {
-                      setUserDropdownOpen(false);
-                    }
-                  }}
+                  className="nav-item dropdown user-nav-dropdown ms-lg-2"
+                  ref={userDropdownRef}
                 >
                   <button
-                    className="nav-link dropdown-toggle btn btn-link d-inline-flex align-items-center gap-2 border-0 bg-transparent text-white px-2 px-lg-3 py-2 text-decoration-none"
+                    className={`btn btn-sm rounded-pill px-3 py-1.5 d-flex align-items-center gap-2 user-menu-btn text-white ${
+                      userDropdownOpen ? "active-dropdown" : ""
+                    }`}
                     type="button"
                     id="userAccountMenu"
                     aria-expanded={userDropdownOpen}
                     onClick={(e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       setUserDropdownOpen((prev) => !prev);
                     }}
                   >
                     <span
-                      className="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold shadow-sm flex-shrink-0"
-                      style={{
-                        width: "32px",
-                        height: "32px",
-                        background: "var(--navy)",
-                        color: "var(--lime)",
-                        border: "2px solid var(--lime)",
-                        fontSize: "0.85rem",
-                      }}
+                      className="user-avatar-circle"
+                      style={{ width: "28px", height: "28px", fontSize: "0.8rem" }}
                     >
                       {user.profile_image ? (
                         <img
@@ -380,125 +412,185 @@ export default function Header({
                     </span>
                     <span
                       className="fw-bold text-white text-truncate"
-                      style={{ maxWidth: "130px" }}
+                      style={{ maxWidth: "120px" }}
                     >
                       {displayName}
                     </span>
+                    <i
+                      className="bi bi-chevron-down text-white-50"
+                      style={{
+                        fontSize: "0.75rem",
+                        transform: userDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.2s ease",
+                      }}
+                    ></i>
                   </button>
 
-                  <ul
-                    className={`dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-4 p-2 ${
+                  <div
+                    className={`dropdown-menu dropdown-menu-end user-account-dropdown-menu ${
                       userDropdownOpen ? "show" : ""
                     }`}
+                    style={{ right: 0, left: "auto" }}
                     aria-labelledby="userAccountMenu"
-                    style={{
-                      minWidth: "250px",
-                      marginTop: "6px",
-                      boxShadow: "0 12px 35px rgba(6, 47, 56, 0.22)",
-                    }}
                   >
                     {/* Header info */}
-                    <li className="px-3 py-2 bg-light rounded-3 mb-2 border">
-                      <div className="fw-bold text-navy text-truncate fs-6">
-                        {displayName}
-                      </div>
-                      <div className="d-flex align-items-center gap-2 mt-1">
-                        <span
-                          className="badge"
-                          style={{
-                            background: "var(--navy)",
-                            color: "var(--lime)",
-                            fontSize: "0.7rem",
-                            fontWeight: 600,
-                            padding: "0.22rem 0.6rem",
-                            borderRadius: "50px",
-                          }}
-                        >
-                          {user.user_type || "Public User"}
-                        </span>
-                      </div>
-                      {user.email && (
-                        <div className="text-secondary small text-truncate mt-1" style={{ fontSize: "0.78rem" }}>
-                          <i className="bi bi-envelope me-1 text-muted"></i>
-                          {user.email}
+                    <div className="user-card-header">
+                      <div className="d-flex align-items-center gap-2">
+                        <div className="user-avatar-circle">
+                          {user.profile_image ? (
+                            <img
+                              src={user.profile_image}
+                              alt={displayName}
+                              className="w-100 h-100 rounded-circle object-fit-cover"
+                            />
+                          ) : (
+                            (displayName?.[0] || "U").toUpperCase()
+                          )}
                         </div>
-                      )}
-                      {user.phone && (
-                        <div className="text-secondary small text-truncate" style={{ fontSize: "0.78rem" }}>
-                          <i className="bi bi-telephone me-1 text-muted"></i>
-                          {user.phone}
+                        <div className="overflow-hidden flex-grow-1">
+                          <div
+                            className="fw-bold text-dark text-truncate"
+                            style={{ fontSize: "0.95rem" }}
+                            title={displayName}
+                          >
+                            {displayName}
+                          </div>
+                          <span
+                            className="badge mt-0.5"
+                            style={{
+                              background: user.is_public ? "#0284c7" : "var(--navy)",
+                              color: user.is_public ? "#ffffff" : "var(--lime)",
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "50px",
+                            }}
+                          >
+                            {user.user_type || (user.is_public ? "Public User" : "Academy User")}
+                          </span>
                         </div>
-                      )}
-                    </li>
+                      </div>
 
-                    {/* 1. User Profile */}
-                    <li>
+                      {(user.email || user.phone) && (
+                        <div className="mt-2 pt-2 border-top" style={{ borderColor: "#e2e8f0" }}>
+                          {user.email && (
+                            <div
+                              className="text-muted small text-truncate d-flex align-items-center gap-1"
+                              style={{ fontSize: "0.76rem" }}
+                              title={user.email}
+                            >
+                              <i className="bi bi-envelope text-secondary"></i>
+                              <span className="text-truncate">{user.email}</span>
+                            </div>
+                          )}
+                          {user.phone && (
+                            <div
+                              className="text-muted small text-truncate d-flex align-items-center gap-1 mt-1"
+                              style={{ fontSize: "0.76rem" }}
+                            >
+                              <i className="bi bi-telephone text-secondary"></i>
+                              <span>{user.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Menu links */}
+                    <div className="d-flex flex-column gap-1">
+                      {/* 1. User Profile */}
                       <Link
-                        className="dropdown-item py-2 px-3 rounded-2 d-flex align-items-center gap-2 fw-semibold text-navy hover-bg-light"
+                        className="dropdown-item"
                         href="/profile"
                         onClick={() => {
                           setNavOpen(false);
                           setUserDropdownOpen(false);
                         }}
                       >
-                        <i className="bi bi-person-circle fs-5 text-teal"></i>
-                        <span>User Profile</span>
+                        <span className="item-icon-box" style={{ background: "#eff6ff", color: "#2563eb" }}>
+                          <i className="bi bi-person-circle"></i>
+                        </span>
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>User Profile</div>
+                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Profile settings & info</div>
+                        </div>
+                        <i className="bi bi-chevron-right text-muted small opacity-50"></i>
                       </Link>
-                    </li>
 
-                    {/* 2. User Orders */}
-                    <li>
+                      {/* 2. User Orders */}
                       <Link
-                        className="dropdown-item py-2 px-3 rounded-2 d-flex align-items-center gap-2 fw-semibold text-navy hover-bg-light"
+                        className="dropdown-item"
                         href="/orders"
                         onClick={() => {
                           setNavOpen(false);
                           setUserDropdownOpen(false);
                         }}
                       >
-                        <i className="bi bi-bag-check-fill fs-5 text-success"></i>
-                        <span>User Orders</span>
+                        <span className="item-icon-box" style={{ background: "#ecfdf5", color: "#059669" }}>
+                          <i className="bi bi-bag-check-fill"></i>
+                        </span>
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>User Orders</div>
+                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Track & view orders</div>
+                        </div>
+                        <i className="bi bi-chevron-right text-muted small opacity-50"></i>
                       </Link>
-                    </li>
 
-                    {/* Admin Portal link if academy user */}
-                    {!user.is_public && user.user_type !== "Public User" && (
-                      <li>
+                      {/* Admin Portal link if academy user */}
+                      {!user.is_public && user.user_type !== "Public User" && (
                         <Link
-                          className="dropdown-item py-2 px-3 rounded-2 d-flex align-items-center gap-2 fw-semibold text-navy hover-bg-light"
+                          className="dropdown-item"
                           href="/next_panel/dashboard"
                           onClick={() => {
                             setNavOpen(false);
                             setUserDropdownOpen(false);
                           }}
                         >
-                          <i className="bi bi-speedometer2 fs-5 text-danger"></i>
-                          <span>Academy Portal</span>
+                          <span className="item-icon-box" style={{ background: "#fff1f2", color: "#e11d48" }}>
+                            <i className="bi bi-speedometer2"></i>
+                          </span>
+                          <div className="flex-grow-1">
+                            <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>Academy Portal</div>
+                            <div className="text-muted" style={{ fontSize: "0.72rem" }}>Manage academy dashboard</div>
+                          </div>
+                          <span
+                            className="badge bg-danger-subtle text-danger border border-danger-subtle"
+                            style={{ fontSize: "0.65rem", padding: "0.2rem 0.45rem" }}
+                          >
+                            Portal
+                          </span>
                         </Link>
-                      </li>
-                    )}
+                      )}
 
-                    <li>
-                      <hr className="dropdown-divider my-2" />
-                    </li>
+                      <hr className="dropdown-divider" />
 
-                    {/* 3. Logout */}
-                    <li>
+                      {/* 3. Logout */}
                       <button
                         type="button"
-                        className="dropdown-item py-2 px-3 rounded-2 d-flex align-items-center gap-2 fw-semibold text-danger border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          setUserDropdownOpen(false);
-                          setNavOpen(false);
-                          logout();
-                          window.location.href = "/";
-                        }}
+                        className="dropdown-item dropdown-item-danger border-0 w-100 text-start"
+                        onClick={handleLogout}
+                        disabled={loggingOut}
                       >
-                        <i className="bi bi-box-arrow-right fs-5"></i>
-                        <span>Logout</span>
+                        <span className="item-icon-box" style={{ background: "#fef2f2", color: "#dc2626" }}>
+                          {loggingOut ? (
+                            <span
+                              className="spinner-border spinner-border-sm"
+                              role="status"
+                              style={{ width: "13px", height: "13px" }}
+                            ></span>
+                          ) : (
+                            <i className="bi bi-box-arrow-right"></i>
+                          )}
+                        </span>
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold text-danger" style={{ lineHeight: 1.2 }}>
+                            {loggingOut ? "Signing out..." : "Sign Out"}
+                          </div>
+                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Log out from this account</div>
+                        </div>
                       </button>
-                    </li>
-                  </ul>
+                    </div>
+                  </div>
                 </li>
               ) : (
                 <li className="nav-item">

@@ -102,6 +102,16 @@ export function UserProvider({ children, initialSession = null }) {
                         window.sessionStorage.setItem("auth_user", uStr);
                         window.localStorage.setItem("auth_user", uStr);
                     }
+                } else if (res.status === 401) {
+                    setSession(null);
+                    if (typeof window !== "undefined") {
+                        window.sessionStorage.removeItem("auth_session");
+                        window.sessionStorage.removeItem("auth_user");
+                        window.sessionStorage.removeItem("auth_permissions");
+                        window.localStorage.removeItem("auth_session");
+                        window.localStorage.removeItem("auth_user");
+                        window.localStorage.removeItem("auth_permissions");
+                    }
                 }
             } catch (_) {
                 // Ignore network errors
@@ -115,7 +125,7 @@ export function UserProvider({ children, initialSession = null }) {
         };
     }, []);
 
-    const logout = async () => {
+    const logout = async (redirectUrl = null) => {
         try {
             if (typeof window !== "undefined") {
                 window.sessionStorage.removeItem("auth_session");
@@ -124,6 +134,10 @@ export function UserProvider({ children, initialSession = null }) {
                 window.localStorage.removeItem("auth_session");
                 window.localStorage.removeItem("auth_user");
                 window.localStorage.removeItem("auth_permissions");
+                try {
+                    document.cookie = "auth_token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+                    document.cookie = "public_auth_token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+                } catch (_) {}
                 window.dispatchEvent(new Event("auth-session-change"));
             }
 
@@ -133,8 +147,12 @@ export function UserProvider({ children, initialSession = null }) {
                 fetch("/api/auth/logout", { method: "POST" }),
                 fetch("/api/public-auth/logout", { method: "POST" }),
             ]);
-        } catch {
-            // ignore
+        } catch (err) {
+            console.error("UserContext logout error:", err);
+        } finally {
+            if (redirectUrl && typeof window !== "undefined") {
+                window.location.href = redirectUrl;
+            }
         }
     };
 

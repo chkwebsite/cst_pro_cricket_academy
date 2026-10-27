@@ -15,6 +15,10 @@ export async function logout(router) {
                 localStorage.removeItem("auth_session");
                 localStorage.removeItem("auth_user");
                 localStorage.removeItem("auth_permissions");
+                try {
+                    document.cookie = "auth_token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+                    document.cookie = "public_auth_token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+                } catch (_) {}
                 window.dispatchEvent(new Event("auth-session-change"));
             }
         } catch (_) {}

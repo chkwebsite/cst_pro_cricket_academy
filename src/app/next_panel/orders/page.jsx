@@ -171,6 +171,14 @@ export default function OrdersPage() {
 
     // Open Status Update Modal
     const handleOpenStatusModal = (order) => {
+        if (order.order_status === "Delivered") {
+            alert("This order is already Delivered. All modifications are disabled.");
+            return;
+        }
+        if (order.order_status === "Cancelled") {
+            alert("This order is already Cancelled. Status cannot be modified.");
+            return;
+        }
         setStatusModalOrder(order);
         setNewStatus(order.order_status || "Pending");
         setStatusNotes("");
@@ -180,6 +188,13 @@ export default function OrdersPage() {
     const handleSaveStatus = async (e) => {
         e.preventDefault();
         if (!statusModalOrder) return;
+
+        // Dispatched orders cannot be cancelled
+        if (newStatus === "Cancelled" && (statusModalOrder.order_status === "Dispatched" || statusModalOrder.order_status === "Delivered")) {
+            alert("Cannot cancel an order that is already dispatched or delivered.");
+            return;
+        }
+
         setUpdatingStatus(true);
 
         try {
@@ -453,120 +468,185 @@ export default function OrdersPage() {
                         <table className="table align-middle table-hover mb-0">
                             <thead className="table-light text-secondary small text-uppercase">
                                 <tr>
-                                    <th style={{ width: "50px" }} className="text-center">#</th>
+                                    <th style={{ width: "40px" }} className="text-center">#</th>
                                     <th>Order No</th>
-                                    <th>Customer Details</th>
-                                    <th>Fulfillment</th>
+                                    <th>Saler Name</th>
+                                    <th>Buyer Name</th>
+                                    <th>Deliver Point</th>
                                     <th>Total (₹)</th>
                                     <th>Payment</th>
                                     <th className="text-center">Order Status</th>
                                     <th>Order Date</th>
-                                    <th style={{ width: "170px" }} className="text-end pe-3">Actions</th>
+                                    <th>Delivery Date</th>
+                                    <th style={{ width: "160px" }} className="text-end pe-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {orders.map((item, idx) => (
-                                    <tr key={item.id}>
-                                        <td className="text-center text-muted small fw-medium">{idx + 1}</td>
-                                        <td>
-                                            <div className="fw-bold text-dark font-monospace" style={{ fontSize: "0.88rem" }}>
-                                                {item.order_no}
-                                            </div>
-                                            <span className="badge bg-light text-muted border" style={{ fontSize: "0.68rem" }}>
-                                                ID: #{item.id}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div className="fw-semibold text-dark">{item.customer_name}</div>
-                                            <div className="small text-muted d-flex align-items-center gap-1">
-                                                <Phone size={11} />
-                                                <span>{item.customer_phone}</span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="d-flex align-items-center gap-1 small">
-                                                {item.fulfillment_type === "Delivery" ? (
-                                                    <>
-                                                        <Truck size={14} className="text-primary" />
-                                                        <span>Delivery</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Package size={14} className="text-teal" />
-                                                        <span>Pickup ({item.branch_name || "Branch"})</span>
-                                                    </>
+                                {orders.map((item, idx) => {
+                                    const isDelivered = item.order_status === "Delivered";
+                                    const isCancelled = item.order_status === "Cancelled";
+
+                                    // Dynamic background based on order lifecycle
+                                    // Delivered: Light Green (#f0fdf4)
+                                    // Cancelled: Light Red (#fef2f2)
+                                    const rowStyle = isDelivered
+                                        ? { backgroundColor: "#f0fdf4" }
+                                        : isCancelled
+                                        ? { backgroundColor: "#fef2f2" }
+                                        : undefined;
+
+                                    return (
+                                        <tr key={item.id} style={rowStyle} className={isDelivered ? "border-success-subtle" : isCancelled ? "border-danger-subtle" : ""}>
+                                            <td className="text-center text-muted small fw-medium">{idx + 1}</td>
+                                            {/* Order No */}
+                                            <td>
+                                                <div className="fw-bold text-dark font-monospace" style={{ fontSize: "0.88rem" }}>
+                                                    {item.order_no}
+                                                </div>
+                                                <span className="badge bg-light text-muted border" style={{ fontSize: "0.68rem" }}>
+                                                    ID: #{item.id}
+                                                </span>
+                                            </td>
+                                            {/* Saler Name */}
+                                            <td>
+                                                <div className="d-flex align-items-center gap-1.5 fw-semibold text-dark small">
+                                                    <MapPin size={13} className="text-danger flex-shrink-0" />
+                                                    <span>{item.branch_name || item.academy_name || "Main Branch"}</span>
+                                                </div>
+                                                <div className="extra-small text-muted" style={{ fontSize: "0.72rem" }}>
+                                                    {item.academy_name && item.academy_name !== item.branch_name ? item.academy_name : "Seller Store"}
+                                                </div>
+                                            </td>
+                                            {/* Buyer Name */}
+                                            <td>
+                                                <div className="fw-semibold text-dark">{item.customer_name}</div>
+                                                <div className="small text-muted d-flex align-items-center gap-1">
+                                                    <Phone size={11} />
+                                                    <span>{item.customer_phone}</span>
+                                                </div>
+                                                {item.customer_email && (
+                                                    <div className="extra-small text-muted text-truncate" style={{ maxWidth: "150px", fontSize: "0.72rem" }}>
+                                                        {item.customer_email}
+                                                    </div>
                                                 )}
-                                            </div>
-                                            {item.delivery_city && (
-                                                <span className="text-muted small d-block">{item.delivery_city}</span>
-                                            )}
-                                            <div className="extra-small text-muted mt-1 d-inline-flex align-items-center gap-1" style={{ fontSize: "0.75rem" }}>
-                                                <Calendar size={11} className="text-primary" />
-                                                <span>Est: <strong>{formatDeliveryDate(item.estimated_delivery_date || getEstimatedDeliveryDate(item.created_at, item.fulfillment_type))}</strong></span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="fw-bold text-dark fs-6">
-                                                ₹{Number(item.grand_total).toLocaleString("en-IN")}
-                                            </div>
-                                            <span className="text-muted small">
-                                                Sub: ₹{Number(item.subtotal).toLocaleString("en-IN")}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${PAYMENT_STATUS_COLORS[item.payment_status] || "bg-secondary"} px-2 py-1 small`}>
-                                                {item.payment_status}
-                                            </span>
-                                            <div className="small text-muted mt-1">{item.payment_method}</div>
-                                        </td>
-                                        <td className="text-center">
-                                            <span className={`badge ${ORDER_STATUS_COLORS[item.order_status] || "bg-secondary"} px-2 py-1`}>
-                                                {item.order_status}
-                                            </span>
-                                        </td>
-                                        <td className="text-muted small">
-                                            {item.created_at
-                                                ? new Date(item.created_at).toLocaleDateString("en-IN", {
-                                                      day: "2-digit",
-                                                      month: "short",
-                                                      year: "numeric",
-                                                      hour: "2-digit",
-                                                      minute: "2-digit",
-                                                  })
-                                                : "—"}
-                                        </td>
-                                        <td className="text-end pe-3">
-                                            <div className="btn-group btn-group-sm">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-info"
-                                                    onClick={() => handleOpenView(item)}
-                                                    title="View Full Details"
-                                                >
-                                                    <Eye size={15} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-primary"
-                                                    onClick={() => handleOpenStatusModal(item)}
-                                                    title="Update Order Status"
-                                                >
-                                                    <Truck size={15} />
-                                                </button>
-                                                {item.payment_status !== "Paid" && (
+                                            </td>
+                                            {/* Deliver Point */}
+                                            <td>
+                                                <div className="d-flex align-items-center gap-1 small fw-medium">
+                                                    {item.fulfillment_type === "Delivery" ? (
+                                                        <>
+                                                            <Truck size={14} className="text-primary flex-shrink-0" />
+                                                            <span>Home Delivery</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Package size={14} className="text-teal flex-shrink-0" />
+                                                            <span>Store Pickup</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                                <div className="text-muted extra-small mt-0.5" style={{ fontSize: "0.74rem" }}>
+                                                    {item.fulfillment_type === "Pickup"
+                                                        ? (item.branch_name || "Pickup at Branch")
+                                                        : [item.delivery_address, item.delivery_city, item.delivery_pincode].filter(Boolean).join(", ") || (item.delivery_city || "Delivery Address")}
+                                                </div>
+                                            </td>
+                                            {/* Total */}
+                                            <td>
+                                                <div className="fw-bold text-dark fs-6">
+                                                    ₹{Number(item.grand_total).toLocaleString("en-IN")}
+                                                </div>
+                                                <span className="text-muted small">
+                                                    Sub: ₹{Number(item.subtotal).toLocaleString("en-IN")}
+                                                </span>
+                                            </td>
+                                            {/* Payment */}
+                                            <td>
+                                                <span className={`badge ${PAYMENT_STATUS_COLORS[item.payment_status] || "bg-secondary"} px-2 py-1 small`}>
+                                                    {item.payment_status}
+                                                </span>
+                                                <div className="small text-muted mt-1">{item.payment_method}</div>
+                                            </td>
+                                            {/* Order Status */}
+                                            <td className="text-center">
+                                                <span className={`badge ${ORDER_STATUS_COLORS[item.order_status] || "bg-secondary"} px-2 py-1`}>
+                                                    {item.order_status}
+                                                </span>
+                                            </td>
+                                            {/* Order Date */}
+                                            <td className="text-muted small">
+                                                {item.created_at
+                                                    ? new Date(item.created_at).toLocaleDateString("en-IN", {
+                                                          day: "2-digit",
+                                                          month: "short",
+                                                          year: "numeric",
+                                                          hour: "2-digit",
+                                                          minute: "2-digit",
+                                                      })
+                                                    : "—"}
+                                            </td>
+                                            {/* Delivery Date */}
+                                            <td>
+                                                <div className="fw-semibold text-dark small d-flex align-items-center gap-1">
+                                                    <Calendar size={13} className="text-primary flex-shrink-0" />
+                                                    <span>
+                                                        {formatDeliveryDate(item.estimated_delivery_date || getEstimatedDeliveryDate(item.created_at, item.fulfillment_type))}
+                                                    </span>
+                                                </div>
+                                                <span className="badge bg-light text-muted border extra-small mt-0.5" style={{ fontSize: "0.68rem" }}>
+                                                    {item.fulfillment_type === "Pickup" ? "+2D (Pickup)" : "+12D (Delivery)"}
+                                                </span>
+                                            </td>
+                                            {/* Actions */}
+                                            <td className="text-end pe-3">
+                                                <div className="btn-group btn-group-sm">
                                                     <button
                                                         type="button"
-                                                        className="btn btn-outline-success"
-                                                        onClick={() => handleOpenPaymentModal(item)}
-                                                        title="Record Payment"
+                                                        className="btn btn-outline-info"
+                                                        onClick={() => handleOpenView(item)}
+                                                        title="View Full Details"
                                                     >
-                                                        <CreditCard size={15} />
+                                                        <Eye size={15} />
                                                     </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-primary"
+                                                        onClick={() => handleOpenStatusModal(item)}
+                                                        disabled={isDelivered || isCancelled}
+                                                        title={
+                                                            isDelivered
+                                                                ? "Order Delivered — all modifications disabled"
+                                                                : isCancelled
+                                                                ? "Order Cancelled — modification disabled"
+                                                                : "Update Order Status"
+                                                        }
+                                                        style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                                                    >
+                                                        <Truck size={15} />
+                                                    </button>
+                                                    {item.payment_status !== "Paid" && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-success"
+                                                            onClick={() => handleOpenPaymentModal(item)}
+                                                            disabled={isDelivered || isCancelled}
+                                                            title={
+                                                                isDelivered
+                                                                    ? "Order Delivered — all buttons disabled"
+                                                                    : isCancelled
+                                                                    ? "Order Cancelled — disabled"
+                                                                    : "Record Payment"
+                                                            }
+                                                            style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                                                        >
+                                                            <CreditCard size={15} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -759,6 +839,15 @@ export default function OrdersPage() {
                                 <button
                                     type="button"
                                     className="btn btn-primary px-3 d-flex align-items-center gap-1"
+                                    disabled={viewOrder.order_status === "Delivered" || viewOrder.order_status === "Cancelled"}
+                                    title={
+                                        viewOrder.order_status === "Delivered"
+                                            ? "Order Delivered — all modifications disabled"
+                                            : viewOrder.order_status === "Cancelled"
+                                            ? "Order Cancelled — disabled"
+                                            : "Update Status"
+                                    }
+                                    style={viewOrder.order_status === "Delivered" || viewOrder.order_status === "Cancelled" ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                                     onClick={() => {
                                         const ord = viewOrder;
                                         setViewOrder(null);
@@ -807,9 +896,26 @@ export default function OrdersPage() {
                                             <option value="Ready">Ready for Pickup / Dispatch</option>
                                             <option value="Dispatched">Dispatched / Out for Delivery</option>
                                             <option value="Delivered">Delivered / Completed</option>
-                                            <option value="Cancelled">Cancelled</option>
+                                            <option
+                                                value="Cancelled"
+                                                disabled={statusModalOrder.order_status === "Dispatched" || statusModalOrder.order_status === "Delivered"}
+                                            >
+                                                Cancelled {statusModalOrder.order_status === "Dispatched" ? "(Disabled — already dispatched)" : statusModalOrder.order_status === "Delivered" ? "(Disabled — already delivered)" : ""}
+                                            </option>
                                             <option value="Returned">Returned</option>
                                         </select>
+                                        {statusModalOrder.order_status === "Dispatched" && (
+                                            <div className="alert alert-warning py-2 px-3 mt-2 small d-flex align-items-center gap-2 mb-0">
+                                                <AlertCircle size={16} className="text-warning flex-shrink-0" />
+                                                <span>This order is already <strong>Dispatched</strong>. Cancel action is disabled.</span>
+                                            </div>
+                                        )}
+                                        {statusModalOrder.order_status === "Delivered" && (
+                                            <div className="alert alert-success py-2 px-3 mt-2 small d-flex align-items-center gap-2 mb-0">
+                                                <CheckCircle2 size={16} className="text-success flex-shrink-0" />
+                                                <span>This order is already <strong>Delivered</strong>. All modifications are disabled.</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="mb-3">
