@@ -1,27 +1,50 @@
+// import mysql from 'mysql2/promise';
+
+// const isRemoteHost =
+//     process.env.DB_HOST &&
+//     !['localhost', '127.0.0.1'].includes(process.env.DB_HOST.trim().toLowerCase());
+
+// const useSsl =
+//     process.env.DB_SSL === 'true' ||
+//     process.env.DB_SSL === '1' ||
+//     (isRemoteHost && process.env.DB_SSL !== 'false');
+
+// const pool = mysql.createPool({
+//     host: process.env.DB_HOST || 'localhost',
+//     port: Number(process.env.DB_PORT) || 3306,
+//     user: process.env.DB_USER || process.env.DB_USERNAME || 'root',
+//     password: process.env.DB_PASSWORD ?? '',
+//     database: process.env.DB_NAME || process.env.DB_DATABASE || '',
+//     waitForConnections: true,
+//     connectionLimit: Number(process.env.DB_CONNECTION_LIMIT) || 2,
+//     queueLimit: 0,
+//     dateStrings: true,
+//     connectTimeout: 10000,
+//     ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+// });
+
+
+// export default pool;
+
 import mysql from 'mysql2/promise';
 
-const isRemoteHost =
-    process.env.DB_HOST &&
-    !['localhost', '127.0.0.1'].includes(process.env.DB_HOST.trim().toLowerCase());
+let pool;
 
-const useSsl =
-    process.env.DB_SSL === 'true' ||
-    process.env.DB_SSL === '1' ||
-    (isRemoteHost && process.env.DB_SSL !== 'false');
+if (!global.mysqlPool) {
+    global.mysqlPool = mysql.createPool({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        port: process.env.DB_PORT || 3306,
+        waitForConnections: true,
+        connectionLimit: 2, // Serverless ke liye limit kam rakhein
+        queueLimit: 0,
+        ssl: {
+            rejectUnauthorized: false // Aiven SSL connection ke liye zaroori hai
+        }
+    });
+}
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER || process.env.DB_USERNAME || 'root',
-    password: process.env.DB_PASSWORD ?? '',
-    database: process.env.DB_NAME || process.env.DB_DATABASE || '',
-    waitForConnections: true,
-    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT) || 2,
-    queueLimit: 0,
-    dateStrings: true,
-    connectTimeout: 10000,
-    ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-});
-
-
+pool = global.mysqlPool;
 export default pool;
