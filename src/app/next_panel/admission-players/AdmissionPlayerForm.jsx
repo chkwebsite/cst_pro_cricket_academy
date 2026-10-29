@@ -123,13 +123,16 @@ export default function AdmissionPlayerForm({ id = null }) {
     ===================================================== */
 
     useEffect(() => {
-        if (!formData.branch_id) {
-            setPrograms([]);
-            setProgramsLoading(false);
-            return;
-        }
-
+        let isMounted = true;
         const loadPrograms = async () => {
+            if (!formData.branch_id) {
+                if (isMounted) {
+                    setPrograms([]);
+                    setProgramsLoading(false);
+                }
+                return;
+            }
+
             setProgramsLoading(true);
             setError("");
 
@@ -147,17 +150,26 @@ export default function AdmissionPlayerForm({ id = null }) {
                     );
                 }
 
-                setPrograms(json.data || []);
+                if (isMounted) {
+                    setPrograms(json.data || []);
+                }
 
             } catch (error) {
-                setPrograms([]);
-                setError(error.message);
+                if (isMounted) {
+                    setPrograms([]);
+                    setError(error.message);
+                }
             } finally {
-                setProgramsLoading(false);
+                if (isMounted) {
+                    setProgramsLoading(false);
+                }
             }
         };
 
         loadPrograms();
+        return () => {
+            isMounted = false;
+        };
     }, [formData.branch_id]);
 
     /* =====================================================
@@ -398,7 +410,7 @@ export default function AdmissionPlayerForm({ id = null }) {
             setLoading(true);
 
             const url = isEdit
-                ? `/api/admission-players/${id} `
+                ? `/api/admission-players/${id}`
                 : `/api/admission-players`;
 
             const body = new FormData();
@@ -780,7 +792,7 @@ export default function AdmissionPlayerForm({ id = null }) {
                             <div className="col-md-3 mb-3">
 
                                 <label className="form-label">
-                                    Father's Name
+                                    Father&apos;s Name
                                 </label>
 
                                 <input
@@ -800,7 +812,7 @@ export default function AdmissionPlayerForm({ id = null }) {
                             <div className="col-md-3 mb-3">
 
                                 <label className="form-label">
-                                    Mother's Name
+                                    Mother&apos;s Name
                                 </label>
 
                                 <input

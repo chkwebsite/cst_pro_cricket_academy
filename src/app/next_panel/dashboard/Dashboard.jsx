@@ -31,6 +31,16 @@ export default function Dashboard() {
     });
     const [loading, setLoading] = useState(true);
 
+    // Auto-redirect players to their dedicated Player Dashboard
+    useEffect(() => {
+        if (user) {
+            const userTypeStr = String(user.user_type || "").trim().toLowerCase();
+            if (userTypeStr === "player" || userTypeStr === "7") {
+                window.location.replace("/next_panel/player-dashboard");
+            }
+        }
+    }, [user]);
+
     const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Admin";
     const currentYear = new Date().getFullYear();
 

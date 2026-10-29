@@ -34,6 +34,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
 
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [tournamentTeams, setTournamentTeams] = useState([]);
+    const [enrolledTournamentPlayers, setEnrolledTournamentPlayers] = useState([]);
     const [registeredPlayers, setRegisteredPlayers] = useState([]);
     const [outsidePlayers, setOutsidePlayers] = useState([]);
     const [playerOptionsLoading, setPlayerOptionsLoading] = useState(false);
@@ -86,22 +87,33 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
         if (!formData.tournament_id) return;
 
         const controller = new AbortController();
-        const loadTournamentTeams = async () => {
+        const loadTournamentData = async () => {
             try {
-                const res = await fetch(`/api/tournament-teams?tournament_id=${formData.tournament_id}`, {
-                    signal: controller.signal,
-                });
-                const json = await res.json();
-                if (!res.ok || !json.success) {
-                    throw new Error(json.message || "Unable to load tournament teams");
+                const [teamsRes, playersRes] = await Promise.all([
+                    fetch(`/api/tournament-teams?tournament_id=${formData.tournament_id}`, {
+                        signal: controller.signal,
+                    }),
+                    fetch(`/api/tournament-team-players?tournament_id=${formData.tournament_id}`, {
+                        signal: controller.signal,
+                    }),
+                ]);
+
+                const teamsJson = await teamsRes.json();
+                if (!teamsRes.ok || !teamsJson.success) {
+                    throw new Error(teamsJson.message || "Unable to load tournament teams");
                 }
-                setTournamentTeams((json.data || []).filter((item) => !["Withdrawn", "Disqualified"].includes(item.status)));
+                setTournamentTeams((teamsJson.data || []).filter((item) => !["Withdrawn", "Disqualified"].includes(item.status)));
+
+                const playersJson = await playersRes.json();
+                if (playersRes.ok && playersJson.success) {
+                    setEnrolledTournamentPlayers(playersJson.data || []);
+                }
             } catch (err) {
                 if (err.name !== "AbortError") setError(err.message);
             }
         };
 
-        loadTournamentTeams();
+        loadTournamentData();
         return () => controller.abort();
     }, [formData.tournament_id]);
 
@@ -152,13 +164,42 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
         }
 
         if (name === "tournament_id") {
+            if (!value) {
+                setTournamentTeams([]);
+                setEnrolledTournamentPlayers([]);
+            }
             setFormData((prev) => ({
                 ...prev,
                 tournament_id: value,
                 tournament_team_id: "",
                 team_id: "",
+                user_id: "",
+                outside_player_id: "",
             }));
             return;
+        }
+
+        if ((name === "user_id" || name === "outside_player_id") && value) {
+            const selectedId = Number(value);
+            const isUser = name === "user_id";
+            const enrolled = enrolledTournamentPlayers.find((ttp) => {
+                if (isEdit && Number(ttp.id) === Number(id)) return false;
+                if (isUser && Number(ttp.user_id) === selectedId) return true;
+                if (!isUser && Number(ttp.outside_player_id) === selectedId) return true;
+                return false;
+            });
+
+            if (enrolled) {
+                const teamName = enrolled.team_name || "another team";
+                const msg = `Player is already enrolled in this tournament under team "${teamName}". A player cannot be enrolled twice in the same tournament.`;
+                alert(msg);
+                setError(msg);
+                setFormData((prev) => ({
+                    ...prev,
+                    [name]: "",
+                }));
+                return;
+            }
         }
 
         if (name === "tournament_team_id") {
@@ -198,6 +239,21 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
         const playerId = Number(isUser ? formData.user_id : formData.outside_player_id);
         if (!Number.isInteger(playerId) || playerId <= 0) {
             return setError(isUser ? "Please enter a valid user ID" : "Please enter a valid outside player ID");
+        }
+
+        const enrolled = enrolledTournamentPlayers.find((ttp) => {
+            if (isEdit && Number(ttp.id) === Number(id)) return false;
+            if (isUser && Number(ttp.user_id) === playerId) return true;
+            if (!isUser && Number(ttp.outside_player_id) === playerId) return true;
+            return false;
+        });
+
+        if (enrolled) {
+            const teamName = enrolled.team_name || "another team";
+            const msg = `Player is already enrolled in this tournament under team "${teamName}". A player cannot be enrolled twice in the same tournament.`;
+            setError(msg);
+            alert(msg);
+            return;
         }
 
         const fee = Number(formData.player_fee);
@@ -342,19 +398,39 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                                     {playerOptionsLoading ? "Loading players..." : `Choose ${isUser ? "registered" : "outside"} player`}
                                 </option>
                                 {isUser
-                                    ? playerOptions.map((player) => (
-                                          <option key={player.id} value={player.id}>
-                                              {player.first_name} {player.last_name}
-                                              {player.appointment_no ? ` (${player.appointment_no})` : ""}
-                                              {player.phone ? ` - ${player.phone}` : ""}
-                                          </option>
-                                      ))
-                                    : playerOptions.map((player) => (
-                                          <option key={player.id} value={player.id}>
-                                              {player.player_name}
-                                              {player.phone ? ` - ${player.phone}` : ""}
-                                          </option>
-                                      ))}
+                                    ? playerOptions.map((player) => {
+                                          const enrolled = enrolledTournamentPlayers.find(
+                                              (ttp) => (!isEdit || Number(ttp.id) !== Number(id)) && Number(ttp.user_id) === Number(player.id)
+                                          );
+                                          return (
+                                              <option
+                                                  key={player.id}
+                                                  value={player.id}
+                                                  disabled={Boolean(enrolled)}
+                                              >
+                                                  {player.first_name} {player.last_name}
+                                                  {player.appointment_no ? ` (${player.appointment_no})` : ""}
+                                                  {player.phone ? ` - ${player.phone}` : ""}
+                                                  {enrolled ? ` — [Already enrolled in ${enrolled.team_name || "another team"}]` : ""}
+                                              </option>
+                                          );
+                                      })
+                                    : playerOptions.map((player) => {
+                                          const enrolled = enrolledTournamentPlayers.find(
+                                              (ttp) => (!isEdit || Number(ttp.id) !== Number(id)) && Number(ttp.outside_player_id) === Number(player.id)
+                                          );
+                                          return (
+                                              <option
+                                                  key={player.id}
+                                                  value={player.id}
+                                                  disabled={Boolean(enrolled)}
+                                              >
+                                                  {player.player_name}
+                                                  {player.phone ? ` - ${player.phone}` : ""}
+                                                  {enrolled ? ` — [Already enrolled in ${enrolled.team_name || "another team"}]` : ""}
+                                              </option>
+                                          );
+                                      })}
                             </select>
                         </div>
                     </div>

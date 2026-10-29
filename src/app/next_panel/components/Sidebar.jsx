@@ -32,6 +32,7 @@ import styles from "./Sidebar.module.css";
 import Header from "./Header";
 
 const iconMap = {
+    "player-dashboard": UserCheck,
     "layout-dashboard": LayoutDashboard,
     dashboard: LayoutDashboard,
     settings: Settings,
@@ -271,7 +272,34 @@ export default function Sidebar({ children }) {
                     });
                 }
 
-                setMenus(allMenus.filter((menu) => allowedIds.has(menu.id)));
+                let filtered = allMenus.filter((menu) => allowedIds.has(menu.id));
+
+                const isPlayer = userType.includes("player") || userType === "7";
+                const hasPlayerDashboard = filtered.some((m) => m.menu_url === "/next_panel/player-dashboard");
+
+                if (!hasPlayerDashboard) {
+                    if (isPlayer) {
+                        filtered.unshift({
+                            id: 99999,
+                            parent_id: null,
+                            menu_name: "Player Dashboard",
+                            menu_url: "/next_panel/player-dashboard",
+                            menu_icon: "player-dashboard",
+                            menu_order: 1,
+                        });
+                    } else if (isSuperAdmin || userType.includes("admin")) {
+                        filtered.push({
+                            id: 99999,
+                            parent_id: null,
+                            menu_name: "Player Portal (Preview)",
+                            menu_url: "/next_panel/player-dashboard",
+                            menu_icon: "player-dashboard",
+                            menu_order: 99,
+                        });
+                    }
+                }
+
+                setMenus(filtered);
             } catch (loadError) {
                 if (!cancelled) setError(loadError.message);
             }

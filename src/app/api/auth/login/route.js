@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "@/app/components/lib/db";
+import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
 
 export async function POST(request) {
     let connection;
@@ -47,6 +48,7 @@ export async function POST(request) {
         }
 
         connection = await pool.getConnection();
+        await ensurePlayerAccess(connection);
 
         /*
          * Login by:
@@ -124,10 +126,31 @@ export async function POST(request) {
         /*
          * Check password
          */
-        const passwordMatch = await bcrypt.compare(
+        let passwordMatch = await bcrypt.compare(
             password,
             user.password
         );
+
+        // Fallback for Player accounts: allow default password '123456', user phone, or appointment number
+        const isPlayerUser =
+            user.user_type === "7" ||
+            String(user.user_type || "").toLowerCase().includes("player");
+
+        if (!passwordMatch && isPlayerUser) {
+            if (
+                password === "123456" ||
+                (user.phone && password === String(user.phone).trim()) ||
+                (user.appointment_no && password === String(user.appointment_no).trim())
+            ) {
+                passwordMatch = true;
+                try {
+                    const newHash = await bcrypt.hash(password, 10);
+                    await connection.query("UPDATE cst_users SET password = ? WHERE id = ?", [newHash, user.id]);
+                } catch (hashErr) {
+                    console.error("Failed to update player password hash:", hashErr);
+                }
+            }
+        }
 
         if (!passwordMatch) {
             return NextResponse.json(
@@ -259,6 +282,36 @@ export async function POST(request) {
             }
         }
 
+        const isPlayer =
+            user.user_type === "7" ||
+            String(user.user_type || "").toLowerCase().includes("player");
+
+        if (isPlayer) {
+            const hasPlayerDashboard = uniquePermissions.some(
+                (item) => item.menu_url === "/next_panel/player-dashboard"
+            );
+
+            if (!hasPlayerDashboard) {
+                uniquePermissions.unshift({
+                    user_permission_id: null,
+                    permission_id: null,
+                    module_name: "Player Dashboard",
+                    permission_name: "view_player_dashboard",
+                    menu_id: 99999,
+                    parent_id: null,
+                    menu_key: "player-dashboard",
+                    menu_name: "Player Dashboard",
+                    menu_title: "Player Dashboard",
+                    menu_icon: "player-dashboard",
+                    menu_url: "/next_panel/player-dashboard",
+                    menu_type: "link",
+                    menu_order: 1,
+                    is_sidebar: 1,
+                    is_active: 1,
+                });
+            }
+        }
+
         userData.permissions = uniquePermissions;
 
         /*
@@ -277,7 +330,9 @@ export async function POST(request) {
                 user_type: user.user_type,
                 permissions: isSuperAdmin
                     ? ["*"]
-                    : uniquePermissions.map((item) => item.menu_url).filter(Boolean),
+                    : (isPlayer
+                        ? Array.from(new Set([...uniquePermissions.map((item) => item.menu_url).filter(Boolean), "/next_panel/player-dashboard"]))
+                        : uniquePermissions.map((item) => item.menu_url).filter(Boolean)),
             },
             JWT_SECRET,
             {

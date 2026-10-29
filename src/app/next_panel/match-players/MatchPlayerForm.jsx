@@ -40,6 +40,8 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
         match_id: searchParams.get("match_id") || "",
     });
     const [matches, setMatches] = useState([]);
+    const [matchExistingPlayers, setMatchExistingPlayers] = useState([]);
+    const [matchExistingPlayersLoading, setMatchExistingPlayersLoading] = useState(false);
     const [registeredPlayers, setRegisteredPlayers] = useState([]);
     const [registeredPlayersTeamId, setRegisteredPlayersTeamId] = useState("");
     const [registeredPlayersLoading, setRegisteredPlayersLoading] = useState(false);
@@ -73,6 +75,35 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
         })();
         return () => controller.abort();
     }, []);
+
+    useEffect(() => {
+        if (!formData.match_id) return;
+
+        const controller = new AbortController();
+        const loadExistingMatchPlayers = async () => {
+            try {
+                setMatchExistingPlayersLoading(true);
+                const res = await fetch(`/api/match-players?match_id=${formData.match_id}`, {
+                    signal: controller.signal,
+                });
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    setMatchExistingPlayers(result.data || []);
+                }
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    console.error("Failed to load match players:", err);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setMatchExistingPlayersLoading(false);
+                }
+            }
+        };
+
+        loadExistingMatchPlayers();
+        return () => controller.abort();
+    }, [formData.match_id]);
 
     useEffect(() => {
         if (!formData.team_id || formData.player_source !== "user_id") return;
@@ -166,6 +197,38 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
         const registeredPlayer = name === "player_ref" && formData.player_source === "user_id"
             ? registeredPlayerOptions.find((player) => Number(player.user_id) === Number(value))
             : null;
+
+        if (name === "match_id" && !value) {
+            setMatchExistingPlayers([]);
+        }
+
+        if (name === "player_ref" && value) {
+            const selectedRef = Number(value);
+            const isUserSource = formData.player_source === "user_id";
+            const isOutsideSource = formData.player_source === "outside_player_id";
+            const isTournamentSource = formData.player_source === "tournament_team_player_id";
+
+            const alreadyPlaying = matchExistingPlayers.find((mp) => {
+                if (isEdit && Number(mp.id) === Number(id)) return false;
+                if (isUserSource && Number(mp.user_id) === selectedRef) return true;
+                if (isOutsideSource && Number(mp.outside_player_id) === selectedRef) return true;
+                if (isTournamentSource && Number(mp.tournament_team_player_id) === selectedRef) return true;
+                return false;
+            });
+
+            if (alreadyPlaying) {
+                const teamName = alreadyPlaying.team_name || "another team";
+                alert("all ready play this match");
+                setError(`all ready play this match (Player is already playing this match under team "${teamName}")`);
+                setFormData((prev) => ({
+                    ...prev,
+                    player_ref: "",
+                    jersey_no: "",
+                }));
+                return;
+            }
+        }
+
         setFormData((prev) => {
             const next = { ...prev, [name]: type === "checkbox" ? checked : value };
             if (name === "match_id") {
@@ -218,6 +281,20 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
             if (paidAmount > 0 && !formData.payment_mode) {
                 return setError("Payment mode is required when an initial amount is paid");
             }
+        }
+
+        const alreadyPlaying = matchExistingPlayers.find((mp) => {
+            if (isEdit && Number(mp.id) === Number(id)) return false;
+            if (formData.player_source === "user_id" && Number(mp.user_id) === ref) return true;
+            if (formData.player_source === "outside_player_id" && Number(mp.outside_player_id) === ref) return true;
+            if (formData.player_source === "tournament_team_player_id" && Number(mp.tournament_team_player_id) === ref) return true;
+            return false;
+        });
+
+        if (alreadyPlaying) {
+            const teamName = alreadyPlaying.team_name || "another team";
+            alert("all ready play this match");
+            return setError(`all ready play this match (Player is already playing this match under team "${teamName}")`);
         }
 
         try {
@@ -397,22 +474,44 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                                             {isEdit && formData.player_ref && !registeredPlayerOptions.some((player) => Number(player.user_id) === Number(formData.player_ref)) && (
                                                 <option value={formData.player_ref}>User #{formData.player_ref}</option>
                                             )}
-                                            {registeredPlayerOptions.map((player) => (
-                                                <option key={player.id} value={player.user_id}>
-                                                    {player.player_name || `User #${player.user_id}`}{player.player_email ? ` (${player.player_email})` : ""}
-                                                </option>
-                                            ))}
+                                            {registeredPlayerOptions.map((player) => {
+                                                const alreadyPlaying = matchExistingPlayers.find((mp) => {
+                                                    if (isEdit && Number(mp.id) === Number(id)) return false;
+                                                    return Number(mp.user_id) === Number(player.user_id);
+                                                });
+                                                return (
+                                                    <option
+                                                        key={player.id}
+                                                        value={player.user_id}
+                                                        disabled={Boolean(alreadyPlaying)}
+                                                    >
+                                                        {player.player_name || `User #${player.user_id}`}{player.player_email ? ` (${player.player_email})` : ""}
+                                                        {alreadyPlaying ? ` — [all ready play this match (${alreadyPlaying.team_name || "Match Team"})]` : ""}
+                                                    </option>
+                                                );
+                                            })}
                                         </>
                                     ) : (
                                         <>
                                             {isEdit && formData.player_ref && !outsidePlayers.some((player) => Number(player.id) === Number(formData.player_ref)) && (
                                                 <option value={formData.player_ref}>Outside player #{formData.player_ref}</option>
                                             )}
-                                            {outsidePlayers.map((player) => (
-                                                <option key={player.id} value={player.id}>
-                                                    {player.player_name}{player.phone ? ` (${player.phone})` : ""}
-                                                </option>
-                                            ))}
+                                            {outsidePlayers.map((player) => {
+                                                const alreadyPlaying = matchExistingPlayers.find((mp) => {
+                                                    if (isEdit && Number(mp.id) === Number(id)) return false;
+                                                    return Number(mp.outside_player_id) === Number(player.id);
+                                                });
+                                                return (
+                                                    <option
+                                                        key={player.id}
+                                                        value={player.id}
+                                                        disabled={Boolean(alreadyPlaying)}
+                                                    >
+                                                        {player.player_name}{player.phone ? ` (${player.phone})` : ""}
+                                                        {alreadyPlaying ? ` — [all ready play this match (${alreadyPlaying.team_name || "Match Team"})]` : ""}
+                                                    </option>
+                                                );
+                                            })}
                                         </>
                                     )}
                                 </select>

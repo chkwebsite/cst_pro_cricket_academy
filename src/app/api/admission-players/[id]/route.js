@@ -3,6 +3,8 @@ import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
 import { syncOnUserProgramInsert, syncOnUserProgramUpdate } from "@/app/components/lib/playerFlowSync.js";
+import { syncPlayerUserAndRole } from "@/app/components/lib/playerUserSync.js";
+import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
 
 
 // =====================================================
@@ -203,14 +205,20 @@ export async function PUT(request, { params }) {
 
         const [existingPlayer] = await connection.query(
             `
-SELECT
-id,
-    aadhaar_card
+            SELECT
+                id,
+                user_id,
+                admission_no,
+                branch_id,
+                role_id,
+                email,
+                phone,
+                aadhaar_card
             FROM cst_admission_players
             WHERE id = ?
-    AND is_deleted = 0
+              AND is_deleted = 0
             LIMIT 1
-    `,
+            `,
             [id]
         );
 
@@ -386,6 +394,22 @@ id,
         // UPDATE
         // =================================================
 
+        await ensurePlayerAccess(connection);
+
+        const { userId: syncedUserId } = await syncPlayerUserAndRole({
+            connection,
+            admissionPlayerId: id,
+            admissionNo: admission_no || existingPlayer[0].admission_no,
+            userId: user_id || existingPlayer[0].user_id,
+            firstName: first_name,
+            lastName: last_name,
+            email,
+            phone,
+            branchId: branch_id,
+            roleId: role_id,
+            status,
+        });
+
         await connection.query(
             `
             UPDATE cst_admission_players
@@ -421,8 +445,8 @@ admission_no = ?,
         WHERE id = ?
             `,
             [
-                user_id || null,
-                admission_no || null,
+                syncedUserId || null,
+                admission_no || existingPlayer[0].admission_no || null,
                 String(first_name).trim(),
                 last_name || null,
                 father_name || null,
@@ -518,20 +542,27 @@ p.id,
             LIMIT 1`, [branch_id]);
 
         if (GetBranchRows.length > 0) {
-            const [UpdBranchRows] = await connection.query(
+            await connection.query(
                 `UPDATE cst_user_branches
-         SET branch_id = ?
-         WHERE id = ?`,
+                 SET branch_id = ?, user_id = COALESCE(?, user_id)
+                 WHERE id = ?`,
                 [
                     Number(branch_id),
+                    syncedUserId,
                     GetBranchRows[0].id,
                 ]
+            );
+        } else {
+            await connection.query(
+                `INSERT INTO cst_user_branches (branch_id, appointment_no, user_id)
+                 VALUES (?, ?, ?)`,
+                [Number(branch_id), admission_no || existingPlayer[0].admission_no, syncedUserId]
             );
         }
 
         const [getUserProgramsRows] = await connection.query(
             `SELECT * FROM cst_user_programs WHERE admission_players_id = ? OR appointment_no = ? LIMIT 1`,
-            [id, admission_no]
+            [id, admission_no || existingPlayer[0].admission_no]
         );
         if (getUserProgramsRows.length > 0) {
             const upId = getUserProgramsRows[0].id;
@@ -544,7 +575,7 @@ p.id,
                     admission_no || getUserProgramsRows[0].appointment_no,
                     Number(branch_id),
                     targetProgramId,
-                    user_id ? Number(user_id) : null,
+                    syncedUserId,
                     status !== undefined ? Number(status) : 1,
                     upId,
                 ]
@@ -558,7 +589,7 @@ p.id,
                     admissionPlayersId: Number(id),
                     programId: targetProgramId,
                     branchId: Number(branch_id),
-                    userId: user_id ? Number(user_id) : null,
+                    userId: syncedUserId,
                     status: status !== undefined ? Number(status) : 1,
                     paymentInfo: paid_amount
                         ? {

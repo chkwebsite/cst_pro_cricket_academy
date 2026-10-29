@@ -3,6 +3,8 @@ import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
 import { syncOnUserProgramInsert, syncOnUserProgramUpdate } from "@/app/components/lib/playerFlowSync.js";
+import { syncPlayerUserAndRole } from "@/app/components/lib/playerUserSync.js";
+import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
 
 const uploadDir = path.join(
     process.cwd(),
@@ -659,6 +661,21 @@ export async function POST(request) {
         await connection.beginTransaction();
 
         try {
+            await ensurePlayerAccess(connection);
+
+            const { userId: syncedUserId } = await syncPlayerUserAndRole({
+                connection,
+                admissionNo,
+                userId: user_id,
+                firstName: first_name,
+                lastName: last_name,
+                email,
+                phone,
+                branchId: branch_id,
+                roleId: role_id,
+                status,
+            });
+
             const [result] =
                 await connection.query(
                     `
@@ -708,7 +725,7 @@ export async function POST(request) {
                     )
                     `,
                     [
-                        user_id,
+                        syncedUserId,
                         program_id,
                         admissionNo,
 
@@ -767,7 +784,7 @@ export async function POST(request) {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 `,
                 [
-                    user_id,
+                    syncedUserId,
                     admissionNo,
                     program_id,
                     branch_id,
@@ -779,11 +796,12 @@ export async function POST(request) {
             );
 
             await connection.query(`
-                INSERT INTO cst_user_branches(
-                branch_id,
-                appointment_no
-                )VALUES(?,?)
-                `, [Number(branch_id), admissionNo]);
+                INSERT INTO cst_user_branches (
+                    branch_id,
+                    appointment_no,
+                    user_id
+                ) VALUES (?, ?, ?)
+                `, [Number(branch_id), admissionNo, syncedUserId]);
 
             // Automatically sync fee invoice, initial payment (if any), and player attendance
             try {
@@ -791,9 +809,9 @@ export async function POST(request) {
                     connection,
                     userProgramId: userProgramResult.insertId,
                     admissionPlayersId: insertedPlayerId,
-                    programId,
+                    programId: program_id,
                     branchId: branch_id,
-                    userId: user_id,
+                    userId: syncedUserId,
                     startDate: start_date,
                     endDate: end_date,
                     status,
@@ -1136,6 +1154,22 @@ export async function PUT(request, context) {
         await connection.beginTransaction();
 
         try {
+            await ensurePlayerAccess(connection);
+
+            const { userId: syncedUserId } = await syncPlayerUserAndRole({
+                connection,
+                admissionPlayerId: playerId,
+                admissionNo: existingPlayer.admission_no,
+                userId: user_id,
+                firstName: first_name,
+                lastName: last_name,
+                email,
+                phone,
+                branchId: branch_id,
+                roleId: role_id,
+                status,
+            });
+
             /* -----------------------------
                UPDATE PLAYER
             ----------------------------- */
@@ -1177,7 +1211,7 @@ export async function PUT(request, context) {
                   AND is_deleted = 0
                 `,
                 [
-                    user_id,
+                    syncedUserId,
 
                     String(first_name).trim(),
                     toNullable(last_name),
@@ -1243,7 +1277,7 @@ export async function PUT(request, context) {
                     WHERE admission_players_id = ?
                     `,
                     [
-                        user_id,
+                        syncedUserId,
                         program_id,
                         branch_id,
                         start_date,
@@ -1253,15 +1287,22 @@ export async function PUT(request, context) {
                     ]
                 );
 
+                await connection.query(
+                    `UPDATE cst_user_branches
+                     SET branch_id = ?, user_id = COALESCE(?, user_id)
+                     WHERE appointment_no = ?`,
+                    [Number(branch_id), syncedUserId, existingPlayer.admission_no]
+                );
+
                 // Automatically sync updated fees and attendance
                 try {
                     await syncOnUserProgramUpdate({
                         connection,
                         userProgramId: programRows[0].id,
                         admissionPlayersId: playerId,
-                        programId,
+                        programId: program_id,
                         branchId: branch_id,
-                        userId: user_id,
+                        userId: syncedUserId,
                         startDate: start_date,
                         endDate: end_date,
                         status,

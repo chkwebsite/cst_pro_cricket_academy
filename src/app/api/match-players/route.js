@@ -554,35 +554,53 @@ export async function POST(request) {
             );
         }
 
-        // Check whether this player has already been selected for this match.
-        const identityColumn =
-            player.user_id !== null
-                ? "user_id"
-                : player.outside_player_id !== null
-                    ? "outside_player_id"
-                    : "tournament_team_player_id";
-
-        const identityValue =
-            player.user_id ??
-            player.outside_player_id ??
-            player.tournament_team_player_id;
+        // Check whether this player has already been selected for this match (Team A or Team B).
+        let resolvedUserId = player.user_id;
+        let resolvedOutsideId = player.outside_player_id;
+        if (player.tournament_team_player_id !== null) {
+            const [ttpRows] = await connection.execute(
+                `SELECT user_id, outside_player_id FROM cst_tournament_team_players WHERE id = ? LIMIT 1`,
+                [player.tournament_team_player_id]
+            );
+            if (ttpRows.length) {
+                if (!resolvedUserId) resolvedUserId = ttpRows[0].user_id || null;
+                if (!resolvedOutsideId) resolvedOutsideId = ttpRows[0].outside_player_id || null;
+            }
+        }
 
         const [duplicate] = await connection.execute(
-            `SELECT id
-             FROM cst_match_players
-             WHERE match_id = ?
-               AND ${identityColumn} = ?
+            `SELECT 
+                mp.id,
+                mp.team_id,
+                t.team_name
+             FROM cst_match_players mp
+             LEFT JOIN cst_teams t ON t.id = mp.team_id
+             LEFT JOIN cst_tournament_team_players ttp ON ttp.id = mp.tournament_team_player_id
+             WHERE mp.match_id = ?
+               AND (
+                   (? IS NOT NULL AND (mp.user_id = ? OR ttp.user_id = ?))
+                   OR
+                   (? IS NOT NULL AND (mp.outside_player_id = ? OR ttp.outside_player_id = ?))
+                   OR
+                   (? IS NOT NULL AND mp.tournament_team_player_id = ?)
+               )
              LIMIT 1`,
-            [matchId, identityValue]
+            [
+                matchId,
+                resolvedUserId, resolvedUserId, resolvedUserId,
+                resolvedOutsideId, resolvedOutsideId, resolvedOutsideId,
+                player.tournament_team_player_id, player.tournament_team_player_id,
+            ]
         );
 
         if (duplicate.length) {
             await connection.rollback();
+            const existingTeam = duplicate[0].team_name || "another team";
 
             return NextResponse.json(
                 {
                     success: false,
-                    message: "This player is already added to this match.",
+                    message: `all ready play this match (Player is already playing this match under team "${existingTeam}")`,
                 },
                 { status: 409 }
             );

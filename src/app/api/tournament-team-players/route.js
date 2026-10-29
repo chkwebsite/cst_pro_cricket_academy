@@ -520,22 +520,32 @@ export async function POST(request) {
             }
         }
 
-        // Prevent registering the same player twice in this tournament team
+        // Prevent registering the same player twice in the same tournament
         const [duplicates] = await connection.execute(
             `
-        SELECT id
-        FROM cst_tournament_team_players
-        WHERE tournament_team_id = ?
-        AND is_deleted = 0
-    AND(
-        (? IS NOT NULL AND user_id = ?)
-    OR
-        (? IS NOT NULL AND outside_player_id = ?)
-          )
-        LIMIT 1
-        `,
+            SELECT 
+                ttp.id,
+                tm.team_name,
+                t.tournament_name
+            FROM cst_tournament_team_players ttp
+            INNER JOIN cst_tournament_teams tt 
+                ON tt.id = ttp.tournament_team_id
+            INNER JOIN cst_tournaments t 
+                ON t.id = tt.tournament_id
+            INNER JOIN cst_teams tm 
+                ON tm.id = tt.team_id
+            WHERE (COALESCE(ttp.tournament_id, tt.tournament_id) = ?)
+              AND ttp.is_deleted = 0
+              AND tt.is_deleted = 0
+              AND (
+                  (? IS NOT NULL AND ttp.user_id = ?)
+                  OR
+                  (? IS NOT NULL AND ttp.outside_player_id = ?)
+              )
+            LIMIT 1
+            `,
             [
-                tournamentTeamId,
+                registration.tournament_id,
                 userId,
                 userId,
                 outsidePlayerId,
@@ -547,10 +557,11 @@ export async function POST(request) {
             await connection.rollback();
             transactionStarted = false;
 
+            const existingTeam = duplicates[0].team_name || "another team";
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Player is already registered in this tournament team",
+                    message: `Player is already enrolled in this tournament under team "${existingTeam}". A player cannot be enrolled twice in the same tournament.`,
                 },
                 { status: 409 }
             );

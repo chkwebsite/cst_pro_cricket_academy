@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
 
 // GET - List user roles
 export async function GET(request) {
@@ -7,6 +8,7 @@ export async function GET(request) {
 
     try {
         connection = await pool.getConnection();
+        await ensurePlayerAccess(connection);
 
         const { searchParams } = new URL(request.url);
 
@@ -269,6 +271,16 @@ export async function POST(request) {
                 role_id,
             ]
         );
+
+        // Keep user_type in cst_users aligned with assigned role
+        try {
+            if (roleRows[0]?.role_name) {
+                await connection.query(
+                    "UPDATE cst_users SET user_type = ? WHERE id = ?",
+                    [roleRows[0].role_name, user_id]
+                );
+            }
+        } catch (_) {}
 
         return NextResponse.json(
             {

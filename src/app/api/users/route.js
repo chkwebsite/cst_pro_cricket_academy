@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import fs from "fs/promises";
 import path from "path";
 import pool from "@/app/components/lib/db";
+import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
 
 
 // =====================================================
@@ -15,6 +16,7 @@ export async function GET(request) {
     const connection = await pool.getConnection();
 
     try {
+        await ensurePlayerAccess(connection);
 
         const { searchParams } = new URL(request.url);
 
@@ -94,12 +96,16 @@ u.id,
         // =====================================================
 
         if (user_type) {
-
-            sql += `
-                AND u.user_type = ?
-    `;
-
-            values.push(user_type);
+            if (user_type.toLowerCase() === "player" || user_type === "7") {
+                sql += `
+                    AND (LOWER(u.user_type) = 'player' OR u.user_type = '7')
+                `;
+            } else {
+                sql += `
+                    AND (LOWER(u.user_type) = LOWER(?) OR u.user_type = ?)
+                `;
+                values.push(user_type, user_type);
+            }
         }
 
 

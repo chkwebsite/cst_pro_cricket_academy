@@ -217,6 +217,16 @@ export async function PUT(request, { params }) {
             ]
         );
 
+        // Keep user_type in cst_users aligned with updated role
+        try {
+            if (roleRows[0]?.role_name) {
+                await connection.query(
+                    "UPDATE cst_users SET user_type = ? WHERE id = ?",
+                    [roleRows[0].role_name, user_id]
+                );
+            }
+        } catch (_) {}
+
         return NextResponse.json({
             success: true,
             message: "User role updated successfully",
