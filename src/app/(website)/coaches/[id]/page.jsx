@@ -39,17 +39,31 @@ export async function generateMetadata({ params }) {
 
   if (!coach) {
     return {
-      title: "Coach Not Found | ST Cricket Academy",
+      title: "Coach Not Found | CST Cricket Academy",
     };
   }
 
   return {
-    title: `${coach.coach_name || "Coach"} - Profile | ST Cricket Academy`,
+    title: `${coach.coach_name || "Coach"} - Profile | CST Cricket Academy`,
     description:
       coach.bio ||
       `Learn more about ${coach.coach_name || "our coach"}, ${
         coach.specialization || "Cricket Specialist"
-      } at ST Cricket Academy.`,
+      } at CST Cricket Academy. Experience, certifications, and coaching philosophy.`,
+    keywords: [
+      coach.coach_name,
+      coach.specialization,
+      "Cricket Coach Profile",
+      "CST Cricket Academy Coach",
+      "Professional Cricket Training",
+    ].filter(Boolean),
+    openGraph: {
+      title: `${coach.coach_name || "Coach"} - Profile | CST Cricket Academy`,
+      description:
+        coach.bio ||
+        `Learn more about ${coach.coach_name || "our coach"} at CST Cricket Academy.`,
+      images: coach.profile_image ? [{ url: coach.profile_image }] : [],
+    },
   };
 }
 
@@ -186,7 +200,7 @@ export default async function CoachDetailPage({ params }) {
                     <div>
                       <strong className="d-block text-dark">Academy Location</strong>
                       <span className="text-secondary">
-                        {coach.academy_name || "ST Cricket Academy"}
+                        {coach.academy_name || "CST Cricket Academy"}
                         {coach.branch_name ? ` • ${coach.branch_name}` : ""}
                       </span>
                     </div>
@@ -314,7 +328,7 @@ export default async function CoachDetailPage({ params }) {
                 >
                   {coach.bio ||
                     `Coach ${coach.coach_name} is an integral member of the coaching panel at ${
-                      coach.academy_name || "ST Cricket Academy"
+                      coach.academy_name || "CST Cricket Academy"
                     }, specializing in ${specializations.join(
                       " and "
                     )} development. With ${

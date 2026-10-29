@@ -2,7 +2,7 @@ export default function AboutStorySection({
   tag = "Our Story",
   title = "More Than a Cricket Academy",
   paragraphs = [
-    "Founded with a simple belief that every young cricketer deserves quality coaching, ST Cricket Academy has grown into a multi-centre training hub. Our programme combines classical technique, match awareness and modern sports science.",
+    "Founded with a simple belief that every young cricketer deserves quality coaching, CST Cricket Academy has grown into a multi-centre training hub. Our programme combines classical technique, match awareness and modern sports science.",
     "We focus on the whole player: skill, fitness, discipline and mindset, so our students grow into confident cricketers and better people.",
   ],
   bulletPoints = [

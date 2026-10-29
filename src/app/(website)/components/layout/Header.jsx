@@ -20,7 +20,7 @@ export default function Header({
   phone = "+91 8285831503",
   email = "chandankeshri100@gmail.com",
   logoSrc = "/images/website/logo.png",
-  logoAlt = "ST Cricket Academy logo",
+  logoAlt = "CST Cricket Academy logo",
 }) {
   const pathname = usePathname();
   const { user, isLoggedIn, logout } = useUser();
@@ -28,6 +28,7 @@ export default function Header({
   const [isSticky, setIsSticky] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [matchesDropdownOpen, setMatchesDropdownOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const userDropdownRef = useRef(null);
@@ -92,6 +93,7 @@ export default function Header({
     setPrevPathname(pathname);
     setNavOpen(false);
     setDropdownOpen(false);
+    setMatchesDropdownOpen(false);
     setUserDropdownOpen(false);
   }
 
@@ -101,14 +103,25 @@ export default function Header({
     return false;
   };
 
-  const isDropdownActive = () => {
+  const isAcademyActive = () => {
     return (
       pathname.startsWith("/about") ||
-      pathname.startsWith("/ground-booking") ||
-      pathname.startsWith("/rules") ||
+      pathname.startsWith("/facilities") ||
+      pathname.startsWith("/achievements") ||
       pathname.startsWith("/coaches") ||
       pathname.startsWith("/programs") ||
-      pathname.startsWith("/branches")
+      pathname.startsWith("/branches") ||
+      pathname.startsWith("/rules")
+    );
+  };
+
+  const isMatchesActive = () => {
+    return (
+      pathname.startsWith("/ground-booking") ||
+      pathname.startsWith("/tournaments") ||
+      pathname.startsWith("/matches") ||
+      pathname.startsWith("/my-bookings") ||
+      pathname.startsWith("/gallery")
     );
   };
 
@@ -132,7 +145,9 @@ export default function Header({
           <div className="d-none d-md-flex align-items-center gap-2">
             <Link href="/contact">Admissions</Link>
             <span>•</span>
-            <Link href="/contact">Book a Free Trial</Link>
+            <Link href="/book-free-trial">Book a Free Trial</Link>
+            <span>•</span>
+            <Link href="/contact">Contact Us</Link>
             <span>•</span>
             {isLoggedIn && user ? (
               <div className="d-inline-flex align-items-center gap-2">
@@ -171,11 +186,12 @@ export default function Header({
       </div>
 
       {/* Main Navigation (Fixed on page scroll) */}
-      <nav
-        className={`navbar navbar-expand-lg sticky-top ${
-          isSticky ? "is-sticky" : ""
-        }`}
-      >
+      <div className={`header-nav-placeholder ${isSticky ? "is-sticky" : ""}`}>
+        <nav
+          className={`navbar navbar-expand-lg ${
+            isSticky ? "is-sticky fixed-top" : "sticky-top"
+          }`}
+        >
         <div className="container">
           <Link
             className="navbar-brand d-flex align-items-center gap-2"
@@ -211,6 +227,7 @@ export default function Header({
                 </Link>
               </li>
 
+              {/* Dropdown 1: Academy Corners */}
               <li
                 className={`nav-item dropdown ${
                   dropdownOpen ? "show" : ""
@@ -228,7 +245,7 @@ export default function Header({
               >
                 <a
                   className={`nav-link dropdown-toggle ${
-                    isDropdownActive() ? "active" : ""
+                    isAcademyActive() ? "active" : ""
                   }`}
                   href="#"
                   id="academyMenu"
@@ -237,6 +254,7 @@ export default function Header({
                   onClick={(e) => {
                     e.preventDefault();
                     setDropdownOpen((prev) => !prev);
+                    setMatchesDropdownOpen(false);
                   }}
                 >
                   Academy Corners
@@ -259,23 +277,23 @@ export default function Header({
                   <li>
                     <Link
                       className={`dropdown-item ${
-                        isActive("/ground-booking") ? "active" : ""
+                        isActive("/facilities") ? "active" : ""
                       }`}
-                      href="/ground-booking"
+                      href="/facilities"
                       onClick={() => setNavOpen(false)}
                     >
-                      Ground Booking
+                      Facilities &amp; Campus
                     </Link>
                   </li>
                   <li>
                     <Link
                       className={`dropdown-item ${
-                        isActive("/rules") ? "active" : ""
+                        isActive("/achievements") ? "active" : ""
                       }`}
-                      href="/rules"
+                      href="/achievements"
                       onClick={() => setNavOpen(false)}
                     >
-                      Rules &amp; Regulations
+                      Hall of Fame &amp; Stars
                     </Link>
                   </li>
                   <li>
@@ -311,22 +329,116 @@ export default function Header({
                       Our Branches
                     </Link>
                   </li>
+                  <li>
+                    <Link
+                      className={`dropdown-item ${
+                        isActive("/rules") ? "active" : ""
+                      }`}
+                      href="/rules"
+                      onClick={() => setNavOpen(false)}
+                    >
+                      Rules &amp; Regulations
+                    </Link>
+                  </li>
                 </ul>
               </li>
 
-              <li className="nav-item">
-                <Link
-                  className={`nav-link ${
-                    isActive("/gallery") ? "active" : ""
+              {/* Dropdown 2: Matches & Events */}
+              <li
+                className={`nav-item dropdown ${
+                  matchesDropdownOpen ? "show" : ""
+                }`}
+                onMouseEnter={() => {
+                  if (typeof window !== "undefined" && window.innerWidth >= 992) {
+                    setMatchesDropdownOpen(true);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (typeof window !== "undefined" && window.innerWidth >= 992) {
+                    setMatchesDropdownOpen(false);
+                  }
+                }}
+              >
+                <a
+                  className={`nav-link dropdown-toggle ${
+                    isMatchesActive() ? "active" : ""
                   }`}
-                  href="/gallery"
-                  onClick={() => setNavOpen(false)}
+                  href="#"
+                  id="matchesMenu"
+                  role="button"
+                  aria-expanded={matchesDropdownOpen}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMatchesDropdownOpen((prev) => !prev);
+                    setDropdownOpen(false);
+                  }}
                 >
-                  Photo Gallery
-                </Link>
+                  Matches &amp; Events
+                </a>
+                <ul
+                  className={`dropdown-menu ${matchesDropdownOpen ? "show" : ""}`}
+                  aria-labelledby="matchesMenu"
+                >
+                  <li>
+                    <Link
+                      className={`dropdown-item ${
+                        isActive("/ground-booking") ? "active" : ""
+                      }`}
+                      href="/ground-booking"
+                      onClick={() => setNavOpen(false)}
+                    >
+                      Ground Booking
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      className={`dropdown-item ${
+                        isActive("/tournaments") ? "active" : ""
+                      }`}
+                      href="/tournaments"
+                      onClick={() => setNavOpen(false)}
+                    >
+                      Tournaments &amp; Cups
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      className={`dropdown-item ${
+                        isActive("/matches") ? "active" : ""
+                      }`}
+                      href="/matches"
+                      onClick={() => setNavOpen(false)}
+                    >
+                      Live Matches &amp; Fixtures
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      className={`dropdown-item ${
+                        isActive("/my-bookings") ? "active" : ""
+                      }`}
+                      href="/my-bookings"
+                      onClick={() => setNavOpen(false)}
+                    >
+                      My Slot Bookings
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      className={`dropdown-item ${
+                        isActive("/gallery") ? "active" : ""
+                      }`}
+                      href="/gallery"
+                      onClick={() => setNavOpen(false)}
+                    >
+                      Photo Gallery
+                    </Link>
+                  </li>
+                </ul>
               </li>
 
-              <li className="nav-item">
+              {/* Mobile only Contact Us */}
+              <li className="nav-item d-lg-none">
                 <Link
                   className={`nav-link ${
                     isActive("/contact") ? "active" : ""
@@ -531,7 +643,26 @@ export default function Header({
                         </span>
                         <div className="flex-grow-1">
                           <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>User Orders</div>
-                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Track & view orders</div>
+                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Track store purchases</div>
+                        </div>
+                        <i className="bi bi-chevron-right text-muted small opacity-50"></i>
+                      </Link>
+
+                      {/* 3. My Ground Bookings */}
+                      <Link
+                        className="dropdown-item"
+                        href="/my-bookings"
+                        onClick={() => {
+                          setNavOpen(false);
+                          setUserDropdownOpen(false);
+                        }}
+                      >
+                        <span className="item-icon-box" style={{ background: "#fef3c7", color: "#d97706" }}>
+                          <i className="bi bi-calendar-check-fill"></i>
+                        </span>
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>Ground Bookings</div>
+                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Reserved turf match slots</div>
                         </div>
                         <i className="bi bi-chevron-right text-muted small opacity-50"></i>
                       </Link>
@@ -609,6 +740,7 @@ export default function Header({
           </div>
         </div>
       </nav>
-    </>
+    </div>
+  </>
   );
 }

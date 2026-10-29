@@ -12,9 +12,27 @@ import FaqSection from "./components/home/FaqSection";
 import CtaSection from "./components/home/CtaSection";
 
 export const metadata = {
-  title: "ST Cricket Academy | Professional Cricket Coaching",
+  title: "CST Cricket Academy | Premier Cricket Academy & Professional Coaching",
   description:
-    "ST Cricket Academy offers professional cricket coaching for all ages with expert coaches, turf pitches and a structured player development programme.",
+    "Welcome to CST Cricket Academy. State-of-the-art turf pitches, bowling machines, BCCI-certified coaches, and comprehensive cricket training programs for youth, juniors, and seniors.",
+  keywords: [
+    "Cricket Academy",
+    "Best Cricket Academy",
+    "Cricket Coaching Near Me",
+    "Professional Cricket Training",
+    "Turf Pitch Cricket Academy",
+    "Junior Cricket Academy",
+    "Cricket Batting Coaching",
+    "Fast Bowling Masterclass",
+    "Cricket Ground Rental",
+    "Cricket Academy Admissions",
+  ],
+  openGraph: {
+    title: "CST Cricket Academy | Premier Cricket Academy & Professional Coaching",
+    description:
+      "State-of-the-art turf pitches, bowling machines, BCCI-certified coaches, and comprehensive cricket training programs.",
+    url: "https://stcricketacademy.com",
+  },
 };
 
 export default function HomePage() {

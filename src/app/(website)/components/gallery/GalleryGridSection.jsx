@@ -349,7 +349,7 @@ function getEmbedUrl(type, url) {
 
 export default function GalleryGridSection({
     tag = "Photo & Video Gallery",
-    title = "Life at ST Cricket Academy",
+    title = "Life at CST Cricket Academy",
     subtitle = "Explore real moments from match days, net practices, tournaments, and fitness camps.",
 }) {
     // -------------------------------------------------------------
@@ -1204,7 +1204,7 @@ export default function GalleryGridSection({
                         <h5 className="mb-1 text-white">
                             {lightboxItems[lightboxIndex].image_caption ||
                                 selectedAlbum?.album_title ||
-                                "ST Cricket Academy Moment"}
+                                "CST Cricket Academy Moment"}
                         </h5>
                         {lightboxItems[lightboxIndex].alt_text && (
                             <p className="small text-white-50 mb-0">

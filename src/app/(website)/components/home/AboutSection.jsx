@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function AboutSection({
   tag = "About the Academy",
   title = "Building Cricketers, Shaping Character",
-  description = "ST Cricket Academy blends traditional technique with modern sports science. From first grip to first-class ambition, every player follows a clear development pathway with regular assessments and personal feedback.",
+  description = "CST Cricket Academy blends traditional technique with modern sports science. From first grip to first-class ambition, every player follows a clear development pathway with regular assessments and personal feedback.",
   bulletPoints = [
     "Certified and experienced coaching panel",
     "Turf wickets, astro pitches and bowling machines",

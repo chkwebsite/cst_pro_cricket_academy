@@ -25,8 +25,8 @@ const poppins = Poppins({
 });
 
 export const metadata = {
-  title: "Sign In | ST Cricket Academy",
-  description: "Sign in to CST Pro Cricket Academy portal for player, coach, and tournament management.",
+  title: "Sign In | CST Cricket Academy",
+  description: "Sign in to CST Cricket Academy portal for player, coach, and tournament management.",
   icons: {
     icon: "/images/website/favicon.png",
   },

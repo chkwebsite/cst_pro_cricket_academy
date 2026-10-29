@@ -90,7 +90,7 @@ const DEFAULT_RULES = [
         iconBg: "bg-warning bg-opacity-10 text-warning",
         summary: "Mandatory academy attire, footwear, and protective armor required for training.",
         points: [
-            "All trainees must report in official ST Cricket Academy practice kit (or clean cricket whites as specified).",
+            "All trainees must report in official CST Cricket Academy practice kit (or clean cricket whites as specified).",
             "Appropriate cricket rubber-stud shoes (or spikes on designated turf pitches only) are strictly mandatory.",
             "Batters MUST wear an approved cricket helmet, batting gloves, leg guards, thigh pad, and abdominal guard in nets.",
             "Wicketkeepers must wear keeping gloves, inners, abdominal guard, and keeping pads at all times during drills.",
@@ -465,7 +465,7 @@ export default function RulesListSection({
                                 Strict Zero-Tolerance Policy
                             </h4>
                             <p className="text-secondary mb-0 small">
-                                ST Cricket Academy maintains zero tolerance toward bullying, verbal abuse, hazing, substance abuse, and deliberate property damage. Any player or affiliate violating these core values faces immediate disciplinary review, suspension, or expulsion.
+                                CST Cricket Academy maintains zero tolerance toward bullying, verbal abuse, hazing, substance abuse, and deliberate property damage. Any player or affiliate violating these core values faces immediate disciplinary review, suspension, or expulsion.
                             </p>
                         </div>
                     </div>

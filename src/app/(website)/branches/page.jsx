@@ -7,9 +7,22 @@ import BranchFaqSection from "../components/branches/BranchFaqSection";
 import BranchCtaSection from "../components/branches/BranchCtaSection";
 
 export const metadata = {
-  title: "Our Branches | CST Pro Cricket Academy",
+  title: "Our Branches & Training Centers | CST Cricket Academy",
   description:
-    "Explore CST Pro Cricket Academy training campuses in Gurugram. State-of-the-art turf pitches, bowling machines, floodlit nets, certified coaching batches, and hostel facilities.",
+    "Find CST Cricket Academy training centers and campus branches. World-class turf pitches, bowling machines, floodlit nets, certified coaches, and hostel facilities.",
+  keywords: [
+    "Cricket Academy Branches",
+    "Cricket Training Center Near Me",
+    "Cricket Academy Campus",
+    "Turf Pitch Center",
+    "Cricket Coaching Centers",
+    "Cricket Academy Locations",
+  ],
+  openGraph: {
+    title: "Our Branches & Training Centers | CST Cricket Academy",
+    description:
+      "Find CST Cricket Academy training centers and campus branches with world-class facilities.",
+  },
 };
 
 export default function BranchesPage() {

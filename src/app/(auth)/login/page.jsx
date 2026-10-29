@@ -194,7 +194,7 @@ function LoginContent() {
                   <Link href="/" className="logo-badge">
                     <img
                       src="/images/website/logo.png"
-                      alt="ST Cricket Academy"
+                      alt="CST Cricket Academy"
                     />
                   </Link>
                 </div>
@@ -313,7 +313,7 @@ function LoginContent() {
                     <Link href="/" className="logo-badge">
                       <img
                         src="/images/website/logo.png"
-                        alt="ST Cricket Academy"
+                        alt="CST Cricket Academy"
                         style={{ height: "36px" }}
                       />
                     </Link>

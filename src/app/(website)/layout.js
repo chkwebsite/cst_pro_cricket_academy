@@ -36,9 +36,63 @@ const poppins = Poppins({
 });
 
 export const metadata = {
-  title: "ST Cricket Academy | Professional Cricket Coaching",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://stcricketacademy.com"),
+  title: {
+    default: "CST Cricket Academy | Professional Cricket Coaching & Training",
+    template: "%s | CST Cricket Academy",
+  },
   description:
-    "ST Cricket Academy offers professional cricket coaching for all ages with expert coaches, turf pitches and a structured player development programme.",
+    "CST Cricket Academy offers professional cricket coaching for all ages with BCCI-certified coaches, natural turf pitches, modern indoor nets, and structured player development programs.",
+  keywords: [
+    "Cricket Academy",
+    "Professional Cricket Coaching",
+    "Cricket Academy Near Me",
+    "Turf Pitch Cricket Booking",
+    "Junior Cricket Academy",
+    "Cricket Batting Coaching",
+    "Fast Bowling Masterclass",
+    "Cricket Ground Rental",
+    "Cricket Tournaments",
+    "Cricket Academy Admission",
+  ],
+  authors: [{ name: "CST Cricket Academy" }],
+  creator: "CST Cricket Academy",
+  publisher: "CST Cricket Academy",
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    url: "https://stcricketacademy.com",
+    siteName: "CST Cricket Academy",
+    title: "CST Cricket Academy | Professional Cricket Coaching & Training",
+    description:
+      "CST Cricket Academy offers professional cricket coaching for all ages with BCCI-certified coaches, natural turf pitches, modern indoor nets, and structured player development programs.",
+    images: [
+      {
+        url: "/images/website/favicon.png",
+        width: 800,
+        height: 600,
+        alt: "CST Cricket Academy",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CST Cricket Academy | Professional Cricket Coaching & Training",
+    description:
+      "CST Cricket Academy offers professional cricket coaching for all ages with BCCI-certified coaches, natural turf pitches, modern indoor nets, and structured player development programs.",
+    images: ["/images/website/favicon.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   icons: {
     icon: "/images/website/favicon.png",
   },

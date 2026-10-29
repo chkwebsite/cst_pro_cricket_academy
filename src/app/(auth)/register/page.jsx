@@ -34,7 +34,7 @@ function RegisterContent() {
           <Link href="/" className="logo-badge">
             <img
               src="/images/website/logo.png"
-              alt="ST Cricket Academy"
+              alt="CST Cricket Academy"
               style={{ height: "44px" }}
             />
           </Link>
@@ -87,7 +87,7 @@ function RegisterContent() {
                   className="display-font mt-2 mb-2"
                   style={{ fontSize: "clamp(1.8rem, 3.5vw, 2.6rem)" }}
                 >
-                  JOIN <span className="text-cyan">ST CRICKET ACADEMY</span>
+                  JOIN <span className="text-cyan">CST CRICKET ACADEMY</span>
                 </h1>
                 <p
                   className="mb-0"

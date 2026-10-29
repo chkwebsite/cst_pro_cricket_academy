@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const ACADEMY_ID = 1; // CST Cricket Academy (Default)
+const ACADEMY_ID = 1; // CCST Cricket Academy (Default)
 
 export default function ContactFormSection({
   tag = "Get in Touch",

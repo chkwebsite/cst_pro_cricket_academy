@@ -106,8 +106,8 @@ export async function POST(request) {
     try {
         const body = await request.json();
 
-        const {
-            academy_id = null,
+        let {
+            academy_id = 1,
             branch_id = null,
             student_name,
             age = null,
@@ -119,6 +119,10 @@ export async function POST(request) {
             enquiry_status = "New",
             assigned_to = null,
         } = body;
+
+        if (!academy_id) {
+            academy_id = 1;
+        }
 
         // Required fields
         if (
@@ -170,11 +174,20 @@ export async function POST(request) {
             "Closed",
         ];
 
+        // Normalize or validate enquiry source
         if (!validSources.includes(enquiry_source)) {
-            return NextResponse.json(
-                { success: false, message: "Invalid enquiry_source" },
-                { status: 400 }
-            );
+            if (
+                typeof enquiry_source === "string" &&
+                (enquiry_source.toLowerCase().includes("trial") ||
+                    enquiry_source.toLowerCase().includes("web") ||
+                    enquiry_source.toLowerCase().includes("online"))
+            ) {
+                enquiry_source = "Website";
+            } else if (typeof enquiry_source === "string" && enquiry_source.trim()) {
+                enquiry_source = "Other";
+            } else {
+                enquiry_source = "Website";
+            }
         }
 
         // New enquiries should normally start with New status.

@@ -25,7 +25,7 @@ export default function HeroSection({
     "All ages, all levels",
   ],
   heroImage = "/images/website/hero-batter.png",
-  heroImageAlt = "ST Cricket Academy batter playing a cover drive",
+  heroImageAlt = "CST Cricket Academy batter playing a cover drive",
 }) {
   return (
     <header className="hero">
