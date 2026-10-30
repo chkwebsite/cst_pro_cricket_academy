@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import AcademyForgotPasswordModal from "../components/AcademyForgotPasswordModal";
 
 function LoginContent() {
   const router = useRouter();
@@ -11,6 +12,10 @@ function LoginContent() {
   // Tab State: 'academy' or 'public'
   const initialTab = searchParams.get("tab") === "public" ? "public" : "academy";
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  // Academy Forgot Password Modal State
+  const [isAcademyForgotOpen, setIsAcademyForgotOpen] = useState(false);
+  const [passwordResetSuccess, setPasswordResetSuccess] = useState("");
 
   // Academy User Form State
   const [academyLogin, setAcademyLogin] = useState("");
@@ -381,6 +386,17 @@ function LoginContent() {
                 </div>
 
                 {/* Notifications */}
+                {passwordResetSuccess && (
+                  <div
+                    className="alert alert-success d-flex align-items-center py-2 px-3 mb-3 rounded-3"
+                    role="alert"
+                    style={{ fontSize: "0.9rem" }}
+                  >
+                    <i className="bi bi-check-circle-fill me-2 fs-5 text-success"></i>
+                    <div>{passwordResetSuccess}</div>
+                  </div>
+                )}
+
                 {justRegistered && (
                   <div
                     className="alert alert-success d-flex align-items-center py-2 px-3 mb-3 rounded-3"
@@ -442,13 +458,18 @@ function LoginContent() {
                           >
                             Password
                           </label>
-                          <a
-                            href="mailto:chandankeshri100@gmail.com?subject=Password%20Reset%20Request%20-%20CST%20Pro"
-                            className="small text-red"
+                          <button
+                            type="button"
+                            className="btn btn-link p-0 small text-red text-decoration-none"
                             style={{ fontSize: "0.82rem" }}
+                            onClick={() => {
+                              setAcademyError("");
+                              setPasswordResetSuccess("");
+                              setIsAcademyForgotOpen(true);
+                            }}
                           >
                             Forgot password?
-                          </a>
+                          </button>
                         </div>
                         <div className="auth-input-group">
                           <i className="bi bi-shield-lock input-icon"></i>
@@ -690,6 +711,19 @@ function LoginContent() {
           </div>
         </div>
       </div>
+
+      {/* Academy Forgot Password Modal */}
+      <AcademyForgotPasswordModal
+        isOpen={isAcademyForgotOpen}
+        onClose={() => setIsAcademyForgotOpen(false)}
+        onSuccess={({ identifier, message }) => {
+          setIsAcademyForgotOpen(false);
+          if (identifier) setAcademyLogin(identifier);
+          setPasswordResetSuccess(
+            message || "Your password has been successfully reset! Please enter your new password to sign in."
+          );
+        }}
+      />
     </main>
   );
 }

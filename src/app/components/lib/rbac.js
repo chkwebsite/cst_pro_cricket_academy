@@ -15,7 +15,16 @@ export async function getAuthUser(request) {
 
         if (request && typeof request.cookies?.get === "function") {
             token = request.cookies.get("auth_token")?.value;
-        } else {
+        }
+
+        if (!token && request && typeof request.headers?.get === "function") {
+            const authHeader = request.headers.get("authorization");
+            if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+                token = authHeader.slice(7).trim();
+            }
+        }
+
+        if (!token) {
             try {
                 const nextHeaders = await import("next/headers");
                 const cookieStore = await nextHeaders.cookies();

@@ -97,6 +97,7 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/gallery-videos",
         "/next_panel/gallery-management",
         "/next_panel/public-users",
+        "/next_panel/password-resets",
         "/next_panel/Settings",
     ],
 
@@ -154,6 +155,7 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/gallery-videos",
         "/next_panel/gallery-management",
         "/next_panel/public-users",
+        "/next_panel/password-resets",
         "/next_panel/Settings",
     ],
 
