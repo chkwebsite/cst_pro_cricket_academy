@@ -336,6 +336,7 @@ export default function MatchScorecardPage() {
                             </Link>
                         </div>
                     ) : (
+                        <>
                         <div className="table-responsive bg-white rounded-4 shadow-sm p-3">
                             <table className="table align-middle table-hover mb-0">
                                 <thead className="table-success">
@@ -446,6 +447,7 @@ export default function MatchScorecardPage() {
                             onPageChange={setPage}
                             pageSize={PAGE_SIZE}
                         />
+                        </>
                     )}
                 </div>
             </div>

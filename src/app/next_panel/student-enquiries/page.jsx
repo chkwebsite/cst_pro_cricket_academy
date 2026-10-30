@@ -419,6 +419,7 @@ export default function StudentEnquiriesPage() {
                             </Link>
                         </div>
                     ) : (
+                        <>
                         <div className="table-responsive bg-white rounded-4 shadow-sm p-3">
                             <table className="table align-middle table-hover mb-0">
                                 <thead className="table-success">
@@ -553,6 +554,7 @@ export default function StudentEnquiriesPage() {
                             onPageChange={setPage}
                             pageSize={PAGE_SIZE}
                         />
+                        </>
                     )}
                 </div>
             </div>

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "@/app/components/lib/db";
 import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
+import { getUserRole, ROLES, ROLE_ALLOWED_ROUTES } from "@/app/components/lib/rbac.js";
 
 export async function POST(request) {
     let connection;
@@ -347,25 +348,30 @@ export async function POST(request) {
         userData.permissions = uniquePermissions;
 
         /*
-         * JWT
+         * JWT with Full Role & Scope Context
          */
-        const isSuperAdmin =
-            user.user_type === "Super Admin" ||
-            user.user_type === "superadmin" ||
-            user.user_type === "super admin";
+        const userRole = getUserRole(user);
+        const isSuperAdmin = userRole === ROLES.SUPER_ADMIN;
+
+        const roleAllowed = ROLE_ALLOWED_ROUTES[userRole] || [];
+        const tokenPermissions = isSuperAdmin
+            ? ["*"]
+            : Array.from(new Set([
+                ...uniquePermissions.map((item) => item.menu_url).filter(Boolean),
+                ...roleAllowed,
+                ...(isPlayer ? ["/next_panel/player-dashboard", "/next_panel/orders"] : []),
+            ]));
 
         const token = jwt.sign(
             {
                 id: user.id,
                 appointment_no: user.appointment_no,
+                academy_id: user.academy_id ? Number(user.academy_id) : null,
+                branch_id: user.branch_id ? Number(user.branch_id) : null,
                 email: user.email,
                 user_type: user.user_type,
-                permissions: isSuperAdmin
-                    ? ["*"]
-                    : Array.from(new Set([
-                        ...uniquePermissions.map((item) => item.menu_url).filter(Boolean),
-                        ...(isPlayer ? ["/next_panel/player-dashboard", "/next_panel/orders"] : []),
-                    ])),
+                role: userRole,
+                permissions: tokenPermissions,
             },
             JWT_SECRET,
             {

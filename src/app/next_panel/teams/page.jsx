@@ -268,6 +268,7 @@ export default function TeamsPage() {
                             ) : teams.length === 0 ? (
                                 <div className="text-center py-5 text-muted">No teams found.</div>
                             ) : (
+                                <>
                                 <div className="table-responsive">
                                     <table className="table align-middle mb-0">
                                         <thead className="table-success">
@@ -350,6 +351,7 @@ export default function TeamsPage() {
                                     onPageChange={setPage}
                                     pageSize={PAGE_SIZE}
                                 />
+                                </>
                             )}
                         </div>
                     </>

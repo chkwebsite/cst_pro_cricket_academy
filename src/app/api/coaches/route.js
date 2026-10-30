@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 // GET: All coaches
 // Example: /api/coaches?search=Rahul&academy_id=1&branch_id=2&status=1
@@ -62,14 +63,40 @@ export async function GET(request) {
             );
         }
 
-        if (academy_id) {
-            sql += " AND c.academy_id = ?";
-            values.push(academy_id);
-        }
-
-        if (branch_id) {
-            sql += " AND c.branch_id = ?";
-            values.push(branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND c.branch_id = ? AND c.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND c.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (branch_id) {
+                    sql += " AND c.branch_id = ?";
+                    values.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND c.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else {
+                if (academy_id) {
+                    sql += " AND c.academy_id = ?";
+                    values.push(academy_id);
+                }
+                if (branch_id) {
+                    sql += " AND c.branch_id = ?";
+                    values.push(branch_id);
+                }
+            }
+        } else {
+            if (academy_id) {
+                sql += " AND c.academy_id = ?";
+                values.push(academy_id);
+            }
+            if (branch_id) {
+                sql += " AND c.branch_id = ?";
+                values.push(branch_id);
+            }
         }
 
         if (status !== null && status !== "" && status !== undefined) {

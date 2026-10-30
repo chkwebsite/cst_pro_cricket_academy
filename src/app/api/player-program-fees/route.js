@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // ============================================
@@ -154,14 +155,60 @@ f.id,
             values.push(id);
         }
 
-        if (academy_id) {
-            sql += ` AND f.academy_id = ? `;
-            values.push(academy_id);
-        }
-
-        if (branch_id) {
-            sql += ` AND f.branch_id = ? `;
-            values.push(branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isCoach) {
+                // Coach: ONLY batch players assigned to this coach AND ONLY Pending or Partial fee status!
+                sql += ` AND f.admission_players_id IN (
+                    SELECT up.admission_players_id
+                    FROM cst_user_programs up
+                    JOIN cst_batch_players bp ON bp.user_program_id = up.id
+                    JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
+                    WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
+                ) AND f.payment_status IN ('Pending', 'Partial')`;
+                values.push(authUser.id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND f.branch_id = ? AND f.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND f.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (branch_id) {
+                    sql += " AND f.branch_id = ?";
+                    values.push(branch_id);
+                }
+            } else if (authUser.isAccountant && authUser.academy_id) {
+                sql += " AND f.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (authUser.branch_id) {
+                    sql += " AND f.branch_id = ?";
+                    values.push(authUser.branch_id);
+                } else if (branch_id) {
+                    sql += " AND f.branch_id = ?";
+                    values.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND f.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else {
+                if (academy_id) {
+                    sql += ` AND f.academy_id = ? `;
+                    values.push(academy_id);
+                }
+                if (branch_id) {
+                    sql += ` AND f.branch_id = ? `;
+                    values.push(branch_id);
+                }
+            }
+        } else {
+            if (academy_id) {
+                sql += ` AND f.academy_id = ? `;
+                values.push(academy_id);
+            }
+            if (branch_id) {
+                sql += ` AND f.branch_id = ? `;
+                values.push(branch_id);
+            }
         }
 
         if (program_id) {
@@ -284,6 +331,14 @@ f.id,
 // POST: Generate Monthly Fee
 // ============================================
 export async function POST(request) {
+    const authUser = await getAuthUser(request);
+    if (authUser && (authUser.isCoach || authUser.isPlayer)) {
+        return NextResponse.json(
+            { success: false, message: "Coaches and Players do not have permission to generate fee records" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {

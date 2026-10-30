@@ -80,12 +80,91 @@ export function proxy(request) {
         pathname !== `${PANEL_PREFIX}/dashboard` &&
         pathname !== NO_PERMISSION_PATH
     ) {
-        // Allow Super Admin full bypass to all modules
-        const userType = String(payload?.user_type || "").toLowerCase().trim();
-        if (userType === "super admin" || userType === "superadmin") {
+        const userType = String(payload?.user_type || payload?.role || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+        // 1. Super Admin: full access to all panel modules
+        if (userType.includes("super")) {
             return NextResponse.next();
         }
 
+        // 2. Academy Admin: full operational access EXCEPT system menus and external academy master
+        if (userType.includes("academyadmin") || userType.includes("academy")) {
+            const forbiddenForAcademyAdmin = [
+                `${PANEL_PREFIX}/menu`,
+                `${PANEL_PREFIX}/menu-permissions`,
+                `${PANEL_PREFIX}/menu-management`,
+                `${PANEL_PREFIX}/permissions`,
+                `${PANEL_PREFIX}/roles`,
+                `${PANEL_PREFIX}/role-permissions`,
+                `${PANEL_PREFIX}/user-roles`,
+                `${PANEL_PREFIX}/academies`,
+            ];
+            const isForbidden = forbiddenForAcademyAdmin.some((f) => matchesMenuPath(pathname, f));
+            if (isForbidden) {
+                return NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url));
+            }
+            return NextResponse.next();
+        }
+
+        // 3. Branch Admin: branch operational access, strictly no global/academy masters or system menus
+        if (userType.includes("branchadmin") || userType.includes("branch")) {
+            const forbiddenForBranchAdmin = [
+                `${PANEL_PREFIX}/academies`,
+                `${PANEL_PREFIX}/branches`,
+                `${PANEL_PREFIX}/menu`,
+                `${PANEL_PREFIX}/menu-permissions`,
+                `${PANEL_PREFIX}/menu-management`,
+                `${PANEL_PREFIX}/permissions`,
+                `${PANEL_PREFIX}/roles`,
+                `${PANEL_PREFIX}/role-permissions`,
+                `${PANEL_PREFIX}/user-roles`,
+            ];
+            const isForbidden = forbiddenForBranchAdmin.some((f) => matchesMenuPath(pathname, f));
+            if (isForbidden) {
+                return NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url));
+            }
+            return NextResponse.next();
+        }
+
+        // 4. Accountant: ONLY accounts and finance modules
+        if (userType.includes("account")) {
+            const allowedForAccountant = [
+                `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/fee-status`,
+                `${PANEL_PREFIX}/fee-payments`,
+                `${PANEL_PREFIX}/player-attendance`,
+                `${PANEL_PREFIX}/player-program-fees`,
+                `${PANEL_PREFIX}/player-payments`,
+                `${PANEL_PREFIX}/player-fees-matrix`,
+                `${PANEL_PREFIX}/ground-payments`,
+                `${PANEL_PREFIX}/orders`,
+                `${PANEL_PREFIX}/order-payments`,
+            ];
+            const isAllowed = allowedForAccountant.some((a) => matchesMenuPath(pathname, a));
+            if (!isAllowed) {
+                return NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url));
+            }
+            return NextResponse.next();
+        }
+
+        // 5. Coach: ONLY batches, batch-players, attendance, and fee status
+        if (userType.includes("coach")) {
+            const allowedForCoach = [
+                `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/batches`,
+                `${PANEL_PREFIX}/batch-players`,
+                `${PANEL_PREFIX}/player-attendance`,
+                `${PANEL_PREFIX}/fee-status`,
+                `${PANEL_PREFIX}/player-program-fees`,
+            ];
+            const isAllowed = allowedForCoach.some((a) => matchesMenuPath(pathname, a));
+            if (!isAllowed) {
+                return NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url));
+            }
+            return NextResponse.next();
+        }
+
+        // 6. Other roles: check against token permissions
         const permissions = Array.isArray(payload?.permissions) ? payload.permissions : [];
 
         if (!hasPagePermission(pathname, permissions)) {

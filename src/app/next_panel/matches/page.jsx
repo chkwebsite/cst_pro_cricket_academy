@@ -215,6 +215,7 @@ export default function MatchesPage() {
                     ) : matches.length === 0 ? (
                         <div className="text-center py-5 text-muted">No matches found.</div>
                     ) : (
+                        <>
                         <div className="table-responsive">
                             <table className="table align-middle mb-0">
                                 <thead className="table-success">
@@ -348,6 +349,7 @@ export default function MatchesPage() {
                             onPageChange={setPage}
                             pageSize={PAGE_SIZE}
                         />
+                        </>
                     )}
                 </div>
             </div>

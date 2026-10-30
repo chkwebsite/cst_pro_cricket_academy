@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { syncIndividualTrainingOnEnrollment } from "@/app/components/lib/playerFlowSync.js";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 const VALID_STATUSES = [
@@ -112,14 +113,47 @@ bp.*,
             params.push(user_id);
         }
 
-        if (academy_id) {
-            sql += " AND b.academy_id = ?";
-            params.push(academy_id);
-        }
-
-        if (branch_id) {
-            sql += " AND b.branch_id = ?";
-            params.push(branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isCoach) {
+                // Coach only sees players in their assigned batches
+                sql += ` AND bp.batch_id IN (
+                    SELECT batch_id FROM cst_batch_coaches
+                    WHERE coach_user_id = ? AND status = 1 AND is_deleted = 0
+                )`;
+                params.push(authUser.id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND b.branch_id = ? AND b.academy_id = ?";
+                params.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND b.academy_id = ?";
+                params.push(authUser.academy_id);
+                if (branch_id) {
+                    sql += " AND b.branch_id = ?";
+                    params.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND b.academy_id = ?";
+                params.push(authUser.academy_id);
+            } else {
+                if (academy_id) {
+                    sql += " AND b.academy_id = ?";
+                    params.push(academy_id);
+                }
+                if (branch_id) {
+                    sql += " AND b.branch_id = ?";
+                    params.push(branch_id);
+                }
+            }
+        } else {
+            if (academy_id) {
+                sql += " AND b.academy_id = ?";
+                params.push(academy_id);
+            }
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
+            }
         }
 
         if (program_id) {

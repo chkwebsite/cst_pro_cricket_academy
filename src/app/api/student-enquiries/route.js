@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // GET: All student enquiries
@@ -49,14 +50,40 @@ e.*,
             values.push(searchValue, searchValue, searchValue);
         }
 
-        if (academy_id) {
-            sql += " AND e.academy_id = ?";
-            values.push(academy_id);
-        }
-
-        if (branch_id) {
-            sql += " AND e.branch_id = ?";
-            values.push(branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND e.branch_id = ? AND e.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND e.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (branch_id) {
+                    sql += " AND e.branch_id = ?";
+                    values.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND e.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else {
+                if (academy_id) {
+                    sql += " AND e.academy_id = ?";
+                    values.push(academy_id);
+                }
+                if (branch_id) {
+                    sql += " AND e.branch_id = ?";
+                    values.push(branch_id);
+                }
+            }
+        } else {
+            if (academy_id) {
+                sql += " AND e.academy_id = ?";
+                values.push(academy_id);
+            }
+            if (branch_id) {
+                sql += " AND e.branch_id = ?";
+                values.push(branch_id);
+            }
         }
 
         if (program_id) {

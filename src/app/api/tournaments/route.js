@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import pool from "@/app/components/lib/db";
 import { syncTournamentStatuses } from "./syncStatuses";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 // =====================================================
 // GET - ALL TOURNAMENTS
@@ -43,18 +44,28 @@ export async function GET(request) {
         // ACADEMY FILTER
         // ==========================================
 
-        if (academy_id) {
-            where += ` AND t.academy_id = ?`;
-            params.push(academy_id);
-        }
-
-        // ==========================================
-        // BRANCH FILTER
-        // ==========================================
-
-        if (branch_id) {
-            where += ` AND t.branch_id = ?`;
-            params.push(branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                where += ` AND t.branch_id = ? AND t.academy_id = ?`;
+                params.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                where += ` AND t.academy_id = ?`;
+                params.push(authUser.academy_id);
+                if (branch_id) {
+                    where += ` AND t.branch_id = ?`;
+                    params.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                where += ` AND t.academy_id = ?`;
+                params.push(authUser.academy_id);
+            } else {
+                if (academy_id) { where += ` AND t.academy_id = ?`; params.push(academy_id); }
+                if (branch_id) { where += ` AND t.branch_id = ?`; params.push(branch_id); }
+            }
+        } else {
+            if (academy_id) { where += ` AND t.academy_id = ?`; params.push(academy_id); }
+            if (branch_id) { where += ` AND t.branch_id = ?`; params.push(branch_id); }
         }
 
         // ==========================================

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // ============================================
@@ -81,14 +82,50 @@ export async function GET(request) {
             values.push(id);
         }
 
-        if (academy_id) {
-            sql += ` AND a.academy_id = ?`;
-            values.push(academy_id);
-        }
-
-        if (branch_id) {
-            sql += ` AND a.branch_id = ?`;
-            values.push(branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isCoach) {
+                // Coach only sees attendance for players in their assigned batches
+                sql += ` AND a.admission_players_id IN (
+                    SELECT up.admission_players_id
+                    FROM cst_user_programs up
+                    JOIN cst_batch_players bp ON bp.user_program_id = up.id
+                    JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
+                    WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
+                )`;
+                values.push(authUser.id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND a.branch_id = ? AND a.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND a.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (branch_id) {
+                    sql += " AND a.branch_id = ?";
+                    values.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND a.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else {
+                if (academy_id) {
+                    sql += ` AND a.academy_id = ?`;
+                    values.push(academy_id);
+                }
+                if (branch_id) {
+                    sql += ` AND a.branch_id = ?`;
+                    values.push(branch_id);
+                }
+            }
+        } else {
+            if (academy_id) {
+                sql += ` AND a.academy_id = ?`;
+                values.push(academy_id);
+            }
+            if (branch_id) {
+                sql += ` AND a.branch_id = ?`;
+                values.push(branch_id);
+            }
         }
 
         if (program_id) {

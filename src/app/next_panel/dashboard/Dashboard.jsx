@@ -44,6 +44,12 @@ export default function Dashboard() {
     const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Admin";
     const currentYear = new Date().getFullYear();
 
+    const userTypeStr = String(user?.user_type || "").trim().toLowerCase();
+    const isCoach = userTypeStr.includes("coach");
+    const isAccountant = userTypeStr.includes("account");
+    const isBranchAdmin = userTypeStr.includes("branch");
+    const isAcademyAdmin = userTypeStr.includes("academy");
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -73,7 +79,7 @@ export default function Dashboard() {
             } catch (err) {
                 console.error("Dashboard stats error:", err);
             } finally {
-                if (!cancelled) setLoading(false);
+                setLoading(false);
             }
         })();
 
@@ -97,36 +103,103 @@ export default function Dashboard() {
                         <div className="col-lg-8">
                             <div className="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-3" style={{ background: "rgba(255, 255, 255, 0.15)", backdropFilter: "blur(4px)" }}>
                                 <Sparkles size={14} className="text-warning" />
-                                <span className="small fw-semibold text-white">CST Pro Cricket Academy Workspace</span>
+                                <span className="small fw-semibold text-white">
+                                    {isCoach ? "Coach Workspace Portal" : isAccountant ? "Accounts & Finance Portal" : isBranchAdmin ? "Branch Admin Portal" : isAcademyAdmin ? "Academy Admin Portal" : "CST Pro Cricket Academy Workspace"}
+                                </span>
                             </div>
                             <h2 className="display-6 fw-bold mb-2 text-white">
                                 Welcome back, {displayName}!
                             </h2>
                             <p className="text-white-50 mb-4" style={{ maxWidth: "620px", fontSize: "0.95rem" }}>
-                                Monitor player admissions, coaching batch assignments, 1:1 training schedules, and track monthly fee collections in real-time.
+                                {isCoach
+                                    ? "Manage your assigned batches, view enrolled players, record attendance, and monitor players with pending or partial fee dues."
+                                    : isAccountant
+                                    ? "Track player program fee invoices, monthly collection matrices, ground payments, and fee receipts in real-time."
+                                    : isBranchAdmin
+                                    ? "Manage your branch batches, players, ground bookings, and fee statuses seamlessly."
+                                    : "Monitor player admissions, coaching batch assignments, 1:1 training schedules, and track monthly fee collections in real-time."}
                             </p>
                             <div className="d-flex flex-wrap gap-2">
-                                <Link
-                                    href="/next_panel/player-fees-matrix"
-                                    className="btn btn-light fw-bold text-dark px-3 py-2 shadow-sm d-inline-flex align-items-center gap-2"
-                                    style={{ borderRadius: "8px" }}
-                                >
-                                    <Calendar size={16} /> Fees Matrix ({currentYear})
-                                </Link>
-                                <Link
-                                    href="/next_panel/individual-training"
-                                    className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
-                                    style={{ borderRadius: "8px" }}
-                                >
-                                    <Activity size={16} /> 1:1 Training
-                                </Link>
-                                <Link
-                                    href="/next_panel/admission-players"
-                                    className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
-                                    style={{ borderRadius: "8px" }}
-                                >
-                                    <Users size={16} /> Players
-                                </Link>
+                                {isCoach ? (
+                                    <>
+                                        <Link
+                                            href="/next_panel/batches"
+                                            className="btn btn-light fw-bold text-dark px-3 py-2 shadow-sm d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <Layers size={16} /> My Batches
+                                        </Link>
+                                        <Link
+                                            href="/next_panel/batch-players"
+                                            className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <Users size={16} /> My Players
+                                        </Link>
+                                        <Link
+                                            href="/next_panel/player-attendance"
+                                            className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <UserCheck size={16} /> Attendance
+                                        </Link>
+                                        <Link
+                                            href="/next_panel/player-program-fees"
+                                            className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <CreditCard size={16} /> Fee Dues
+                                        </Link>
+                                    </>
+                                ) : isAccountant ? (
+                                    <>
+                                        <Link
+                                            href="/next_panel/player-fees-matrix"
+                                            className="btn btn-light fw-bold text-dark px-3 py-2 shadow-sm d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <Calendar size={16} /> Fees Matrix ({currentYear})
+                                        </Link>
+                                        <Link
+                                            href="/next_panel/player-program-fees"
+                                            className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <Receipt size={16} /> Program Fees
+                                        </Link>
+                                        <Link
+                                            href="/next_panel/player-payments"
+                                            className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <CheckCircle2 size={16} /> Receipts
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Link
+                                            href="/next_panel/player-fees-matrix"
+                                            className="btn btn-light fw-bold text-dark px-3 py-2 shadow-sm d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <Calendar size={16} /> Fees Matrix ({currentYear})
+                                        </Link>
+                                        <Link
+                                            href="/next_panel/individual-training"
+                                            className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <Activity size={16} /> 1:1 Training
+                                        </Link>
+                                        <Link
+                                            href="/next_panel/admission-players"
+                                            className="btn btn-outline-light px-3 py-2 d-inline-flex align-items-center gap-2"
+                                            style={{ borderRadius: "8px" }}
+                                        >
+                                            <Users size={16} /> Players
+                                        </Link>
+                                    </>
+                                )}
                             </div>
                         </div>
 
@@ -153,7 +226,7 @@ export default function Dashboard() {
                                 <div>
                                     <span className="text-muted small fw-semibold text-uppercase">Admitted Players</span>
                                     <h3 className="fw-bold text-dark mt-2 mb-0">
-                                        {loading ? "..." : stats.playersCount}
+                                        {loading ? <span className="spinner-border spinner-border-sm text-muted" role="status" /> : stats.playersCount}
                                     </h3>
                                 </div>
                                 <div className="p-2 rounded-3" style={{ background: "rgba(6, 47, 56, 0.08)", color: "#062f38" }}>
@@ -176,7 +249,7 @@ export default function Dashboard() {
                                 <div>
                                     <span className="text-muted small fw-semibold text-uppercase">Training Batches</span>
                                     <h3 className="fw-bold text-dark mt-2 mb-0">
-                                        {loading ? "..." : stats.batchesCount}
+                                        {loading ? <span className="spinner-border spinner-border-sm text-muted" role="status" /> : stats.batchesCount}
                                     </h3>
                                 </div>
                                 <div className="p-2 rounded-3" style={{ background: "rgba(0, 188, 212, 0.1)", color: "#008ba3" }}>
@@ -199,7 +272,7 @@ export default function Dashboard() {
                                 <div>
                                     <span className="text-muted small fw-semibold text-uppercase">{currentYear} Fees Collected</span>
                                     <h3 className="fw-bold text-success mt-2 mb-0">
-                                        {loading ? "..." : `₹${Number(stats.matrixStats?.totalYearPaid || 0).toLocaleString("en-IN")}`}
+                                        {loading ? <span className="spinner-border spinner-border-sm text-muted" role="status" /> : `₹${Number(stats.matrixStats?.totalYearPaid || 0).toLocaleString("en-IN")}`}
                                     </h3>
                                 </div>
                                 <div className="p-2 rounded-3" style={{ background: "rgba(0, 150, 136, 0.1)", color: "#009688" }}>
@@ -222,7 +295,7 @@ export default function Dashboard() {
                                 <div>
                                     <span className="text-muted small fw-semibold text-uppercase">{currentYear} Outstanding Due</span>
                                     <h3 className="fw-bold text-danger mt-2 mb-0">
-                                        {loading ? "..." : `₹${Number(stats.matrixStats?.totalYearDue || 0).toLocaleString("en-IN")}`}
+                                        {loading ? <span className="spinner-border spinner-border-sm text-muted" role="status" /> : `₹${Number(stats.matrixStats?.totalYearDue || 0).toLocaleString("en-IN")}`}
                                     </h3>
                                 </div>
                                 <div className="p-2 rounded-3" style={{ background: "rgba(215, 38, 61, 0.1)", color: "#d7263d" }}>

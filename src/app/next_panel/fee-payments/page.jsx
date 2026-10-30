@@ -197,6 +197,7 @@ export default function FeePaymentsPage() {
                     ) : visible.length === 0 ? (
                         <div className="text-center py-5 text-muted">No payments found.</div>
                     ) : (
+                        <>
                         <div className="table-responsive">
                             <table className="table align-middle mb-0">
                                 <thead className="table-success">
@@ -276,6 +277,7 @@ export default function FeePaymentsPage() {
                             onPageChange={setPage}
                             pageSize={PAGE_SIZE}
                         />
+                    </>
                     )}
                 </div>
             </div>

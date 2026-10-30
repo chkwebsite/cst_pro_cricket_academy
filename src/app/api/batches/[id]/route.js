@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 // GET: Single batch by id with coaches and players count
 export async function GET(request, context) {
@@ -45,6 +46,16 @@ export async function GET(request, context) {
                 { success: false, message: "Batch not found" },
                 { status: 404 }
             );
+        }
+
+        const authUser = await getAuthUser(request);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (authUser.isAcademyAdmin && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Batch not found or access denied" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && authUser.branch_id && Number(rows[0].branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Batch belongs to another branch" }, { status: 403 });
+            }
         }
 
         const batch = rows[0];

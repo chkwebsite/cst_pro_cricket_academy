@@ -223,6 +223,7 @@ export default function UsersPage() {
                         users.length === 0 ? (
                             <div className="text-center py-5 text-muted">No users found yet.</div>
                         ) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-success">
@@ -301,6 +302,7 @@ export default function UsersPage() {
                                     pageSize={PAGE_SIZE}
                                 />
                             </div>
+                            </>
                         )
                     )}
                 </div>

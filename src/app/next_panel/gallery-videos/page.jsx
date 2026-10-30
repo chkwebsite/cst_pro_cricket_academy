@@ -287,6 +287,7 @@ export default function GalleryVideosPage() {
                             </Link>
                         </div>
                     ) : (
+                        <>
                         <div className="row g-3">
                             {pagedVideos.map((vid) => {
                                 const typeBadgeClass =
@@ -413,6 +414,7 @@ export default function GalleryVideosPage() {
                                 pageSize={PAGE_SIZE}
                             />
                         </div>
+                        </>
                     )}
                 </div>
             </div>

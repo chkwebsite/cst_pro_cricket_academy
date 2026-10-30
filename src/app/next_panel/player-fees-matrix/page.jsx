@@ -426,6 +426,7 @@ export default function PlayerFeesMatrixPage() {
                             </button>
                         </div>
                     ) : (
+                        <>
                         <div className="table-responsive" style={{ maxHeight: "72vh" }}>
                             <table className="table table-hover table-bordered align-middle mb-0 matrix-table">
                                 <thead className="table-light sticky-top" style={{ zIndex: 3 }}>
@@ -678,6 +679,7 @@ export default function PlayerFeesMatrixPage() {
                                 pageSize={PAGE_SIZE}
                             />
                         </div>
+                        </>
                     )}
                 </div>
             </div>

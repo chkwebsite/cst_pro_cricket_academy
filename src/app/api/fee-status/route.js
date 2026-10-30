@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 const FEE_TYPES = [
@@ -252,7 +253,41 @@ export async function GET(request) {
         const conditions = [];
         const values = [];
 
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isCoach) {
+                // Coach: ONLY Pending or Partial fee status
+                conditions.push("fs.status IN ('Pending', 'Partial')");
+                if (authUser.academy_id) {
+                    conditions.push("fs.academy_id = ?");
+                    values.push(authUser.academy_id);
+                }
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                conditions.push("fs.branch_id = ? AND fs.academy_id = ?");
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                conditions.push("fs.academy_id = ?");
+                values.push(authUser.academy_id);
+            } else if (authUser.isAccountant && authUser.academy_id) {
+                conditions.push("fs.academy_id = ?");
+                values.push(authUser.academy_id);
+                if (authUser.branch_id) {
+                    conditions.push("fs.branch_id = ?");
+                    values.push(authUser.branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                conditions.push("fs.academy_id = ?");
+                values.push(authUser.academy_id);
+            }
+        }
+
         for (const field of filterFields) {
+            // If academy_id or branch_id was already enforced by role, skip query override
+            if (authUser && !authUser.isSuperAdmin) {
+                if (field === "academy_id" && authUser.academy_id) continue;
+                if (field === "branch_id" && authUser.isBranchAdmin && authUser.branch_id) continue;
+            }
+
             const value = searchParams.get(field);
 
             if (value !== null && value !== "") {
@@ -395,6 +430,14 @@ export async function GET(request) {
 
 // POST /api/fee-status
 export async function POST(request) {
+    const authUser = await getAuthUser(request);
+    if (authUser && (authUser.isCoach || authUser.isPlayer)) {
+        return NextResponse.json(
+            { success: false, message: "Coaches and Players do not have permission to manage fee status" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {

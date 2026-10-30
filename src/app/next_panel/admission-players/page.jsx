@@ -223,6 +223,7 @@ export default function AdmissionPlayersPage() {
                         players.length === 0 ? (
                             <div className="text-center py-5 text-muted">No admission players found yet.</div>
                         ) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-success">
@@ -292,6 +293,7 @@ export default function AdmissionPlayersPage() {
                                     pageSize={PAGE_SIZE}
                                 />
                             </div>
+                            </>
                         )
                     )}
                 </div>

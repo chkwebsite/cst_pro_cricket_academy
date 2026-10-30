@@ -144,6 +144,7 @@ export default function RolesPage() {
                         ) : roles.length === 0 ? (
                             <div className="text-center py-5 text-muted">No roles found yet.</div>
                         ) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-light">
@@ -212,6 +213,7 @@ export default function RolesPage() {
                                 onPageChange={setPage}
                                 pageSize={PAGE_SIZE}
                             />
+                            </>
                         )}
                     </div>
                 </div>

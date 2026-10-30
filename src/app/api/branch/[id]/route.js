@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 /* =====================================================
    GET SINGLE BRANCH
@@ -62,6 +63,16 @@ export async function GET(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        const authUser = await getAuthUser(request);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (authUser.isAcademyAdmin && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Branch not found or access denied" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && authUser.branch_id && Number(id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: You can only access your assigned branch" }, { status: 403 });
+            }
         }
 
 
@@ -439,6 +450,16 @@ export async function DELETE(
                 },
                 { status: 404 }
             );
+        }
+
+        const authUser = await getAuthUser(request);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (authUser.isAcademyAdmin && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Branch not found or access denied" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && authUser.branch_id && Number(id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: You can only access your assigned branch" }, { status: 403 });
+            }
         }
 
 

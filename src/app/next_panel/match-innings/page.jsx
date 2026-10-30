@@ -291,6 +291,7 @@ export default function MatchInningsPage() {
                             </Link>
                         </div>
                     ) : (
+                        <>
                         <div className="table-responsive bg-white rounded-4 shadow-sm p-3">
                             <table className="table align-middle table-hover mb-0">
                                 <thead className="table-success">
@@ -402,6 +403,7 @@ export default function MatchInningsPage() {
                             onPageChange={setPage}
                             pageSize={PAGE_SIZE}
                         />
+                        </>
                     )}
                 </div>
             </div>

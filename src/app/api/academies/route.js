@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // GET ACADEMY LIST WITH FILTER
@@ -39,7 +40,12 @@ export async function GET(request) {
     `;
 
         const params = [];
-        if (id) {
+
+        const authUser = await getAuthUser(request);
+        if (authUser && !authUser.isSuperAdmin && authUser.academy_id) {
+            sql += ` AND id = ?`;
+            params.push(authUser.academy_id);
+        } else if (id) {
             sql += ` AND id = ?`;
             params.push(id);
         }
@@ -74,6 +80,14 @@ export async function GET(request) {
 // POST ACADEMY
 
 export async function POST(request) {
+    const authUser = await getAuthUser(request);
+    if (!authUser || !authUser.isSuperAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Only Super Admin can register new academies" },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
     try {
         const formData = await request.formData();

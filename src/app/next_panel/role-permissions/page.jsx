@@ -118,6 +118,7 @@ export default function RolePermissionsPage() {
                         filteredRolePermissions.length === 0 ? (
                             <div className="text-center py-5 text-muted">No role permissions found yet.</div>
                         ) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-success">
@@ -173,6 +174,7 @@ export default function RolePermissionsPage() {
                                 onPageChange={setPage}
                                 pageSize={PAGE_SIZE}
                             />
+                            </>
                         )
                     )}
                 </div>

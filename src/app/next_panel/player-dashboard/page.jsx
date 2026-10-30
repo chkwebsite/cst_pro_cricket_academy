@@ -35,6 +35,7 @@ import {
     Users,
     Zap,
 } from "lucide-react";
+import PageLoader, { usePageLoading } from "../components/PageLoader";
 
 export default function PlayerDashboardPage() {
     const searchParams = useSearchParams();
@@ -109,15 +110,10 @@ export default function PlayerDashboardPage() {
 
     if (loading && !data) {
         return (
-            <div className="container-fluid py-5">
-                <div className="card shadow-sm border-0 rounded-4 p-5 text-center my-5">
-                    <div className="spinner-border text-primary mx-auto mb-3" style={{ width: "3rem", height: "3rem" }} role="status">
-                        <span className="visually-hidden">Loading Player Dashboard...</span>
-                    </div>
-                    <h5 className="fw-bold text-dark mb-1">Loading Player Dashboard</h5>
-                    <p className="text-muted small mb-0">Retrieving player enrolled programs, match fixtures, and fee records...</p>
-                </div>
-            </div>
+            <PageLoader
+                message="Loading Player Dashboard"
+                subtitle="Retrieving player enrolled programs, match fixtures, and fee records..."
+            />
         );
     }
 

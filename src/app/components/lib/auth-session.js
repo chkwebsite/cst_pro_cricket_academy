@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import pool from "./db";
+import { getUserRole, ROLES, ROLE_ALLOWED_ROUTES } from "./rbac";
 
 const JWT_SECRET = process.env.JWT_SECRET || "cricketAcademy_2026@Admin#Panel$Role%Secure123";
 
@@ -49,11 +50,8 @@ export async function getServerSession() {
                                     u.appointment_no ||
                                     "Academy User";
 
-                                const isSuper =
-                                    u.user_type === "Super Admin" ||
-                                    u.user_type === "superadmin" ||
-                                    String(u.user_type || "").toLowerCase().includes("super") ||
-                                    (Array.isArray(decoded.permissions) && decoded.permissions.includes("*"));
+                                const role = getUserRole(u);
+                                const isSuper = role === ROLES.SUPER_ADMIN || (Array.isArray(decoded.permissions) && decoded.permissions.includes("*"));
 
                                 let livePermissions = [];
                                 if (isSuper) {
@@ -70,16 +68,12 @@ export async function getServerSession() {
                                              WHERE ur.user_id = ? AND p.status = 1 AND m.is_deleted = 0 AND m.is_active = 1 AND m.status = 1`,
                                             [u.id]
                                         );
-                                        livePermissions = permRows.map((r) => r.menu_url).filter(Boolean);
-                                        const isPlayer = u.user_type === "7" || String(u.user_type || "").toLowerCase().includes("player");
-                                        if (isPlayer) {
-                                            livePermissions.push("/next_panel/player-dashboard");
-                                            livePermissions.push("/next_panel/orders");
-                                            livePermissions = Array.from(new Set(livePermissions));
-                                        }
+                                        const dbUrls = permRows.map((r) => r.menu_url).filter(Boolean);
+                                        const standardUrls = ROLE_ALLOWED_ROUTES[role] || [];
+                                        livePermissions = Array.from(new Set([...dbUrls, ...standardUrls]));
                                     } catch (pErr) {
                                         console.warn("getServerSession: permission DB lookup failed, falling back to token payload:", pErr?.message);
-                                        livePermissions = Array.isArray(decoded.permissions) ? decoded.permissions : [];
+                                        livePermissions = Array.isArray(decoded.permissions) ? decoded.permissions : (ROLE_ALLOWED_ROUTES[role] || []);
                                     }
                                 }
 
@@ -87,8 +81,8 @@ export async function getServerSession() {
                                     user: {
                                         id: u.id,
                                         appointment_no: u.appointment_no,
-                                        academy_id: u.academy_id,
-                                        branch_id: u.branch_id,
+                                        academy_id: u.academy_id ? Number(u.academy_id) : null,
+                                        branch_id: u.branch_id ? Number(u.branch_id) : null,
                                         first_name: u.first_name,
                                         last_name: u.last_name,
                                         name: fullName,
@@ -96,6 +90,13 @@ export async function getServerSession() {
                                         phone: u.phone,
                                         profile_image: u.profile_image || null,
                                         user_type: u.user_type || "Academy User",
+                                        role,
+                                        isSuperAdmin: role === ROLES.SUPER_ADMIN,
+                                        isAcademyAdmin: role === ROLES.ACADEMY_ADMIN,
+                                        isBranchAdmin: role === ROLES.BRANCH_ADMIN,
+                                        isAccountant: role === ROLES.ACCOUNTANT,
+                                        isCoach: role === ROLES.COACH,
+                                        isPlayer: role === ROLES.PLAYER,
                                         is_public: false,
                                     },
                                     permissions: livePermissions.length > 0 ? livePermissions : (Array.isArray(decoded.permissions) ? decoded.permissions : []),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // ======================================================
@@ -84,35 +85,41 @@ export async function GET(request) {
             values.push(status);
         }
 
-        // Academy
-        if (academyId) {
-            if (isNaN(academyId)) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid academy ID"
-                    },
-                    { status: 400 }
-                );
+        // Academy & Branch role-based scoping
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND g.branch_id = ? AND g.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND g.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (branchId && Number.isInteger(Number(branchId))) {
+                    sql += " AND g.branch_id = ?";
+                    values.push(Number(branchId));
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND g.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else {
+                if (academyId && !isNaN(academyId)) {
+                    sql += ` AND g.academy_id = ?`;
+                    values.push(academyId);
+                }
+                if (branchId && Number.isInteger(Number(branchId))) {
+                    sql += ` AND g.branch_id = ?`;
+                    values.push(Number(branchId));
+                }
             }
-
-            sql += ` AND g.academy_id = ?`;
-            values.push(academyId);
-        }
-
-        if (branchId) {
-            if (!Number.isInteger(Number(branchId)) || Number(branchId) <= 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid branch ID"
-                    },
-                    { status: 400 }
-                );
+        } else {
+            if (academyId && !isNaN(academyId)) {
+                sql += ` AND g.academy_id = ?`;
+                values.push(academyId);
             }
-
-            sql += ` AND g.branch_id = ?`;
-            values.push(Number(branchId));
+            if (branchId && Number.isInteger(Number(branchId))) {
+                sql += ` AND g.branch_id = ?`;
+                values.push(Number(branchId));
+            }
         }
 
         sql += ` ORDER BY g.id DESC`;

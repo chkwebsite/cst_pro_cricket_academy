@@ -141,6 +141,7 @@ export default function AcademiesPage() {
                         ) : academies.length === 0 ? (
                             <div className="text-center py-5 text-muted">No academies found yet.</div>
                         ) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-light">
@@ -226,6 +227,7 @@ export default function AcademiesPage() {
                                     pageSize={PAGE_SIZE}
                                 />
                             </div>
+                            </>
                         )}
                     </div>
                 </div>

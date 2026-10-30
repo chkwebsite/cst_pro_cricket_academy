@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 const isValidMatchDate = (value) => {
     if (typeof value !== "string") {
@@ -165,14 +166,28 @@ export async function GET(request) {
             values.push(filters.id);
         }
 
-        if (filters.academy_id) {
-            sql += " AND m.academy_id = ?";
-            values.push(filters.academy_id);
-        }
-
-        if (filters.branch_id) {
-            sql += " AND m.branch_id = ?";
-            values.push(filters.branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND m.branch_id = ? AND m.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND m.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (filters.branch_id) {
+                    sql += " AND m.branch_id = ?";
+                    values.push(filters.branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND m.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else {
+                if (filters.academy_id) { sql += " AND m.academy_id = ?"; values.push(filters.academy_id); }
+                if (filters.branch_id) { sql += " AND m.branch_id = ?"; values.push(filters.branch_id); }
+            }
+        } else {
+            if (filters.academy_id) { sql += " AND m.academy_id = ?"; values.push(filters.academy_id); }
+            if (filters.branch_id) { sql += " AND m.branch_id = ?"; values.push(filters.branch_id); }
         }
 
         if (filters.tournament_id) {

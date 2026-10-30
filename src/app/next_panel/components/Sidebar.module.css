@@ -216,6 +216,123 @@
     width: 100%;
     max-width: 1540px;
     margin: 0 auto;
+    position: relative;
+    min-height: calc(100vh - 130px);
+}
+
+/* Sidebar Menu Skeleton Loader */
+.menuSkeletonContainer {
+    padding: 6px 4px 16px;
+    animation: fadeIn 0.25s ease-in-out;
+}
+
+.menuSkeletonHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 10px;
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px dashed rgba(6, 47, 56, 0.09);
+}
+
+.menuSkeletonSpinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(6, 47, 56, 0.15);
+    border-top-color: #00bcd4;
+    border-right-color: #062f38;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.menuSkeletonList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.menuSkeletonItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: rgba(6, 47, 56, 0.025);
+    border: 1px solid rgba(6, 47, 56, 0.04);
+}
+
+.skeletonIconBox {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #e5e9ec 25%, #f4f6f8 50%, #e5e9ec 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.5s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+.skeletonTextBox {
+    height: 12px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #e5e9ec 25%, #f4f6f8 50%, #e5e9ec 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.5s ease-in-out infinite;
+}
+
+.menuErrorContainer {
+    padding: 10px 12px;
+    margin: 8px 12px;
+    background: rgba(215, 38, 61, 0.05);
+    border: 1px solid rgba(215, 38, 61, 0.15);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.menuErrorContainer p {
+    margin: 0 0 8px;
+    font-size: 0.8rem;
+    color: #d7263d;
+}
+
+.retryBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #ffffff;
+    background: #062f38;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.retryBtn:hover {
+    background: #00bcd4;
+}
+
+@keyframes skeletonShimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .backdrop {

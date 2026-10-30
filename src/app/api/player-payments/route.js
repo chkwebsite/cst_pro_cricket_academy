@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import crypto from "crypto";
 import { syncOnPaymentRecorded } from "@/app/components/lib/playerFlowSync.js";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // ============================================
@@ -237,14 +238,38 @@ pay.id,
             values.push(player_program_fee_id);
         }
 
-        if (academy_id) {
-            sql += ` AND f.academy_id = ? `;
-            values.push(academy_id);
-        }
-
-        if (branch_id) {
-            sql += ` AND f.branch_id = ? `;
-            values.push(branch_id);
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND f.branch_id = ? AND f.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND f.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (branch_id) {
+                    sql += " AND f.branch_id = ?";
+                    values.push(branch_id);
+                }
+            } else if (authUser.isAccountant && authUser.academy_id) {
+                sql += " AND f.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (authUser.branch_id) {
+                    sql += " AND f.branch_id = ?";
+                    values.push(authUser.branch_id);
+                } else if (branch_id) {
+                    sql += " AND f.branch_id = ?";
+                    values.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND f.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else {
+                if (academy_id) { sql += ` AND f.academy_id = ? `; values.push(academy_id); }
+                if (branch_id) { sql += ` AND f.branch_id = ? `; values.push(branch_id); }
+            }
+        } else {
+            if (academy_id) { sql += ` AND f.academy_id = ? `; values.push(academy_id); }
+            if (branch_id) { sql += ` AND f.branch_id = ? `; values.push(branch_id); }
         }
 
         if (admission_players_id) {
@@ -336,6 +361,14 @@ AND(
 // POST: Receive Payment
 // ============================================
 export async function POST(request) {
+    const authUser = await getAuthUser(request);
+    if (authUser && (authUser.isCoach || authUser.isPlayer)) {
+        return NextResponse.json(
+            { success: false, message: "Coaches and Players do not have permission to record payments" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {

@@ -371,6 +371,7 @@ export default function BatchPlayersPage() {
                             </Link>
                         </div>
                     ) : (
+                        <>
                         <div className="table-responsive">
                             <table className="table table-hover align-middle mb-0">
                                 <thead className="table-light">
@@ -473,6 +474,7 @@ export default function BatchPlayersPage() {
                                 pageSize={PAGE_SIZE}
                             />
                         </div>
+                        </>
                     )}
                 </div>
             </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db.js";
+import { getAuthUser } from "@/app/components/lib/rbac.js";
 
 const MONTHS = [
     { key: "01", name: "Jan", full: "January" },
@@ -70,14 +71,59 @@ export async function GET(request) {
 
         const playerValues = [];
 
-        if (academy_id) {
-            playerSql += ` AND p.academy_id = ? `;
-            playerValues.push(Number(academy_id));
-        }
-
-        if (branch_id) {
-            playerSql += ` AND up.branch_id = ? `;
-            playerValues.push(Number(branch_id));
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isCoach) {
+                playerSql += ` AND ap.id IN (
+                    SELECT up2.admission_players_id
+                    FROM cst_user_programs up2
+                    JOIN cst_batch_players bp ON bp.user_program_id = up2.id
+                    JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
+                    WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
+                )`;
+                playerValues.push(authUser.id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                playerSql += ` AND up.branch_id = ? AND p.academy_id = ? `;
+                playerValues.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                playerSql += ` AND p.academy_id = ? `;
+                playerValues.push(authUser.academy_id);
+                if (branch_id) {
+                    playerSql += ` AND up.branch_id = ? `;
+                    playerValues.push(Number(branch_id));
+                }
+            } else if (authUser.isAccountant && authUser.academy_id) {
+                playerSql += ` AND p.academy_id = ? `;
+                playerValues.push(authUser.academy_id);
+                if (authUser.branch_id) {
+                    playerSql += ` AND up.branch_id = ? `;
+                    playerValues.push(authUser.branch_id);
+                } else if (branch_id) {
+                    playerSql += ` AND up.branch_id = ? `;
+                    playerValues.push(Number(branch_id));
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                playerSql += ` AND p.academy_id = ? `;
+                playerValues.push(authUser.academy_id);
+            } else {
+                if (academy_id) {
+                    playerSql += ` AND p.academy_id = ? `;
+                    playerValues.push(Number(academy_id));
+                }
+                if (branch_id) {
+                    playerSql += ` AND up.branch_id = ? `;
+                    playerValues.push(Number(branch_id));
+                }
+            }
+        } else {
+            if (academy_id) {
+                playerSql += ` AND p.academy_id = ? `;
+                playerValues.push(Number(academy_id));
+            }
+            if (branch_id) {
+                playerSql += ` AND up.branch_id = ? `;
+                playerValues.push(Number(branch_id));
+            }
         }
 
         if (program_id) {

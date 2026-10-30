@@ -206,6 +206,7 @@ export default function ProgramsPage() {
                         filteredPrograms.length === 0 ? (
                             <div className="text-center py-5 text-muted">No programs found yet.</div>
                         ) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-success">
@@ -301,6 +302,7 @@ export default function ProgramsPage() {
                                     pageSize={PAGE_SIZE}
                                 />
                             </div>
+                            </>
                         )
                     )}
                 </div>

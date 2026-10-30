@@ -295,6 +295,7 @@ export default function TournamentTeamPlayersPage() {
                     ) : visible.length === 0 ? (
                         <div className="text-center py-5 text-muted">No players found.</div>
                     ) : (
+                        <>
                         <div className="table-responsive">
                             <table className="table align-middle mb-0">
                                 <thead className="table-success">
@@ -390,6 +391,7 @@ export default function TournamentTeamPlayersPage() {
                             onPageChange={setPage}
                             pageSize={PAGE_SIZE}
                         />
+                        </>
                     )}
                 </div>
             </div>

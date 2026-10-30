@@ -136,6 +136,7 @@ export default function BranchesPage() {
                         ) : branches.length === 0 ? (
                             <div className="text-center py-5 text-muted">No branches found yet.</div>
                         ) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-light">
@@ -209,6 +210,7 @@ export default function BranchesPage() {
                                     pageSize={PAGE_SIZE}
                                 />
                             </div>
+                            </>
                         )}
                     </div>
                 </div>

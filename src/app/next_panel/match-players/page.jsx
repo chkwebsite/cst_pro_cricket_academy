@@ -228,6 +228,7 @@ export default function MatchPlayersPage() {
                     ) : visible.length === 0 ? (
                         <div className="text-center py-5 text-muted">No match players found.</div>
                     ) : (
+                        <>
                         <div className="table-responsive">
                             <table className="table align-middle mb-0">
                                 <thead className="table-success">
@@ -305,6 +306,7 @@ export default function MatchPlayersPage() {
                             onPageChange={setPage}
                             pageSize={PAGE_SIZE}
                         />
+                        </>
                     )}
                 </div>
             </div>

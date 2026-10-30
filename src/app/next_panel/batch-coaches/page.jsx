@@ -349,6 +349,7 @@ export default function BatchCoachesPage() {
                             </Link>
                         </div>
                     ) : (
+                        <>
                         <div className="table-responsive">
                             <table className="table table-hover align-middle mb-0">
                                 <thead className="table-light">
@@ -452,6 +453,7 @@ export default function BatchCoachesPage() {
                                 pageSize={PAGE_SIZE}
                             />
                         </div>
+                        </>
                     )}
                 </div>
             </div>

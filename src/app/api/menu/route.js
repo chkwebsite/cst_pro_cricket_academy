@@ -8,7 +8,9 @@ export async function GET(request) {
     let connection;
 
     try {
-        await ensureEcommerceTables();
+        if (!globalThis._ecommerceInitialized) {
+            ensureEcommerceTables().catch((e) => console.warn("Ecommerce init error:", e));
+        }
         connection = await pool.getConnection();
 
         // Auto-ensure "Public Users" menu under Appointments & Users

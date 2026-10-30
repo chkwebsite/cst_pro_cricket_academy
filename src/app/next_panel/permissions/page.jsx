@@ -119,6 +119,7 @@ export default function PermissionsPage() {
                     {error && <div className="alert alert-danger">{error}</div>}
                     {loading ? (<div className="text-center py-5 text-muted">Loading permissions...</div>) :
                         (permissions.length === 0 ? (<div className="text-center py-5 text-muted">No permissions found yet.</div>) : (
+                            <>
                             <div className="table-responsive">
                                 <table className="table align-middle mb-0">
                                     <thead className="table-success">
@@ -173,6 +174,7 @@ export default function PermissionsPage() {
                                 onPageChange={setPage}
                                 pageSize={PAGE_SIZE}
                             />
+                            </>
                         ))}
                 </div>
             </div>

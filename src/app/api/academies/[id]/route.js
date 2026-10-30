@@ -2,13 +2,23 @@ import pool from "@/app/components/lib/db";
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 // GET SINGLE ACADEMY LIST
 
 export async function GET(req, { params }) {
+    const authUser = await getAuthUser(req);
+    const { id } = await params;
+
+    if (authUser && !authUser.isSuperAdmin && Number(authUser.academy_id) !== Number(id)) {
+        return NextResponse.json({
+            success: false,
+            message: "Access denied: You can only access your own academy records"
+        }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
     try {
-        const { id } = await params;
         const [rows] = await connection.query(`
             SELECT * from cst_academy WHERE id = ? AND is_deleted = 0 LIMIT 1 `, [id]);
         if (rows.length === 0) {
@@ -43,9 +53,18 @@ export async function GET(req, { params }) {
 // UPDATE SINGLE ACADEMY LIST
 
 export async function PUT(req, { params }) {
+    const authUser = await getAuthUser(req);
+    const { id } = await params;
+
+    if (authUser && !authUser.isSuperAdmin && Number(authUser.academy_id) !== Number(id)) {
+        return NextResponse.json({
+            success: false,
+            message: "Access denied: You can only edit your own academy records"
+        }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
     try {
-        const { id } = await params;
         const formData = await req.formData();
 
         const academy_name = formData.get("academy_name");
@@ -189,6 +208,14 @@ export async function PUT(req, { params }) {
 // DELETE - Soft Delete
 // =========================
 export async function DELETE(request, { params }) {
+    const authUser = await getAuthUser(request);
+    if (!authUser || !authUser.isSuperAdmin) {
+        return NextResponse.json({
+            success: false,
+            message: "Only Super Admin can delete academies"
+        }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
     try {
         const { id } = await params;

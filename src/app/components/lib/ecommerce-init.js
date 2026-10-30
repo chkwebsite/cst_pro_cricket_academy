@@ -1,9 +1,8 @@
 import pool from "./db";
 
-let initialized = false;
-
 export async function ensureEcommerceTables() {
-    if (initialized) return;
+    if (globalThis._ecommerceInitialized) return;
+    globalThis._ecommerceInitialized = true;
 
     let connection;
     try {

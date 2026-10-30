@@ -326,6 +326,7 @@ export default function ProductCategoriesPage() {
                         </button>
                     </div>
                 ) : (
+                    <>
                     <div className="table-responsive">
                         <table className="table align-middle table-hover mb-0">
                             <thead className="table-light text-secondary small text-uppercase">
@@ -420,6 +421,7 @@ export default function ProductCategoriesPage() {
                         onPageChange={setPage}
                         pageSize={PAGE_SIZE}
                     />
+                    </>
                 )}
             </div>
 

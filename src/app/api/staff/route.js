@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 async function generateAppointmentNo(connection) {
     const year = new Date().getFullYear();
@@ -50,8 +51,29 @@ export async function GET(request) {
             const q = `%${search}%`;
             params.push(q, q, q, q);
         }
-        if (academyId) { where.push("s.academy_id = ?"); params.push(Number(academyId)); }
-        if (branchId) { where.push("s.branch_id = ?"); params.push(Number(branchId)); }
+        const authUser = await getAuthUser(request);
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                where.push("s.branch_id = ?", "s.academy_id = ?");
+                params.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                where.push("s.academy_id = ?");
+                params.push(authUser.academy_id);
+                if (branchId) {
+                    where.push("s.branch_id = ?");
+                    params.push(Number(branchId));
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                where.push("s.academy_id = ?");
+                params.push(authUser.academy_id);
+            } else {
+                if (academyId) { where.push("s.academy_id = ?"); params.push(Number(academyId)); }
+                if (branchId) { where.push("s.branch_id = ?"); params.push(Number(branchId)); }
+            }
+        } else {
+            if (academyId) { where.push("s.academy_id = ?"); params.push(Number(academyId)); }
+            if (branchId) { where.push("s.branch_id = ?"); params.push(Number(branchId)); }
+        }
         if (roleId) { where.push("s.role_id = ?"); params.push(Number(roleId)); }
         if (statusParam !== null && statusParam !== "") {
             const status = Number(statusParam);
