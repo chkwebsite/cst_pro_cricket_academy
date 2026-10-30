@@ -4,6 +4,41 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
 
+function formatDismissal(dismissalType, bowlerName, fielderName) {
+    const dt = String(dismissalType || "").trim();
+    if (!dt || dt.toLowerCase() === "not out") return "not out";
+    if (dt.toLowerCase().includes("caught & bowled") || dt.toLowerCase() === "c & b") {
+        return bowlerName ? `c & b ${bowlerName}` : "c & b";
+    }
+    if (dt.toLowerCase() === "caught" || dt.toLowerCase() === "c") {
+        if (fielderName && bowlerName) {
+            if (fielderName.toLowerCase() === bowlerName.toLowerCase()) return `c & b ${bowlerName}`;
+            return `c ${fielderName} b ${bowlerName}`;
+        }
+        if (bowlerName) return `c ? b ${bowlerName}`;
+        if (fielderName) return `c ${fielderName}`;
+        return "caught";
+    }
+    if (dt.toLowerCase() === "bowled" || dt.toLowerCase() === "b") {
+        return bowlerName ? `b ${bowlerName}` : "bowled";
+    }
+    if (dt.toLowerCase() === "lbw") {
+        return bowlerName ? `lbw b ${bowlerName}` : "lbw";
+    }
+    if (dt.toLowerCase().includes("run out")) {
+        return fielderName ? `run out (${fielderName})` : "run out";
+    }
+    if (dt.toLowerCase().includes("stump")) {
+        if (fielderName && bowlerName) return `st ${fielderName} b ${bowlerName}`;
+        if (bowlerName) return `st ? b ${bowlerName}`;
+        return "stumped";
+    }
+    if (dt.toLowerCase().includes("hit wicket")) {
+        return bowlerName ? `hit wicket b ${bowlerName}` : "hit wicket";
+    }
+    return bowlerName ? `${dt} b ${bowlerName}` : dt;
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
@@ -504,7 +539,7 @@ export async function GET(request) {
             console.warn("Error fetching enrolled teams:", teamErr.message);
         }
 
-        // 7. Fetch My Enrolled Matches & Tournaments
+        // 7. Fetch My Enrolled Matches with Full Scorecard Details
         let enrolledMatches = [];
         try {
             const [matchRows] = await connection.query(
@@ -515,10 +550,16 @@ export async function GET(request) {
                     m.match_date,
                     m.match_time,
                     m.status AS match_status,
+                    m.toss_decision,
+                    toss_t.team_name AS toss_winner_name,
                     t.tournament_name,
+                    t.id AS tournament_id,
                     ta.team_name AS team_a_name,
                     tb.team_name AS team_b_name,
                     g.ground_name,
+                    mp.id AS match_player_id,
+                    mp.team_id AS my_team_id,
+                    myt.team_name AS my_team_name,
                     CASE 
                         WHEN mp.captain = 1 THEN 'Captain'
                         WHEN mp.vice_captain = 1 THEN 'Vice Captain'
@@ -526,14 +567,14 @@ export async function GET(request) {
                         WHEN mp.substitute = 1 THEN 'Substitute'
                         WHEN mp.playing_11 = 1 THEN 'Playing XI'
                         ELSE 'Player'
-                    END AS player_role,
-                    myt.team_name AS my_team_name
+                    END AS player_role
                  FROM cst_match_players mp
                  INNER JOIN cst_matches m ON m.id = mp.match_id
                  LEFT JOIN cst_tournaments t ON t.id = m.tournament_id
                  LEFT JOIN cst_teams ta ON ta.id = m.team_a_id
                  LEFT JOIN cst_teams tb ON tb.id = m.team_b_id
                  LEFT JOIN cst_teams myt ON myt.id = mp.team_id
+                 LEFT JOIN cst_teams toss_t ON toss_t.id = m.toss_winner_team_id
                  LEFT JOIN cst_ground g ON g.id = m.ground_id
                  WHERE mp.user_id = ?
                  ORDER BY m.match_date DESC, m.id DESC`,
@@ -547,7 +588,220 @@ export async function GET(request) {
                     matchMap.set(item.id, item);
                 }
             }
-            enrolledMatches = Array.from(matchMap.values());
+            const uniqueMatchList = Array.from(matchMap.values());
+            const matchIds = uniqueMatchList.map((m) => m.id);
+
+            // Query Batting Scorecards for this player
+            const [battingRecords] = await connection.query(
+                `SELECT 
+                    sc.id,
+                    sc.match_id,
+                    sc.innings_id,
+                    sc.match_player_id,
+                    sc.batting_position,
+                    sc.runs,
+                    sc.balls,
+                    sc.fours,
+                    sc.sixes,
+                    sc.strike_rate,
+                    sc.dismissal_type,
+                    mi.innings_no,
+                    COALESCE(CONCAT_WS(' ', bu.first_name, bu.last_name), bop.player_name) AS bowler_name,
+                    COALESCE(CONCAT_WS(' ', fu.first_name, fu.last_name), fop.player_name) AS fielder_name
+                 FROM cst_match_scorecard sc
+                 INNER JOIN cst_match_players mp ON mp.id = sc.match_player_id
+                 LEFT JOIN cst_match_innings mi ON mi.id = sc.innings_id
+                 LEFT JOIN cst_match_players bmp ON bmp.id = sc.dismissed_by_player_id
+                 LEFT JOIN cst_users bu ON bu.id = bmp.user_id
+                 LEFT JOIN cst_outside_players bop ON bop.id = bmp.outside_player_id
+                 LEFT JOIN cst_match_players fmp ON fmp.id = sc.fielder_player_id
+                 LEFT JOIN cst_users fu ON fu.id = fmp.user_id
+                 LEFT JOIN cst_outside_players fop ON fop.id = fmp.outside_player_id
+                 WHERE mp.user_id = ?
+                 ORDER BY sc.match_id DESC, mi.innings_no ASC`,
+                [user.id]
+            );
+
+            // Query Bowling Scorecards for this player
+            const [bowlingRecords] = await connection.query(
+                `SELECT 
+                    bs.id,
+                    bs.match_id,
+                    bs.innings_id,
+                    bs.match_player_id,
+                    bs.overs,
+                    bs.balls_bowled,
+                    bs.maidens,
+                    bs.runs_conceded,
+                    bs.wickets,
+                    bs.wides,
+                    bs.no_balls,
+                    bs.economy,
+                    mi.innings_no
+                 FROM cst_match_bowling_scorecard bs
+                 INNER JOIN cst_match_players mp ON mp.id = bs.match_player_id
+                 LEFT JOIN cst_match_innings mi ON mi.id = bs.innings_id
+                 WHERE mp.user_id = ?
+                 ORDER BY bs.match_id DESC, mi.innings_no ASC`,
+                [user.id]
+            );
+
+            // Query Fielding dismissals for this player (catches, run outs, stumpings)
+            const [fieldingRecords] = await connection.query(
+                `SELECT 
+                    sc.id,
+                    sc.match_id,
+                    sc.dismissal_type,
+                    sc.fielder_player_id,
+                    sc.dismissed_by_player_id,
+                    mi.innings_no
+                 FROM cst_match_scorecard sc
+                 LEFT JOIN cst_match_innings mi ON mi.id = sc.innings_id
+                 WHERE sc.fielder_player_id IN (SELECT id FROM cst_match_players WHERE user_id = ?)
+                    OR (sc.dismissed_by_player_id IN (SELECT id FROM cst_match_players WHERE user_id = ?) AND LOWER(sc.dismissal_type) LIKE '%caught%bowled%')`,
+                [user.id, user.id]
+            );
+
+            // Query Team Innings scores for these matches
+            let inningsRows = [];
+            if (matchIds.length > 0) {
+                const [inngData] = await connection.query(
+                    `SELECT 
+                        mi.match_id,
+                        mi.innings_no,
+                        mi.batting_team_id,
+                        t.team_name AS batting_team_name,
+                        mi.total_runs,
+                        mi.total_wickets,
+                        mi.total_overs,
+                        mi.total_balls,
+                        mi.extras
+                     FROM cst_match_innings mi
+                     LEFT JOIN cst_teams t ON t.id = mi.batting_team_id
+                     WHERE mi.match_id IN (?)
+                     ORDER BY mi.match_id, mi.innings_no ASC`,
+                    [matchIds]
+                );
+                inningsRows = inngData;
+            }
+
+            // Group by match_id
+            const battingByMatch = new Map();
+            for (const b of battingRecords) {
+                if (!battingByMatch.has(b.match_id)) battingByMatch.set(b.match_id, b);
+            }
+
+            const bowlingByMatch = new Map();
+            for (const bw of bowlingRecords) {
+                if (!bowlingByMatch.has(bw.match_id)) bowlingByMatch.set(bw.match_id, bw);
+            }
+
+            const fieldingByMatch = new Map();
+            for (const f of fieldingRecords) {
+                if (!fieldingByMatch.has(f.match_id)) fieldingByMatch.set(f.match_id, []);
+                fieldingByMatch.get(f.match_id).push(f);
+            }
+
+            const inningsByMatch = new Map();
+            for (const inng of inningsRows) {
+                if (!inningsByMatch.has(inng.match_id)) inningsByMatch.set(inng.match_id, []);
+                inningsByMatch.get(inng.match_id).push(inng);
+            }
+
+            // Construct enriched matches with individual scorecards
+            enrolledMatches = uniqueMatchList.map((m) => {
+                const b = battingByMatch.get(m.id) || null;
+                const bw = bowlingByMatch.get(m.id) || null;
+                const fList = fieldingByMatch.get(m.id) || [];
+                const inngList = inningsByMatch.get(m.id) || [];
+
+                let battingObj = null;
+                if (b) {
+                    const runs = Number(b.runs || 0);
+                    const balls = Number(b.balls || 0);
+                    const fours = Number(b.fours || 0);
+                    const sixes = Number(b.sixes || 0);
+                    const sr = balls > 0 ? ((runs / balls) * 100).toFixed(2) : (b.strike_rate ? Number(b.strike_rate).toFixed(2) : "0.00");
+                    const dismissalText = formatDismissal(b.dismissal_type, b.bowler_name, b.fielder_name);
+                    battingObj = {
+                        has_batted: true,
+                        runs,
+                        balls,
+                        fours,
+                        sixes,
+                        strike_rate: sr,
+                        batting_position: b.batting_position || 1,
+                        dismissal_type: b.dismissal_type || "Not Out",
+                        bowler_name: b.bowler_name || null,
+                        fielder_name: b.fielder_name || null,
+                        dismissal_text: dismissalText,
+                        is_not_out: String(b.dismissal_type || "").toLowerCase() === "not out",
+                    };
+                }
+
+                let bowlingObj = null;
+                if (bw) {
+                    const overs = Number(bw.overs || 0);
+                    const ballsBowled = Number(bw.balls_bowled || Math.round(overs * 6));
+                    const maidens = Number(bw.maidens || 0);
+                    const runsConceded = Number(bw.runs_conceded || 0);
+                    const wickets = Number(bw.wickets || 0);
+                    const wides = Number(bw.wides || 0);
+                    const noBalls = Number(bw.no_balls || 0);
+                    const economy = overs > 0 ? (runsConceded / overs).toFixed(2) : (bw.economy ? Number(bw.economy).toFixed(2) : "0.00");
+                    bowlingObj = {
+                        has_bowled: true,
+                        overs: overs.toFixed(1),
+                        balls_bowled: ballsBowled,
+                        maidens,
+                        runs_conceded: runsConceded,
+                        wickets,
+                        wides,
+                        no_balls: noBalls,
+                        economy,
+                    };
+                }
+
+                let catches = 0;
+                let runOuts = 0;
+                let stumpings = 0;
+                for (const f of fList) {
+                    const dt = String(f.dismissal_type || "").toLowerCase();
+                    if (dt.includes("caught") || dt === "c" || dt === "c & b") catches++;
+                    else if (dt.includes("run out")) runOuts++;
+                    else if (dt.includes("stump")) stumpings++;
+                }
+                const totalDismissals = catches + runOuts + stumpings;
+                const fieldingObj = {
+                    has_fielded: totalDismissals > 0,
+                    catches,
+                    run_outs: runOuts,
+                    stumpings,
+                    total_dismissals: totalDismissals,
+                };
+
+                const inningsSummary = inngList.map((inng) => ({
+                    innings_no: inng.innings_no,
+                    batting_team_name: inng.batting_team_name || "Team",
+                    runs: inng.total_runs || 0,
+                    wickets: inng.total_wickets || 0,
+                    overs: Number(inng.total_overs || 0).toFixed(1),
+                    score_text: `${inng.total_runs || 0}/${inng.total_wickets || 0} (${Number(inng.total_overs || 0).toFixed(1)} ov)`,
+                }));
+
+                const hasScorecard = Boolean(battingObj || bowlingObj || fieldingObj.has_fielded);
+                const isCompleted = String(m.match_status).toLowerCase() === "completed";
+
+                return {
+                    ...m,
+                    has_scorecard: hasScorecard,
+                    is_played: isCompleted || hasScorecard,
+                    batting: battingObj,
+                    bowling: bowlingObj,
+                    fielding: fieldingObj,
+                    innings_summary: inningsSummary,
+                };
+            });
         } catch (mErr) {
             console.warn("Error fetching enrolled matches:", mErr.message);
         }
@@ -741,6 +995,7 @@ export async function GET(request) {
         // 10. Player Performance Statistics
         let batting = {};
         let bowling = {};
+        let fielding = {};
         let recentScores = [];
         try {
             const [battingStatsRows] = await connection.query(
@@ -774,35 +1029,106 @@ export async function GET(request) {
                 [user.id]
             );
 
+            const [fieldingStatsRows] = await connection.query(
+                `SELECT 
+                    COALESCE(SUM(CASE WHEN LOWER(sc.dismissal_type) IN ('caught', 'c', 'caught & bowled') OR LOWER(sc.dismissal_type) LIKE '%caught%' THEN 1 ELSE 0 END), 0) AS total_catches,
+                    COALESCE(SUM(CASE WHEN LOWER(sc.dismissal_type) LIKE '%run out%' THEN 1 ELSE 0 END), 0) AS total_run_outs,
+                    COALESCE(SUM(CASE WHEN LOWER(sc.dismissal_type) LIKE '%stump%' THEN 1 ELSE 0 END), 0) AS total_stumpings
+                 FROM cst_match_scorecard sc
+                 WHERE sc.fielder_player_id IN (SELECT id FROM cst_match_players WHERE user_id = ?)
+                    OR (sc.dismissed_by_player_id IN (SELECT id FROM cst_match_players WHERE user_id = ?) AND LOWER(sc.dismissal_type) LIKE '%caught%bowled%')`,
+                [user.id, user.id]
+            );
+
             batting = battingStatsRows[0] || {};
             bowling = bowlingStatsRows[0] || {};
+            fielding = fieldingStatsRows[0] || {};
 
             const [recScores] = await connection.query(
                 `SELECT 
                     m.id AS match_id,
                     m.match_no,
                     m.match_date,
+                    m.match_type,
                     t.tournament_name,
+                    ta.team_name AS team_a_name,
+                    tb.team_name AS team_b_name,
                     sc.runs,
                     sc.balls,
                     sc.fours,
                     sc.sixes,
+                    sc.strike_rate,
                     sc.dismissal_type,
+                    COALESCE(ub.first_name, opb.player_name) AS bowler_name,
+                    COALESCE(uf.first_name, opf.player_name) AS fielder_name,
                     bs.overs,
+                    bs.balls_bowled,
                     bs.maidens,
                     bs.runs_conceded,
-                    bs.wickets
+                    bs.wickets,
+                    bs.wides,
+                    bs.no_balls,
+                    bs.economy
                  FROM cst_match_players mp
                  INNER JOIN cst_matches m ON m.id = mp.match_id
                  LEFT JOIN cst_tournaments t ON t.id = m.tournament_id
+                 LEFT JOIN cst_teams ta ON ta.id = m.team_a_id
+                 LEFT JOIN cst_teams tb ON tb.id = m.team_b_id
                  LEFT JOIN cst_match_scorecard sc ON sc.match_player_id = mp.id
+                 LEFT JOIN cst_match_players mp_b ON mp_b.id = sc.dismissed_by_player_id
+                 LEFT JOIN cst_users ub ON ub.id = mp_b.user_id
+                 LEFT JOIN cst_outside_players opb ON opb.id = mp_b.outside_player_id
+                 LEFT JOIN cst_match_players mp_f ON mp_f.id = sc.fielder_player_id
+                 LEFT JOIN cst_users uf ON uf.id = mp_f.user_id
+                 LEFT JOIN cst_outside_players opf ON opf.id = mp_f.outside_player_id
                  LEFT JOIN cst_match_bowling_scorecard bs ON bs.match_player_id = mp.id
                  WHERE mp.user_id = ? AND (sc.id IS NOT NULL OR bs.id IS NOT NULL)
                  ORDER BY m.match_date DESC
-                 LIMIT 6`,
+                 LIMIT 10`,
                 [user.id]
             );
-            recentScores = recScores;
+
+            recentScores = recScores.map((score) => {
+                const runs = score.runs !== null ? Number(score.runs) : null;
+                const balls = score.balls !== null ? Number(score.balls) : null;
+                const sr = balls && balls > 0 ? ((runs / balls) * 100).toFixed(2) : (score.strike_rate ? Number(score.strike_rate).toFixed(2) : null);
+                const dismissalText = score.runs !== null ? formatDismissal(score.dismissal_type, score.bowler_name, score.fielder_name) : null;
+
+                const overs = score.overs !== null ? Number(score.overs) : null;
+                const runsConceded = score.runs_conceded !== null ? Number(score.runs_conceded) : null;
+                const econ = overs && overs > 0 ? (runsConceded / overs).toFixed(2) : (score.economy ? Number(score.economy).toFixed(2) : null);
+
+                // Find fielding for this match
+                const fMatch = (typeof fieldingByMatch !== "undefined" && fieldingByMatch.get(score.match_id)) || [];
+                let ct = 0, ro = 0, st = 0;
+                for (const f of fMatch) {
+                    const dt = String(f.dismissal_type || "").toLowerCase();
+                    if (dt.includes("caught") || dt === "c" || dt === "c & b") ct++;
+                    else if (dt.includes("run out")) ro++;
+                    else if (dt.includes("stump")) st++;
+                }
+
+                return {
+                    ...score,
+                    runs,
+                    balls,
+                    fours: score.fours !== null ? Number(score.fours) : null,
+                    sixes: score.sixes !== null ? Number(score.sixes) : null,
+                    strike_rate: sr,
+                    dismissal_text: dismissalText,
+                    overs: overs !== null ? overs.toFixed(1) : null,
+                    maidens: score.maidens !== null ? Number(score.maidens) : null,
+                    runs_conceded: runsConceded,
+                    wickets: score.wickets !== null ? Number(score.wickets) : null,
+                    wides: score.wides !== null ? Number(score.wides) : 0,
+                    no_balls: score.no_balls !== null ? Number(score.no_balls) : 0,
+                    economy: econ,
+                    catches: ct,
+                    run_outs: ro,
+                    stumpings: st,
+                    total_fielding: ct + ro + st,
+                };
+            });
         } catch (perfErr) {
             console.warn("Error fetching performance stats:", perfErr.message);
         }
@@ -818,6 +1144,11 @@ export async function GET(request) {
         const totalRunsConceded = Number(bowling.total_runs_conceded || 0);
         const economy = totalOvers > 0 ? (totalRunsConceded / totalOvers).toFixed(2) : "0.00";
         const bowlingAverage = totalWickets > 0 ? (totalRunsConceded / totalWickets).toFixed(2) : "—";
+
+        const totalCatches = Number(fielding.total_catches || 0);
+        const totalRunOuts = Number(fielding.total_run_outs || 0);
+        const totalStumpings = Number(fielding.total_stumpings || 0);
+        const totalFieldDismissals = totalCatches + totalRunOuts + totalStumpings;
 
         return NextResponse.json({
             success: true,
@@ -863,6 +1194,12 @@ export async function GET(request) {
                         best_wickets: Number(bowling.best_wickets || 0),
                         economy: economy,
                         average: bowlingAverage,
+                    },
+                    fielding: {
+                        catches: totalCatches,
+                        run_outs: totalRunOuts,
+                        stumpings: totalStumpings,
+                        total_dismissals: totalFieldDismissals,
                     },
                     recentScores,
                 },

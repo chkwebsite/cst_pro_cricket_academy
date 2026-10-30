@@ -10,6 +10,8 @@ import {
     Calendar,
     Check,
     CheckCircle2,
+    ChevronDown,
+    ChevronUp,
     Clock,
     CreditCard,
     DollarSign,
@@ -46,6 +48,11 @@ export default function PlayerDashboardPage() {
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
     const [activeTab, setActiveTab] = useState("overview"); // "overview" | "matches" | "fees" | "performance"
+    const [expandedMatchId, setExpandedMatchId] = useState(null);
+
+    const toggleExpandMatch = (id) => {
+        setExpandedMatchId((prev) => (prev === id ? null : id));
+    };
 
     useEffect(() => {
         let isMounted = true;
@@ -656,7 +663,7 @@ export default function PlayerDashboardPage() {
                                     </div>
                                 ) : (
                                     <div className="table-responsive bg-white rounded-4 border">
-                                        <table className="table table-hover align-middle mb-0 small">
+                                        <table className="table align-middle mb-0 small">
                                             <thead className="table-light">
                                                 <tr>
                                                     <th>Match</th>
@@ -666,43 +673,246 @@ export default function PlayerDashboardPage() {
                                                     <th>Venue</th>
                                                     <th>My Team &amp; Role</th>
                                                     <th>Status</th>
+                                                    <th>My Performance</th>
+                                                    <th className="text-end">Scorecard</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {enrolledMatches.map((m) => (
-                                                    <tr key={m.id}>
-                                                        <td className="fw-bold">{m.match_no}</td>
-                                                        <td>
-                                                            <span className="text-dark fw-medium">{m.tournament_name || "Practice Game"}</span>
-                                                            <span className="text-muted d-block" style={{ fontSize: "0.7rem" }}>{m.match_type || "T20"}</span>
-                                                        </td>
-                                                        <td className="fw-semibold">
-                                                            {m.team_a_name || "Team A"} <span className="text-muted">vs</span> {m.team_b_name || "Team B"}
-                                                        </td>
-                                                        <td>
-                                                            <div className="fw-medium">{m.match_date ? new Date(m.match_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "TBD"}</div>
-                                                            <div className="text-muted" style={{ fontSize: "0.7rem" }}>{m.match_time || "—"}</div>
-                                                        </td>
-                                                        <td>{m.ground_name || "Academy Ground"}</td>
-                                                        <td>
-                                                            <span className="badge bg-primary-subtle text-primary">{m.my_team_name || "Assigned Team"}</span>
-                                                            <span className="text-muted d-block mt-0.5" style={{ fontSize: "0.7rem" }}>{m.player_role || "Player"}</span>
-                                                        </td>
-                                                        <td>
-                                                            <span className={`badge ${
-                                                                String(m.match_status).toLowerCase() === "live"
-                                                                    ? "bg-danger"
-                                                                    : String(m.match_status).toLowerCase() === "completed"
-                                                                    ? "bg-success"
-                                                                    : "bg-warning text-dark"
-                                                            }`}>
-                                                                {m.match_status || "Upcoming"}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                {enrolledMatches.map((m) => {
+                                                    const isExpanded = expandedMatchId === m.id;
+                                                    return (
+                                                        <tr key={m.id} className={isExpanded ? "table-active" : ""}>
+                                                            <td className="fw-bold">{m.match_no}</td>
+                                                            <td>
+                                                                <span className="text-dark fw-medium">{m.tournament_name || "Practice Game"}</span>
+                                                                <span className="text-muted d-block" style={{ fontSize: "0.7rem" }}>{m.match_type || "T20"}</span>
+                                                            </td>
+                                                            <td className="fw-semibold">
+                                                                {m.team_a_name || "Team A"} <span className="text-muted">vs</span> {m.team_b_name || "Team B"}
+                                                            </td>
+                                                            <td>
+                                                                <div className="fw-medium">{m.match_date ? new Date(m.match_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "TBD"}</div>
+                                                                <div className="text-muted" style={{ fontSize: "0.7rem" }}>{m.match_time || "—"}</div>
+                                                            </td>
+                                                            <td>{m.ground_name || "Academy Ground"}</td>
+                                                            <td>
+                                                                <span className="badge bg-primary-subtle text-primary">{m.my_team_name || "Assigned Team"}</span>
+                                                                <span className="text-muted d-block mt-0.5" style={{ fontSize: "0.7rem" }}>{m.player_role || "Player"}</span>
+                                                            </td>
+                                                            <td>
+                                                                <span className={`badge ${
+                                                                    String(m.match_status).toLowerCase() === "live"
+                                                                        ? "bg-danger"
+                                                                        : String(m.match_status).toLowerCase() === "completed"
+                                                                        ? "bg-success"
+                                                                        : "bg-warning text-dark"
+                                                                }`}>
+                                                                    {m.match_status || "Upcoming"}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                {m.has_scorecard ? (
+                                                                    <div className="d-flex flex-wrap gap-1 align-items-center">
+                                                                        {m.batting?.has_batted && (
+                                                                            <span className="badge bg-primary-subtle text-primary border border-primary-subtle" title="Batting: Runs (Balls)">
+                                                                                🏏 {m.batting.runs} ({m.batting.balls}b)
+                                                                            </span>
+                                                                        )}
+                                                                        {m.bowling?.has_bowled && (
+                                                                            <span className="badge bg-danger-subtle text-danger border border-danger-subtle" title="Bowling: Wickets/Runs">
+                                                                                🎯 {m.bowling.wickets}/{m.bowling.runs_conceded}
+                                                                            </span>
+                                                                        )}
+                                                                        {m.fielding?.has_fielded && (
+                                                                            <span className="badge bg-success-subtle text-success border border-success-subtle" title="Fielding dismissals">
+                                                                                🧤 {m.fielding.total_dismissals}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                                                        {m.is_played ? "Scorecard pending" : "Match not played"}
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="text-end">
+                                                                {m.has_scorecard ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className={`btn btn-sm ${isExpanded ? "btn-primary text-white" : "btn-outline-primary"} rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1`}
+                                                                        onClick={() => toggleExpandMatch(m.id)}
+                                                                    >
+                                                                        <span>{isExpanded ? "Hide" : "Scorecard"}</span>
+                                                                        {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="text-muted small">—</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
+
+                                        {/* EXPANDABLE CRICKET SCORECARDS FOR EXPANDED MATCH */}
+                                        {enrolledMatches.filter((m) => expandedMatchId === m.id).map((m) => (
+                                            <div key={`expanded-card-${m.id}`} className="p-3.5 bg-light border-top">
+                                                <div className="bg-white rounded-4 p-3.5 border shadow-sm">
+                                                    {/* Header / Inning Summaries */}
+                                                    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 pb-3 mb-3 border-bottom">
+                                                        <div>
+                                                            <h6 className="fw-bold text-dark font-oswald text-uppercase mb-0 d-flex align-items-center gap-1.5">
+                                                                <Trophy size={16} className="text-warning" />
+                                                                <span>Match #{m.match_no} Official Player Performance</span>
+                                                            </h6>
+                                                            <span className="text-muted small">
+                                                                {m.team_a_name} vs {m.team_b_name} • {m.tournament_name || "Academy Fixture"} • {m.ground_name}
+                                                            </span>
+                                                        </div>
+                                                        {m.innings_summary && m.innings_summary.length > 0 && (
+                                                            <div className="d-flex flex-wrap gap-1.5 align-items-center">
+                                                                {m.innings_summary.map((inn, innIdx) => (
+                                                                    <span key={innIdx} className="badge bg-secondary-subtle text-dark border px-2.5 py-1 fw-semibold" style={{ fontSize: "0.75rem" }}>
+                                                                        Innings {inn.innings_no} ({inn.batting_team_name}): <strong className="text-primary">{inn.score_text}</strong>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 3 Detailed Cards: Batting, Bowling, Fielding */}
+                                                    <div className="row g-3">
+                                                        {/* Card 1: Batting */}
+                                                        <div className="col-12 col-md-4">
+                                                            <div className="card h-100 border rounded-4 p-3 bg-light-subtle">
+                                                                <div className="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                                                                    <div className="d-flex align-items-center gap-1.5">
+                                                                        <Zap size={16} className="text-primary" />
+                                                                        <span className="fw-bold text-dark font-oswald text-uppercase small">Batting Breakdown</span>
+                                                                    </div>
+                                                                    {m.batting?.has_batted && (
+                                                                        <span className="badge bg-primary-subtle text-primary fw-bold" style={{ fontSize: "0.68rem" }}>
+                                                                            Position #{m.batting.batting_position}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {m.batting?.has_batted ? (
+                                                                    <div>
+                                                                        <div className="d-flex align-items-baseline gap-2 my-2">
+                                                                            <span className="fs-2 fw-bold text-primary font-oswald">{m.batting.runs}</span>
+                                                                            <span className="text-muted small">runs off <strong>{m.batting.balls}</strong> balls</span>
+                                                                        </div>
+
+                                                                        <div className="bg-white p-2 rounded-3 mb-2 small text-dark d-flex justify-content-between border">
+                                                                            <span><strong>{m.batting.fours}</strong> × 4s</span>
+                                                                            <span><strong>{m.batting.sixes}</strong> × 6s</span>
+                                                                            <span>SR: <strong>{m.batting.strike_rate}</strong></span>
+                                                                        </div>
+
+                                                                        <div className="small pt-1">
+                                                                            <span className="text-muted d-block" style={{ fontSize: "0.7rem" }}>Dismissal Mode:</span>
+                                                                            <span className={`badge ${m.batting.is_not_out ? "bg-success-subtle text-success border border-success-subtle" : "bg-light text-dark border"} text-wrap text-start mt-0.5`}>
+                                                                                {m.batting.dismissal_text}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="py-4 text-center text-muted small">
+                                                                        <Zap size={22} className="opacity-25 mb-1" />
+                                                                        <p className="mb-0">Did not bat in this fixture</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Card 2: Bowling */}
+                                                        <div className="col-12 col-md-4">
+                                                            <div className="card h-100 border rounded-4 p-3 bg-light-subtle">
+                                                                <div className="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                                                                    <div className="d-flex align-items-center gap-1.5">
+                                                                        <Flame size={16} className="text-danger" />
+                                                                        <span className="fw-bold text-dark font-oswald text-uppercase small">Bowling Spell</span>
+                                                                    </div>
+                                                                    {m.bowling?.has_bowled && (
+                                                                        <span className="badge bg-danger-subtle text-danger fw-bold" style={{ fontSize: "0.68rem" }}>
+                                                                            {m.bowling.overs} Overs
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {m.bowling?.has_bowled ? (
+                                                                    <div>
+                                                                        <div className="d-flex align-items-baseline gap-2 my-2">
+                                                                            <span className="fs-2 fw-bold text-danger font-oswald">
+                                                                                {m.bowling.wickets} / {m.bowling.runs_conceded}
+                                                                            </span>
+                                                                            <span className="text-muted small">in <strong>{m.bowling.overs}</strong> ov</span>
+                                                                        </div>
+
+                                                                        <div className="bg-white p-2 rounded-3 mb-2 small text-dark d-flex justify-content-between border">
+                                                                            <span>Maidens: <strong>{m.bowling.maidens}</strong></span>
+                                                                            <span>Balls: <strong>{m.bowling.balls_bowled}</strong></span>
+                                                                            <span>Econ: <strong>{m.bowling.economy}</strong></span>
+                                                                        </div>
+
+                                                                        <div className="small pt-1 d-flex justify-content-between text-muted">
+                                                                            <span>Wides: <strong className="text-dark">{m.bowling.wides}</strong></span>
+                                                                            <span>No Balls: <strong className="text-dark">{m.bowling.no_balls}</strong></span>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="py-4 text-center text-muted small">
+                                                                        <Flame size={22} className="opacity-25 mb-1" />
+                                                                        <p className="mb-0">Did not bowl in this fixture</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Card 3: Fielding */}
+                                                        <div className="col-12 col-md-4">
+                                                            <div className="card h-100 border rounded-4 p-3 bg-light-subtle">
+                                                                <div className="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                                                                    <div className="d-flex align-items-center gap-1.5">
+                                                                        <Shield size={16} className="text-success" />
+                                                                        <span className="fw-bold text-dark font-oswald text-uppercase small">Fielding &amp; Keeping</span>
+                                                                    </div>
+                                                                    <span className="badge bg-success-subtle text-success fw-bold" style={{ fontSize: "0.68rem" }}>
+                                                                        {m.fielding?.total_dismissals || 0} Total
+                                                                    </span>
+                                                                </div>
+
+                                                                {m.fielding?.has_fielded ? (
+                                                                    <div>
+                                                                        <div className="d-flex align-items-baseline gap-2 my-2">
+                                                                            <span className="fs-2 fw-bold text-success font-oswald">{m.fielding.total_dismissals}</span>
+                                                                            <span className="text-muted small">Dismissals effected</span>
+                                                                        </div>
+
+                                                                        <div className="bg-white p-2 rounded-3 mb-2 small text-dark d-flex justify-content-between border">
+                                                                            <span>Catches: <strong>{m.fielding.catches}</strong></span>
+                                                                            <span>Run Outs: <strong>{m.fielding.run_outs}</strong></span>
+                                                                            <span>Stumpings: <strong>{m.fielding.stumpings}</strong></span>
+                                                                        </div>
+
+                                                                        <div className="small pt-1 text-muted">
+                                                                            <span>Active fielding contributions recorded on match sheet</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="py-4 text-center text-muted small">
+                                                                        <Shield size={22} className="opacity-25 mb-1" />
+                                                                        <p className="mb-0">0 catches or dismissals credited</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </div>
@@ -1083,6 +1293,45 @@ export default function PlayerDashboardPage() {
                                 </div>
                             </div>
 
+                            {/* Fielding Card */}
+                            <div className="card border rounded-4 p-4 mb-4 shadow-sm bg-white">
+                                <div className="d-flex align-items-center gap-2 mb-3">
+                                    <div className="badge bg-success text-white p-2 rounded-3">
+                                        <Shield size={18} />
+                                    </div>
+                                    <h6 className="fw-bold text-dark font-oswald text-uppercase fs-5 mb-0">
+                                        Fielding Career Record
+                                    </h6>
+                                </div>
+
+                                <div className="row g-3 text-center">
+                                    <div className="col-6 col-md-3">
+                                        <div className="bg-light p-2.5 rounded-3">
+                                            <span className="text-muted d-block small" style={{ fontSize: "0.72rem" }}>Total Dismissals</span>
+                                            <span className="fs-4 fw-bold font-oswald text-success">{performance?.fielding?.total_dismissals || 0}</span>
+                                        </div>
+                                    </div>
+                                    <div className="col-6 col-md-3">
+                                        <div className="bg-light p-2.5 rounded-3">
+                                            <span className="text-muted d-block small" style={{ fontSize: "0.72rem" }}>Catches Taken</span>
+                                            <span className="fs-4 fw-bold font-oswald text-dark">{performance?.fielding?.catches || 0}</span>
+                                        </div>
+                                    </div>
+                                    <div className="col-6 col-md-3">
+                                        <div className="bg-light p-2.5 rounded-3">
+                                            <span className="text-muted d-block small" style={{ fontSize: "0.72rem" }}>Run Outs</span>
+                                            <span className="fs-4 fw-bold font-oswald text-dark">{performance?.fielding?.run_outs || 0}</span>
+                                        </div>
+                                    </div>
+                                    <div className="col-6 col-md-3">
+                                        <div className="bg-light p-2.5 rounded-3">
+                                            <span className="text-muted d-block small" style={{ fontSize: "0.72rem" }}>Stumpings</span>
+                                            <span className="fs-4 fw-bold font-oswald text-dark">{performance?.fielding?.stumpings || 0}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Recent Match Performance Log */}
                             <div>
                                 <h6 className="fw-bold text-dark font-oswald text-uppercase mb-3">
@@ -1100,32 +1349,80 @@ export default function PlayerDashboardPage() {
                                             <thead className="table-light">
                                                 <tr>
                                                     <th>Match</th>
-                                                    <th>Event</th>
-                                                    <th>Batting Performance</th>
-                                                    <th>Bowling Performance</th>
+                                                    <th>Event / Format</th>
+                                                    <th>Batting Details</th>
+                                                    <th>Bowling Spell</th>
+                                                    <th>Fielding</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {performance.recentScores.map((score, idx) => (
                                                     <tr key={idx}>
-                                                        <td className="fw-bold">{score.match_no}</td>
-                                                        <td>{score.tournament_name || "Academy Fixture"}</td>
+                                                        <td>
+                                                            <div className="fw-bold text-dark">{score.match_no}</div>
+                                                            {score.match_date && (
+                                                                <span className="text-muted" style={{ fontSize: "0.7rem" }}>
+                                                                    {new Date(score.match_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            <div className="text-dark fw-medium">{score.tournament_name || "Academy Fixture"}</div>
+                                                            {score.match_type && (
+                                                                <span className="badge bg-light text-muted border mt-0.5" style={{ fontSize: "0.68rem" }}>
+                                                                    {score.match_type}
+                                                                </span>
+                                                            )}
+                                                        </td>
                                                         <td>
                                                             {score.runs !== null ? (
-                                                                <span className="fw-bold text-primary">
-                                                                    {score.runs} <span className="text-muted fw-normal">({score.balls}b, {score.fours}x4, {score.sixes}x6) - {score.dismissal_type || "Not Out"}</span>
-                                                                </span>
+                                                                <div>
+                                                                    <div className="fw-bold text-primary">
+                                                                        {score.runs} <span className="text-muted fw-normal">runs ({score.balls}b, {score.fours}×4, {score.sixes}×6)</span>
+                                                                    </div>
+                                                                    <div className="text-muted mt-0.5" style={{ fontSize: "0.72rem" }}>
+                                                                        SR: <strong className="text-dark">{score.strike_rate || "0.00"}</strong> • {score.dismissal_text || score.dismissal_type || "Not Out"}
+                                                                    </div>
+                                                                </div>
                                                             ) : (
-                                                                <span className="text-muted">Did not bat</span>
+                                                                <span className="text-muted fst-italic">Did not bat</span>
                                                             )}
                                                         </td>
                                                         <td>
                                                             {score.overs !== null ? (
-                                                                <span className="fw-bold text-danger">
-                                                                    {score.wickets}/{score.runs_conceded} <span className="text-muted fw-normal">({score.overs} ov, {score.maidens} m)</span>
-                                                                </span>
+                                                                <div>
+                                                                    <div className="fw-bold text-danger">
+                                                                        {score.wickets} / {score.runs_conceded} <span className="text-muted fw-normal">({score.overs} ov)</span>
+                                                                    </div>
+                                                                    <div className="text-muted mt-0.5" style={{ fontSize: "0.72rem" }}>
+                                                                        Econ: <strong className="text-dark">{score.economy || "0.00"}</strong> • Maidens: {score.maidens || 0}
+                                                                    </div>
+                                                                </div>
                                                             ) : (
-                                                                <span className="text-muted">Did not bowl</span>
+                                                                <span className="text-muted fst-italic">Did not bowl</span>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            {(score.total_fielding || 0) > 0 ? (
+                                                                <div className="d-flex flex-wrap gap-1">
+                                                                    {score.catches > 0 && (
+                                                                        <span className="badge bg-success-subtle text-success border border-success-subtle">
+                                                                            {score.catches} Catch{score.catches > 1 ? "es" : ""}
+                                                                        </span>
+                                                                    )}
+                                                                    {score.run_outs > 0 && (
+                                                                        <span className="badge bg-info-subtle text-info border border-info-subtle">
+                                                                            {score.run_outs} Run Out{score.run_outs > 1 ? "s" : ""}
+                                                                        </span>
+                                                                    )}
+                                                                    {score.stumpings > 0 && (
+                                                                        <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                                                                            {score.stumpings} Stumping{score.stumpings > 1 ? "s" : ""}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-muted">—</span>
                                                             )}
                                                         </td>
                                                     </tr>
