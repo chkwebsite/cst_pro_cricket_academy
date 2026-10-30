@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const ORDER_STATUS_COLORS = {
     Pending: "bg-warning text-dark",
@@ -64,7 +65,12 @@ const formatDeliveryDate = (dateVal) => {
 
 export default function OrdersPage() {
     const { user } = useUser();
+    const currentUserType = String(user?.user_type || "").toLowerCase().trim();
+    const isPlayer = currentUserType.includes("player") || currentUserType === "7";
+
     const [orders, setOrders] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -115,6 +121,12 @@ export default function OrdersPage() {
                 if (startDate) params.set("start_date", startDate);
                 if (endDate) params.set("end_date", endDate);
 
+                // If logged in user is a player, restrict to their orders
+                if (isPlayer && user?.id) {
+                    params.set("customer_user_id", user.id);
+                    if (user.email) params.set("customer_email", user.email);
+                }
+
                 const res = await fetch(`/api/orders?${params.toString()}`);
                 const json = await res.json();
 
@@ -130,7 +142,11 @@ export default function OrdersPage() {
 
         fetchOrders();
         return () => { cancelled = true; };
-    }, [search, statusFilter, paymentFilter, fulfillmentFilter, startDate, endDate, reloadCount]);
+    }, [search, statusFilter, paymentFilter, fulfillmentFilter, startDate, endDate, reloadCount, isPlayer, user]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, statusFilter, paymentFilter, fulfillmentFilter, startDate, endDate]);
 
     // KPI Metrics
     const totalOrders = orders.length;
@@ -138,6 +154,9 @@ export default function OrdersPage() {
     const processingOrders = orders.filter((o) => ["Confirmed", "Processing", "Ready", "Dispatched"].includes(o.order_status)).length;
     const deliveredOrders = orders.filter((o) => o.order_status === "Delivered").length;
     const totalRevenue = orders.filter((o) => o.order_status !== "Cancelled").reduce((acc, o) => acc + Number(o.grand_total || 0), 0);
+
+    const totalPages = Math.ceil(orders.length / PAGE_SIZE) || 1;
+    const pagedOrders = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // Open View Order Modal & Fetch details
     const handleOpenView = async (order) => {
@@ -288,9 +307,13 @@ export default function OrdersPage() {
                             <ShoppingCart size={24} />
                         </div>
                         <div>
-                            <h3 className="mb-0 fw-bold text-dark">Customer Orders</h3>
+                            <h3 className="mb-0 fw-bold text-dark">
+                                {isPlayer ? "My Orders & Purchases" : "Customer Orders"}
+                            </h3>
                             <p className="text-muted small mb-0">
-                                Review e-commerce orders, track fulfillment status, record payments, and inspect order histories.
+                                {isPlayer
+                                    ? "Track your academy gear, kit orders, and shipment delivery updates."
+                                    : "Review e-commerce orders, track fulfillment status, record payments, and inspect order histories."}
                             </p>
                         </div>
                     </div>
@@ -318,7 +341,7 @@ export default function OrdersPage() {
                     <div className="col-6 col-md">
                         <div className="p-3 rounded-3 bg-light border d-flex align-items-center justify-content-between">
                             <div>
-                                <div className="text-muted small fw-medium">New / Pending</div>
+                                <div className="text-muted small fw-medium">{isPlayer ? "Awaiting Confirmation" : "New / Pending"}</div>
                                 <div className="fs-4 fw-bold text-warning">{pendingOrders}</div>
                             </div>
                             <Clock className="text-warning opacity-75" size={26} />
@@ -327,7 +350,7 @@ export default function OrdersPage() {
                     <div className="col-6 col-md">
                         <div className="p-3 rounded-3 bg-light border d-flex align-items-center justify-content-between">
                             <div>
-                                <div className="text-muted small fw-medium">In Progress</div>
+                                <div className="text-muted small fw-medium">{isPlayer ? "In Transit / Ready" : "In Progress"}</div>
                                 <div className="fs-4 fw-bold text-info">{processingOrders}</div>
                             </div>
                             <Truck className="text-info opacity-75" size={26} />
@@ -336,7 +359,7 @@ export default function OrdersPage() {
                     <div className="col-6 col-md">
                         <div className="p-3 rounded-3 bg-light border d-flex align-items-center justify-content-between">
                             <div>
-                                <div className="text-muted small fw-medium">Completed</div>
+                                <div className="text-muted small fw-medium">{isPlayer ? "Delivered / Received" : "Completed"}</div>
                                 <div className="fs-4 fw-bold text-success">{deliveredOrders}</div>
                             </div>
                             <CheckCircle2 className="text-success opacity-75" size={26} />
@@ -345,7 +368,7 @@ export default function OrdersPage() {
                     <div className="col-12 col-md">
                         <div className="p-3 rounded-3 bg-light border d-flex align-items-center justify-content-between">
                             <div>
-                                <div className="text-muted small fw-medium">Revenue</div>
+                                <div className="text-muted small fw-medium">{isPlayer ? "Total Spent" : "Revenue"}</div>
                                 <div className="fs-4 fw-bold text-success">₹{totalRevenue.toLocaleString("en-IN")}</div>
                             </div>
                             <DollarSign className="text-success opacity-75" size={26} />
@@ -460,8 +483,12 @@ export default function OrdersPage() {
                 ) : orders.length === 0 ? (
                     <div className="text-center py-5">
                         <ShoppingCart size={48} className="text-muted opacity-50 mb-2" />
-                        <h5 className="fw-semibold text-secondary">No Orders Found</h5>
-                        <p className="text-muted small mb-0">Customer orders placed on the website store will appear here.</p>
+                        <h5 className="fw-semibold text-secondary">{isPlayer ? "No Orders Placed Yet" : "No Orders Found"}</h5>
+                        <p className="text-muted small mb-0">
+                            {isPlayer
+                                ? "You have not placed any orders yet. Visit the academy merchandise store to order gear and kits."
+                                : "Customer orders placed on the website store will appear here."}
+                        </p>
                     </div>
                 ) : (
                     <div className="table-responsive">
@@ -482,7 +509,7 @@ export default function OrdersPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {orders.map((item, idx) => {
+                                {pagedOrders.map((item, idx) => {
                                     const isDelivered = item.order_status === "Delivered";
                                     const isCancelled = item.order_status === "Cancelled";
 
@@ -497,7 +524,7 @@ export default function OrdersPage() {
 
                                     return (
                                         <tr key={item.id} style={rowStyle} className={isDelivered ? "border-success-subtle" : isCancelled ? "border-danger-subtle" : ""}>
-                                            <td className="text-center text-muted small fw-medium">{idx + 1}</td>
+                                            <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                             {/* Order No */}
                                             <td>
                                                 <div className="fw-bold text-dark font-monospace" style={{ fontSize: "0.88rem" }}>
@@ -608,39 +635,43 @@ export default function OrdersPage() {
                                                     >
                                                         <Eye size={15} />
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-outline-primary"
-                                                        onClick={() => handleOpenStatusModal(item)}
-                                                        disabled={isDelivered || isCancelled}
-                                                        title={
-                                                            isDelivered
-                                                                ? "Order Delivered — all modifications disabled"
-                                                                : isCancelled
-                                                                ? "Order Cancelled — modification disabled"
-                                                                : "Update Order Status"
-                                                        }
-                                                        style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-                                                    >
-                                                        <Truck size={15} />
-                                                    </button>
-                                                    {item.payment_status !== "Paid" && (
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-success"
-                                                            onClick={() => handleOpenPaymentModal(item)}
-                                                            disabled={isDelivered || isCancelled}
-                                                            title={
-                                                                isDelivered
-                                                                    ? "Order Delivered — all buttons disabled"
-                                                                    : isCancelled
-                                                                    ? "Order Cancelled — disabled"
-                                                                    : "Record Payment"
-                                                            }
-                                                            style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-                                                        >
-                                                            <CreditCard size={15} />
-                                                        </button>
+                                                    {!isPlayer && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-primary"
+                                                                onClick={() => handleOpenStatusModal(item)}
+                                                                disabled={isDelivered || isCancelled}
+                                                                title={
+                                                                    isDelivered
+                                                                        ? "Order Delivered — all modifications disabled"
+                                                                        : isCancelled
+                                                                        ? "Order Cancelled — modification disabled"
+                                                                        : "Update Order Status"
+                                                                }
+                                                                style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                                                            >
+                                                                <Truck size={15} />
+                                                            </button>
+                                                            {item.payment_status !== "Paid" && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-outline-success"
+                                                                    onClick={() => handleOpenPaymentModal(item)}
+                                                                    disabled={isDelivered || isCancelled}
+                                                                    title={
+                                                                        isDelivered
+                                                                            ? "Order Delivered — all buttons disabled"
+                                                                            : isCancelled
+                                                                            ? "Order Cancelled — disabled"
+                                                                            : "Record Payment"
+                                                                    }
+                                                                    style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                                                                >
+                                                                    <CreditCard size={15} />
+                                                                </button>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             </td>
@@ -650,6 +681,13 @@ export default function OrdersPage() {
                             </tbody>
                         </table>
                     </div>
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={orders.length}
+                        onPageChange={setPage}
+                        pageSize={PAGE_SIZE}
+                    />
                 )}
             </div>
 

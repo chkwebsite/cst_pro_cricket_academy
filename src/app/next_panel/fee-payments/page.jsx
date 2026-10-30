@@ -4,6 +4,7 @@ import { Edit, Eye, Receipt, SearchSlash, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const PAYMENT_MODES = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
 const PAYMENT_STATUSES = ["Paid", "Refunded", "Cancelled"];
@@ -36,6 +37,8 @@ export default function FeePaymentsPage() {
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [payments, setPayments] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Filters (all supported server-side by GET /api/fee-payments)
     const [search, setSearch] = useState(""); // client-side only
@@ -96,6 +99,13 @@ export default function FeePaymentsPage() {
                   .some((v) => String(v).toLowerCase().includes(needle))
           )
         : scoped;
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, paymentMode, status, dateFrom, dateTo]);
+
+    const totalPages = Math.ceil(visible.length / PAGE_SIZE) || 1;
+    const pagedItems = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // Net received = Paid minus Refunded; cancelled payments are ignored (same as the API)
     const netReceived = visible.reduce((sum, p) => {
@@ -203,9 +213,9 @@ export default function FeePaymentsPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visible.map((item, idx) => (
+                                    {pagedItems.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <th>{idx + 1}</th>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                             <td>{formatDateTime(item.payment_date)}</td>
                                             <td>
                                                 <Link href={`/next_panel/fee-status/${item.fee_status_id}`} className="text-decoration-none">
@@ -259,6 +269,13 @@ export default function FeePaymentsPage() {
                                 </tfoot>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={visible.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

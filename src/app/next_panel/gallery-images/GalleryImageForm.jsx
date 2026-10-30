@@ -86,6 +86,13 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
     const handleSingleFileChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                setError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                e.target.value = "";
+                setImageFile(null);
+                setImagePreview(null);
+                return;
+            }
             setImageFile(file);
             setImagePreview(URL.createObjectURL(file));
         }
@@ -93,6 +100,13 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
 
     const handleMultipleFilesChange = (e) => {
         const files = Array.from(e.target.files || []);
+        const oversized = files.filter((f) => f.size > 2 * 1024 * 1024);
+        if (oversized.length > 0) {
+            setError(`The following file(s) exceed the 2MB limit: ${oversized.map((f) => f.name).join(", ")}. Please select images up to 2MB.`);
+            e.target.value = "";
+            setMultipleFiles([]);
+            return;
+        }
         setMultipleFiles(files);
     };
 
@@ -404,7 +418,7 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
                                             onChange={handleMultipleFilesChange}
                                         />
                                         <small className="text-muted d-block mt-2">
-                                            Supported formats: JPG, PNG, WEBP (Max 5MB each).
+                                            Supported formats: JPG, PNG, WEBP (Max 2MB each).
                                         </small>
                                     </div>
                                     {multipleFiles.length > 0 && (
@@ -441,7 +455,7 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
 
                                     <div className="col-md-8">
                                         <label className="form-label fw-semibold">
-                                            {isEdit ? "Replace Image (Optional)" : "Select Image (Max 5MB)"}
+                                            {isEdit ? "Replace Image (Optional)" : "Select Image (Max 2MB)"}
                                         </label>
                                         <input
                                             type="file"

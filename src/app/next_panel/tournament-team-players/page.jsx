@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import useCurrentUser from "../teams/useCurrentUser";
 import useTournamentOptions from "../tournament-teams/useTournamentOptions";
+import Pagination from "../components/Pagination";
 
 const PLAYER_ROLES = ["Player", "Captain", "Vice Captain", "Wicket Keeper", "All Rounder", "Bowler", "Batter"];
 const PAYMENT_STATUSES = ["Pending", "Partial", "Paid"];
@@ -45,6 +46,8 @@ export default function TournamentTeamPlayersPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [players, setPlayers] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Filters (all supported server-side by GET /api/tournament-team-players)
     const [tournamentId, setTournamentId] = useState("");
@@ -129,6 +132,13 @@ export default function TournamentTeamPlayersPage() {
         if (!q) return players;
         return players.filter((p) => playerInfo(p).name.toLowerCase().includes(q));
     }, [players, search]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, tournamentId, teamId, jerseyNo, playerRole, paymentStatus, status]);
+
+    const totalPages = Math.ceil(visible.length / PAGE_SIZE) || 1;
+    const pagedItems = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -302,11 +312,11 @@ export default function TournamentTeamPlayersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visible.map((item, idx) => {
+                                    {pagedItems.map((item, idx) => {
                                         const player = playerInfo(item);
                                         return (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>
                                                     <div>
                                                         {player.name}{" "}
@@ -373,6 +383,13 @@ export default function TournamentTeamPlayersPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={visible.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

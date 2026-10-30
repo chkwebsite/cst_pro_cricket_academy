@@ -22,12 +22,15 @@ import {
     formatDate,
     formatDateTime,
 } from "../student-enquiries/enquiryHelpers";
+import Pagination from "../components/Pagination";
 
 export default function StudentEnquiriesFlowupPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [followups, setFollowups] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Filters
     const [search, setSearch] = useState("");
@@ -73,6 +76,13 @@ export default function StudentEnquiriesFlowupPage() {
                 .some((v) => String(v).toLowerCase().includes(needle))
         );
     }, [followups, needle]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, statusFilter]);
+
+    const totalPages = Math.ceil(visibleFollowups.length / PAGE_SIZE) || 1;
+    const pagedFollowups = visibleFollowups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -246,7 +256,7 @@ export default function StudentEnquiriesFlowupPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visibleFollowups.map((item) => (
+                                    {pagedFollowups.map((item) => (
                                         <tr key={item.id}>
                                             <td>
                                                 <div className="fw-bold text-dark">{item.student_name}</div>
@@ -310,6 +320,13 @@ export default function StudentEnquiriesFlowupPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={visibleFollowups.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

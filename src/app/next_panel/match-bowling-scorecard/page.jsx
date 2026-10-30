@@ -18,12 +18,15 @@ import {
     calculateEconomy,
     getPlayerDisplayName,
 } from "../components/cricketHelpers";
+import Pagination from "../components/Pagination";
 
 export default function MatchBowlingScorecardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [bowlingList, setBowlingList] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [matches, setMatches] = useState([]);
     const [inningsList, setInningsList] = useState([]);
 
@@ -108,6 +111,13 @@ export default function MatchBowlingScorecardPage() {
                 .some((v) => String(v).toLowerCase().includes(needle))
         );
     }, [bowlingList, needle]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, matchId, inningsId]);
+
+    const totalPages = Math.ceil(visibleBowling.length / PAGE_SIZE) || 1;
+    const pagedBowling = visibleBowling.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -320,7 +330,7 @@ export default function MatchBowlingScorecardPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visibleBowling.map((item) => (
+                                    {pagedBowling.map((item) => (
                                         <tr key={item.id}>
                                             <td>
                                                 <div className="fw-bold text-dark">
@@ -386,6 +396,13 @@ export default function MatchBowlingScorecardPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={visibleBowling.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

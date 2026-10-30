@@ -115,10 +115,10 @@ export async function PUT(request, { params }) {
                 }, { status: 400 });
             }
 
-            if (cover_image.size > 5 * 1024 * 1024) {
+            if (cover_image.size > 2 * 1024 * 1024) {
                 return NextResponse.json({
                     success: false,
-                    message: "Cover image must not exceed 5MB"
+                    message: "Cover image must not exceed 2MB"
                 }, { status: 400 });
             }
 

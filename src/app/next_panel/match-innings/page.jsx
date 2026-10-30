@@ -20,12 +20,15 @@ import {
     INNINGS_STATUSES,
     formatDate,
 } from "../components/cricketHelpers";
+import Pagination from "../components/Pagination";
 
 export default function MatchInningsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [inningsList, setInningsList] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [matches, setMatches] = useState([]);
 
     // Filters
@@ -96,6 +99,13 @@ export default function MatchInningsPage() {
                 .some((val) => String(val).toLowerCase().includes(needle))
         );
     }, [inningsList, needle]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, matchId, status]);
+
+    const totalPages = Math.ceil(visibleInnings.length / PAGE_SIZE) || 1;
+    const pagedInnings = visibleInnings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -297,7 +307,7 @@ export default function MatchInningsPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visibleInnings.map((item) => (
+                                    {pagedInnings.map((item) => (
                                         <tr key={item.id}>
                                             <td>
                                                 <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fs-6">
@@ -385,6 +395,13 @@ export default function MatchInningsPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={visibleInnings.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

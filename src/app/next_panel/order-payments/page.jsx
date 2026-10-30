@@ -22,6 +22,7 @@ import {
     X,
     XCircle,
 } from "lucide-react";
+import Pagination from "../components/Pagination";
 
 const PAYMENT_METHODS = ["Cash", "UPI", "Card", "Bank Transfer", "COD"];
 const PAYMENT_STATUSES = ["Pending", "Success", "Failed", "Refunded"];
@@ -41,6 +42,8 @@ function formatPaymentDate(dateVal) {
 
 export default function OrderPaymentsPage() {
     const [payments, setPayments] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -126,6 +129,13 @@ export default function OrderPaymentsPage() {
             isMounted = false;
         };
     }, []);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, methodFilter, statusFilter, startDate, endDate]);
+
+    const totalPages = Math.ceil(payments.length / PAGE_SIZE) || 1;
+    const pagedPayments = payments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // KPI Metrics
     const totalCollected = payments
@@ -483,7 +493,7 @@ export default function OrderPaymentsPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                payments.map((p) => {
+                                pagedPayments.map((p) => {
                                     const statusBadge =
                                         p.payment_status === "Success"
                                             ? "bg-success-subtle text-success border border-success-subtle"
@@ -579,6 +589,13 @@ export default function OrderPaymentsPage() {
                         </tbody>
                     </table>
                 </div>
+                <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    total={payments.length}
+                    onPageChange={setPage}
+                    pageSize={PAGE_SIZE}
+                />
             </div>
 
             {/* Modal: Record New Payment */}

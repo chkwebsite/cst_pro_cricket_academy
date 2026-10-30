@@ -3,6 +3,7 @@
 import { Edit, Search, SearchSlash, Trash2, GraduationCap } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
+import Pagination from "../components/Pagination";
 
 export default function ProgramsPage() {
     // STATES
@@ -16,6 +17,8 @@ export default function ProgramsPage() {
     const [academyId, setAcademyId] = useState("");
     const [branchId, setBranchId] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // LOAD ACADEMIES (once)
     useEffect(() => {
@@ -76,6 +79,7 @@ export default function ProgramsPage() {
 
     useEffect(() => {
         loadPrograms();
+        setPage(1);
     }, [academyId, branchId, status]);
 
     // Client-side text filter — the API has no text search param, so we filter
@@ -90,12 +94,16 @@ export default function ProgramsPage() {
         );
     }, [search, programs]);
 
+    const totalPages = Math.ceil(filteredPrograms.length / PAGE_SIZE) || 1;
+    const pagedPrograms = filteredPrograms.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     const handleClear = (e) => {
         e.preventDefault();
         setSearch("");
         setAcademyId("");
         setBranchId("");
         setStatus("");
+        setPage(1);
     };
 
     const handleDelete = async (id, name) => {
@@ -215,9 +223,9 @@ export default function ProgramsPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredPrograms.map((item, idx) => (
+                                        {pagedPrograms.map((item, idx) => (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>
                                                     <div className="d-flex align-items-center gap-2">
                                                         <div
@@ -283,6 +291,15 @@ export default function ProgramsPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={filteredPrograms.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )
                     )}

@@ -4,6 +4,7 @@ import { Edit, Search, SearchSlash, Trash2, Users as UsersIcon } from "lucide-re
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const USER_TYPES = [
     { value: "admin", label: "Admin" },
@@ -25,6 +26,8 @@ export default function UsersPage() {
     const [branchId, setBranchId] = useState("");
     const [userType, setUserType] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     const {user} = useUser();
     const hasSessionUser = Boolean(user);
@@ -134,6 +137,9 @@ export default function UsersPage() {
     const userTypeLabel = (value) =>
         USER_TYPES.find((t) => t.value === value)?.label || value || "—";
 
+    const totalPages = Math.ceil(users.length / PAGE_SIZE) || 1;
+    const pagedUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
    
     console.log("uuss",user);
     return (
@@ -234,9 +240,9 @@ export default function UsersPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {users.map((item, idx) => (
+                                        {pagedUsers.map((item, idx) => (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>
                                                     {item.profile_image ? (
                                                         // eslint-disable-next-line @next/next/no-img-element
@@ -285,6 +291,15 @@ export default function UsersPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={users.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )
                     )}

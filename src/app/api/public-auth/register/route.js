@@ -153,6 +153,9 @@ export async function POST(request) {
             const formData = await request.formData();
             for (const [key, value] of formData.entries()) {
                 if (key === "profile_image" && value && typeof value === "object" && "arrayBuffer" in value && value.size > 0) {
+                    if (value.size > 2 * 1024 * 1024) {
+                        return NextResponse.json({ success: false, message: "Profile image must be less than 2MB" }, { status: 400 });
+                    }
                     const ext = value.type === "image/png" ? "png" : value.type === "image/webp" ? "webp" : "jpg";
                     const bytes = Buffer.from(await value.arrayBuffer());
                     const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "public-users");
@@ -365,6 +368,9 @@ export async function PUT(request) {
 
             const image = formData.get("profile_image");
             if (image && typeof image === "object" && "arrayBuffer" in image && image.size > 0) {
+                if (image.size > 2 * 1024 * 1024) {
+                    return NextResponse.json({ success: false, message: "Profile image must be less than 2MB" }, { status: 400 });
+                }
                 const ext = image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg";
                 const bytes = Buffer.from(await image.arrayBuffer());
                 const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "public-users");

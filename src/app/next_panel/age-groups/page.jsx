@@ -3,6 +3,7 @@
 import { Edit, Search, SearchSlash, Trash2, Baby } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
+import Pagination from "../components/Pagination";
 
 export default function AgeGroupsPage() {
     // STATES
@@ -11,6 +12,8 @@ export default function AgeGroupsPage() {
     const [ageGroups, setAgeGroups] = useState([]);
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     const loadAgeGroups = async () => {
         setLoading(true);
@@ -47,10 +50,14 @@ export default function AgeGroupsPage() {
         );
     }, [search, ageGroups]);
 
+    const totalPages = Math.ceil(filteredAgeGroups.length / PAGE_SIZE) || 1;
+    const pagedAgeGroups = filteredAgeGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     const handleClear = (e) => {
         e.preventDefault();
         setSearch("");
         setStatus("");
+        setPage(1);
     };
 
     const handleDelete = async (id, name) => {
@@ -142,9 +149,9 @@ export default function AgeGroupsPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredAgeGroups.map((item, idx) => (
+                                        {pagedAgeGroups.map((item, idx) => (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>{item.age_group}</td>
                                                 <td>{formatAgeRange(item)}</td>
                                                 <td>
@@ -175,6 +182,15 @@ export default function AgeGroupsPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={filteredAgeGroups.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )
                     )}

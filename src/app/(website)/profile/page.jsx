@@ -31,8 +31,9 @@ function ProfileContent() {
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setUpdateError("Image cannot exceed 5MB.");
+    if (file.size > 2 * 1024 * 1024) {
+      setUpdateError("Image cannot exceed 2MB.");
+      e.target.value = "";
       return;
     }
     setProfileImageFile(file);
@@ -321,7 +322,7 @@ function ProfileContent() {
                   disabled={isUpdating}
                 />
                 <div className="form-text small text-muted">
-                  Upload JPG, PNG or WEBP format image (maximum 5MB).
+                  Upload JPG, PNG or WEBP format image (maximum 2MB).
                 </div>
               </div>
 

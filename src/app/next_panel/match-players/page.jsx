@@ -3,6 +3,7 @@
 import { ArrowLeft, Edit, Search, SearchSlash, Trash2, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import Pagination from "../components/Pagination";
 
 const formatDate = (value) => {
     if (!value) return "—";
@@ -25,6 +26,8 @@ export default function MatchPlayersPage() {
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [players, setPlayers] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [matches, setMatches] = useState([]);
 
     // Filters (all supported server-side by GET /api/match-players)
@@ -89,6 +92,13 @@ export default function MatchPlayersPage() {
                   .some((v) => String(v).toLowerCase().includes(needle))
           )
         : players;
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, matchId, teamId, selection, status]);
+
+    const totalPages = Math.ceil(visible.length / PAGE_SIZE) || 1;
+    const pagedItems = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -233,9 +243,9 @@ export default function MatchPlayersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visible.map((item, idx) => (
+                                    {pagedItems.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <th>{idx + 1}</th>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                             <td>
                                                 <div>
                                                     {playerName(item)}
@@ -288,6 +298,13 @@ export default function MatchPlayersPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={visible.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

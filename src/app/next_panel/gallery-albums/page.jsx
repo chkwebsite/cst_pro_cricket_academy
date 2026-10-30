@@ -17,9 +17,12 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GalleryNavigationTabs from "../components/GalleryNavigationTabs";
+import Pagination from "../components/Pagination";
 
 export default function GalleryAlbumsPage() {
     const [albums, setAlbums] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
@@ -75,6 +78,13 @@ export default function GalleryAlbumsPage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         loadAlbums();
     }, [categoryId, status, isFeatured, loadAlbums]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, categoryId, status, isFeatured]);
+
+    const totalPages = Math.ceil(albums.length / PAGE_SIZE) || 1;
+    const pagedAlbums = albums.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -256,9 +266,9 @@ export default function GalleryAlbumsPage() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        albums.map((album, idx) => (
+                                        pagedAlbums.map((album, idx) => (
                                             <tr key={album.id}>
-                                                <td className="text-muted small">{idx + 1}</td>
+                                                <td className="text-muted small">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                                 <td>
                                                     {album.cover_image ? (
                                                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -375,6 +385,13 @@ export default function GalleryAlbumsPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={albums.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     </div>
                 </div>
             </div>

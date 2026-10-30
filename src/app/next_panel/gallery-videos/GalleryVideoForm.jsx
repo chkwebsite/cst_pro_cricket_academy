@@ -88,6 +88,13 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
     const handleThumbnailChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                setError(`Thumbnail "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                e.target.value = "";
+                setThumbnailFile(null);
+                setThumbnailPreview(null);
+                return;
+            }
             setThumbnailFile(file);
             setThumbnailPreview(URL.createObjectURL(file));
         }
@@ -96,6 +103,12 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
     const handleVideoFileChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 20 * 1024 * 1024) {
+                setError(`Video "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed video size is 20MB.`);
+                e.target.value = "";
+                setVideoFile(null);
+                return;
+            }
             setVideoFile(file);
         }
     };
@@ -341,7 +354,7 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                 ) : (
                                     <div className="col-12">
                                         <label className="form-label fw-semibold">
-                                            {isEdit ? "Replace Video File (Optional)" : "Upload Video File (Max 100MB)"}
+                                            {isEdit ? "Replace Video File (Optional)" : "Upload Video File (Max 20MB)"}
                                         </label>
                                         <input
                                             type="file"
@@ -350,7 +363,7 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                             onChange={handleVideoFileChange}
                                         />
                                         <small className="text-muted d-block mt-1">
-                                            Supported video formats: MP4, WEBM, MOV (Max 100MB).
+                                            Supported video formats: MP4, WEBM, MOV (Max 20MB).
                                         </small>
                                         {isEdit && formData.video_url && (
                                             <div className="mt-2 text-muted small">
@@ -389,7 +402,7 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
 
                                 <div className="col-md-8">
                                     <label className="form-label fw-semibold">
-                                        Upload Thumbnail (Max 5MB)
+                                        Upload Thumbnail (Max 2MB)
                                     </label>
                                     <input
                                         type="file"

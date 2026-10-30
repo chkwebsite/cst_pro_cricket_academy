@@ -19,8 +19,8 @@ const UPLOAD_URL = "/images/uploads/product-categories/";
 async function saveCategoryImage(file) {
     if (!file || file.size === 0) return null;
 
-    if (file.size > 5 * 1024 * 1024) {
-        throw new Error("Image size must not exceed 5MB.");
+    if (file.size > 2 * 1024 * 1024) {
+        throw new Error("Image size must not exceed 2MB.");
     }
 
     const allowedTypes = {

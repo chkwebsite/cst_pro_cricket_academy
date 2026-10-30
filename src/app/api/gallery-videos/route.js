@@ -3,8 +3,8 @@ import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
 
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100 MB
-const MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_VIDEO_SIZE = 20 * 1024 * 1024; // 20 MB
+const MAX_THUMBNAIL_SIZE = 2 * 1024 * 1024; // 2 MB
 const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
@@ -114,7 +114,7 @@ export async function POST(request) {
         return jsonError("For video_type=Upload, provide a video file in the `video` field.");
       }
       if (!VIDEO_TYPES.includes(videoFile.type)) return jsonError("Only MP4, WEBM and MOV videos are allowed.");
-      if (videoFile.size > MAX_VIDEO_SIZE) return jsonError("Video file must not exceed 100MB.");
+      if (videoFile.size > MAX_VIDEO_SIZE) return jsonError("Video file must not exceed 20MB.");
     } else {
       if (!video_url) return jsonError("video_url is required for YouTube and Vimeo videos.");
       let parsedUrl;
@@ -131,7 +131,7 @@ export async function POST(request) {
 
     if (thumbnailFile && typeof thumbnailFile.arrayBuffer === "function" && thumbnailFile.size > 0) {
       if (!IMAGE_TYPES.includes(thumbnailFile.type)) return jsonError("Thumbnail must be JPG, PNG or WEBP.");
-      if (thumbnailFile.size > MAX_THUMBNAIL_SIZE) return jsonError("Thumbnail must not exceed 5MB.");
+      if (thumbnailFile.size > MAX_THUMBNAIL_SIZE) return jsonError("Thumbnail must not exceed 2MB.");
     }
 
     connection = await pool.getConnection();

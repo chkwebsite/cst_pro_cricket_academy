@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Building2, Edit, MapPin, Plus, Search, Trash2 } from "lucide-react";
+import Pagination from "../components/Pagination";
 
 export default function BranchesPage() {
     const [branches, setBranches] = useState([]);
@@ -11,6 +12,8 @@ export default function BranchesPage() {
     const [error, setError] = useState(null);
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     const loadBranches = async () => {
         setLoading(true);
@@ -26,6 +29,7 @@ export default function BranchesPage() {
             const json = await res.json();
             if (!res.ok) throw new Error(json.message || "Unable to load branches.");
             setBranches(json.data || []);
+            setPage(1);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -64,6 +68,9 @@ export default function BranchesPage() {
             setDeletingId(null);
         }
     };
+
+    const totalPages = Math.ceil(branches.length / PAGE_SIZE) || 1;
+    const pagedBranches = branches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -142,7 +149,7 @@ export default function BranchesPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {branches.map((branch) => (
+                                        {pagedBranches.map((branch) => (
                                             <tr key={branch.id}>
                                                 <td>
                                                     <div className="fw-semibold">{branch.branch_name}</div>
@@ -192,6 +199,15 @@ export default function BranchesPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={branches.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )}
                     </div>

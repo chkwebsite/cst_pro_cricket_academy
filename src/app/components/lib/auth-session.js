@@ -49,6 +49,40 @@ export async function getServerSession() {
                                     u.appointment_no ||
                                     "Academy User";
 
+                                const isSuper =
+                                    u.user_type === "Super Admin" ||
+                                    u.user_type === "superadmin" ||
+                                    String(u.user_type || "").toLowerCase().includes("super") ||
+                                    (Array.isArray(decoded.permissions) && decoded.permissions.includes("*"));
+
+                                let livePermissions = [];
+                                if (isSuper) {
+                                    livePermissions = ["*"];
+                                } else {
+                                    try {
+                                        const [permRows] = await pool.query(
+                                            `SELECT DISTINCT m.menu_url
+                                             FROM cst_user_roles ur
+                                             INNER JOIN cst_role_permissions rp ON rp.role_id = ur.role_id
+                                             INNER JOIN cst_permissions p ON p.id = rp.permission_id
+                                             INNER JOIN cst_menu_permissions mp ON mp.permission_id = p.id
+                                             INNER JOIN cst_menu m ON m.id = mp.menu_id
+                                             WHERE ur.user_id = ? AND p.status = 1 AND m.is_deleted = 0 AND m.is_active = 1 AND m.status = 1`,
+                                            [u.id]
+                                        );
+                                        livePermissions = permRows.map((r) => r.menu_url).filter(Boolean);
+                                        const isPlayer = u.user_type === "7" || String(u.user_type || "").toLowerCase().includes("player");
+                                        if (isPlayer) {
+                                            livePermissions.push("/next_panel/player-dashboard");
+                                            livePermissions.push("/next_panel/orders");
+                                            livePermissions = Array.from(new Set(livePermissions));
+                                        }
+                                    } catch (pErr) {
+                                        console.warn("getServerSession: permission DB lookup failed, falling back to token payload:", pErr?.message);
+                                        livePermissions = Array.isArray(decoded.permissions) ? decoded.permissions : [];
+                                    }
+                                }
+
                                 return {
                                     user: {
                                         id: u.id,
@@ -64,7 +98,7 @@ export async function getServerSession() {
                                         user_type: u.user_type || "Academy User",
                                         is_public: false,
                                     },
-                                    permissions: Array.isArray(decoded.permissions) ? decoded.permissions : [],
+                                    permissions: livePermissions.length > 0 ? livePermissions : (Array.isArray(decoded.permissions) ? decoded.permissions : []),
                                 };
                             }
                         }

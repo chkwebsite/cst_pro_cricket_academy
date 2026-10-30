@@ -21,6 +21,7 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
+import Pagination from "../components/Pagination";
 
 export default function PublicUsersPage() {
     const [loading, setLoading] = useState(true);
@@ -33,6 +34,8 @@ export default function PublicUsersPage() {
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     const [reloadCount, setReloadCount] = useState(0);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Modal states
     const [viewUser, setViewUser] = useState(null);
@@ -72,6 +75,7 @@ export default function PublicUsersPage() {
                 if (!isCancelled) {
                     setUsers(json.data || []);
                     if (json.stats) setStats(json.stats);
+                    setPage(1);
                 }
             } catch (err) {
                 if (!isCancelled) setError(err.message);
@@ -222,6 +226,9 @@ export default function PublicUsersPage() {
             setFormSaving(false);
         }
     };
+
+    const totalPages = Math.ceil(users.length / PAGE_SIZE) || 1;
+    const pagedUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid py-2">
@@ -414,9 +421,9 @@ export default function PublicUsersPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.map((item, idx) => (
+                                {pagedUsers.map((item, idx) => (
                                     <tr key={item.id}>
-                                        <td className="text-center text-muted small fw-medium">{idx + 1}</td>
+                                        <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                         <td>
                                             <div className="d-flex align-items-center gap-2">
                                                 {item.profile_image ? (
@@ -547,6 +554,18 @@ export default function PublicUsersPage() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {!loading && users.length > 0 && (
+                    <div className="p-3 border-top">
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={users.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     </div>
                 )}
             </div>

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useUser } from "../components/UserContext";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB (same limit as the API)
+const MAX_SIZE = 2 * 1024 * 1024; // 2 MB (same limit as the API)
 
 export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
     const router = useRouter();
@@ -116,7 +116,7 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
                 return setError(`${f.name}: only JPG, PNG and WEBP images are allowed`);
             }
             if (f.size > MAX_SIZE) {
-                return setError(`${f.name} exceeds the 5MB limit`);
+                return setError(`${f.name} exceeds the 2MB limit`);
             }
         }
         setError("");
@@ -242,7 +242,7 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
                             multiple={!isEdit}
                             onChange={handleFiles}
                         />
-                        <div className="form-text">JPG, PNG or WEBP, up to 5MB each.</div>
+                        <div className="form-text">JPG, PNG or WEBP, up to 2MB each.</div>
                     </div>
 
                     {/* Previews */}

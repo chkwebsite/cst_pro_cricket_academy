@@ -3,6 +3,7 @@
 import { Edit, IndianRupee, Search, SearchSlash, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import Pagination from "../components/Pagination";
 
 const PAYMENT_MODES = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
 
@@ -29,6 +30,8 @@ export default function GroundPaymentsPage() {
     const [paymentDate, setPaymentDate] = useState("");
     const [paymentMode, setPaymentMode] = useState("");
     const [transactionNo, setTransactionNo] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Debounced fetch so we don't hit the API on every keystroke
     useEffect(() => {
@@ -93,6 +96,8 @@ export default function GroundPaymentsPage() {
     };
 
     const total = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const totalPages = Math.ceil(payments.length / PAGE_SIZE) || 1;
+    const pagedPayments = payments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 console.log("payment", payments);
     return (
         <div className="container-fluid">
@@ -200,9 +205,9 @@ console.log("payment", payments);
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {payments.map((item, idx) => (
+                                    {pagedPayments.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <th>{idx + 1}</th>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                             <td>#{item.booking_id}-{item.booking_no}</td>
                                             <td>{formatDate(item.payment_date)}</td>
                                             <td className="text-end">{formatAmount(item.amount)}</td>
@@ -241,6 +246,18 @@ console.log("payment", payments);
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+                    )}
+
+                    {!loading && payments.length > 0 && (
+                        <div className="mt-3">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={payments.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

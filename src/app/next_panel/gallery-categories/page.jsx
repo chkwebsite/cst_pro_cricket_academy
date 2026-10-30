@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GalleryNavigationTabs from "../components/GalleryNavigationTabs";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 export default function GalleryCategoriesPage() {
     const { user } = useUser();
@@ -23,6 +24,8 @@ export default function GalleryCategoriesPage() {
     const isAcademyAdmin = Boolean(userAcademyId) && !isSuperAdmin;
 
     const [categories, setCategories] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [academies, setAcademies] = useState([]);
     const [selectedAcademyId, setSelectedAcademyId] = useState("");
     const [loading, setLoading] = useState(true);
@@ -81,6 +84,13 @@ export default function GalleryCategoriesPage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         loadCategories();
     }, [status, selectedAcademyId, userAcademyId, loadCategories]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, status, selectedAcademyId]);
+
+    const totalPages = Math.ceil(categories.length / PAGE_SIZE) || 1;
+    const pagedCategories = categories.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -255,9 +265,9 @@ export default function GalleryCategoriesPage() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        categories.map((cat, idx) => (
+                                        pagedCategories.map((cat, idx) => (
                                             <tr key={cat.id}>
-                                                <td className="text-muted small">{idx + 1}</td>
+                                                <td className="text-muted small">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                                 <td>
                                                     {cat.featured_image ? (
                                                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -343,6 +353,13 @@ export default function GalleryCategoriesPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={categories.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     </div>
                 </div>
             </div>

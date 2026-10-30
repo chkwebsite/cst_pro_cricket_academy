@@ -266,8 +266,13 @@ export async function GET(request) {
                     );
                 }
 
-                conditions.push(`fs.${field} = ?`);
-                values.push(Number(value));
+                if (field === "user_id") {
+                    conditions.push("(fs.user_id = ? OR ttp.user_id = ? OR mp.user_id = ?)");
+                    values.push(Number(value), Number(value), Number(value));
+                } else {
+                    conditions.push(`fs.${field} = ?`);
+                    values.push(Number(value));
+                }
             }
         }
 
@@ -297,6 +302,11 @@ export async function GET(request) {
 
             conditions.push("fs.status = ?");
             values.push(status);
+        }
+
+        const excludeTeamFees = searchParams.get("exclude_team_fees");
+        if (excludeTeamFees === "1" || excludeTeamFees === "true") {
+            conditions.push("fs.fee_type NOT IN ('Tournament Team', 'Match Team')");
         }
 
         const whereClause = conditions.length

@@ -3,6 +3,7 @@
 import { Edit, Search, SearchSlash, Trash2, UserPlus, Users, Phone } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import Pagination from "../components/Pagination";
 
 export default function OutsidePlayersPage() {
     const [loading, setLoading] = useState(true);
@@ -19,6 +20,8 @@ export default function OutsidePlayersPage() {
     const [battingStyle, setBattingStyle] = useState("");
     const [bowlingStyle, setBowlingStyle] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     useEffect(() => {
         const controller = new AbortController();
@@ -109,6 +112,9 @@ export default function OutsidePlayersPage() {
             setError(err.message);
         }
     };
+
+    const totalPages = Math.ceil(players.length / PAGE_SIZE) || 1;
+    const pagedPlayers = players.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -251,9 +257,9 @@ export default function OutsidePlayersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {players.map((item, idx) => (
+                                    {pagedPlayers.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <th>{idx + 1}</th>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                             <td>
                                                 <div className="d-flex align-items-center gap-2">
                                                     {item.profile_image ? (
@@ -318,6 +324,18 @@ export default function OutsidePlayersPage() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+
+                    {!loading && players.length > 0 && (
+                        <div className="mt-3">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={players.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

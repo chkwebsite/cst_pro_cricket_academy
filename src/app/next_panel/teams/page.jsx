@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { TEAM_TYPES } from "./TeamForm";
 import useCurrentUser, { ROLES } from "./useCurrentUser";
 import useOrgOptions, { inAcademy } from "./useOrgOptions";
+import Pagination from "../components/Pagination";
 
 export default function TeamsPage() {
     const me = useCurrentUser();
@@ -19,6 +20,8 @@ export default function TeamsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [teams, setTeams] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Filters (all supported server-side by GET /api/teams)
     const [teamName, setTeamName] = useState("");
@@ -51,6 +54,7 @@ export default function TeamsPage() {
         const timer = setTimeout(async () => {
             setLoading(true);
             setError(null);
+            setPage(1);
             try {
                 const params = new URLSearchParams();
                 if (effectiveAcademyId) params.set("academy_id", effectiveAcademyId);
@@ -114,6 +118,9 @@ export default function TeamsPage() {
             setError(err.message);
         }
     };
+
+    const totalPages = Math.ceil(teams.length / PAGE_SIZE) || 1;
+    const pagedTeams = teams.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -277,9 +284,9 @@ export default function TeamsPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {teams.map((item, idx) => (
+                                            {pagedTeams.map((item, idx) => (
                                                 <tr key={item.id} className={isMine(item) ? "table-warning" : ""}>
-                                                    <th>{idx + 1}</th>
+                                                    <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                     <td>
                                                         <div>{item.team_name}</div>
                                                         <small className="text-muted">{item.team_code || "—"}</small>
@@ -336,6 +343,13 @@ export default function TeamsPage() {
                                         </tbody>
                                     </table>
                                 </div>
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={teams.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             )}
                         </div>
                     </>

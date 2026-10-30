@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import Pagination from "../components/Pagination";
 
 const BASE = "/next_panel/match-types";
 
 export default function MatchTypesPage() {
     const [rows, setRows] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [busyId, setBusyId] = useState(null);
@@ -17,7 +20,10 @@ export default function MatchTypesPage() {
     const [applied, setApplied] = useState(filters);
 
     useEffect(() => {
-        const t = setTimeout(() => setApplied(filters), 350);
+        const t = setTimeout(() => {
+            setApplied(filters);
+            setPage(1);
+        }, 350);
         return () => clearTimeout(t);
     }, [filters]);
 
@@ -89,6 +95,8 @@ export default function MatchTypesPage() {
     };
 
     const hasFilters = filters.name || filters.code || filters.status !== "";
+    const totalPages = Math.ceil(rows.length / PAGE_SIZE) || 1;
+    const pagedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -190,7 +198,7 @@ export default function MatchTypesPage() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        rows.map((row) => (
+                                        pagedRows.map((row) => (
                                             <tr key={row.id}>
                                                 <td className="fw-semibold">{row.name}</td>
                                                 <td><span className="badge bg-light text-dark border">{row.code}</span></td>
@@ -245,6 +253,13 @@ export default function MatchTypesPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={rows.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     </div>
                 </div>
             </div>

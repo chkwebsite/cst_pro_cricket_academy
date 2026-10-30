@@ -1,4 +1,3 @@
-import { Inter, Oswald, Poppins } from "next/font/google";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "./website.css";
@@ -13,27 +12,6 @@ import BackToTop from "./components/layout/BackToTop";
 import WhatsAppButton from "./components/layout/WhatsAppButton";
 import MobileBar from "./components/layout/MobileBar";
 import ScrollRevealInit from "./components/layout/ScrollRevealInit";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const oswald = Oswald({
-  variable: "--font-oswald",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  display: "swap",
-});
-
-const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["500", "600"],
-  display: "swap",
-});
 
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://stcricketacademy.com"),
@@ -104,10 +82,15 @@ export default async function WebsiteLayout({ children }) {
   const session = await getServerSession();
 
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${oswald.variable} ${poppins.variable}`}
-    >
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Poppins:wght@500;600&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <UserProvider initialSession={session}>
           <CartProvider>

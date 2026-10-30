@@ -30,29 +30,35 @@ import {
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 import Header from "./Header";
+import { useUser } from "./UserContext";
 
 const iconMap = {
     "player-dashboard": UserCheck,
+    "my-orders": ShoppingBag,
+    orders: ShoppingBag,
+    "shopping-bag": ShoppingBag,
+    "shopping-cart": ShoppingCart,
     "layout-dashboard": LayoutDashboard,
     dashboard: LayoutDashboard,
     settings: Settings,
     users: Users,
     "public-users": Users,
-    "shopping-bag": ShoppingBag,
     "store-management": ShoppingBag,
     products: Package,
     package: Package,
     "product-categories": FolderTree,
     "product-images": Images,
     "product-stock": Layers,
-    orders: ShoppingCart,
-    "shopping-cart": ShoppingCart,
     "order-payments": CreditCard,
     "credit-card": CreditCard,
+    "match-fee-status": CreditCard,
+    "fee-status": CreditCard,
     shield: ShieldCheck,
     calendar: Calendar,
     "calendar-check": CalendarCheck,
     "ground-booking-requests": CalendarCheck,
+    "ground-bookings": CalendarCheck,
+    "ground-availability": Calendar,
     layers: Layers,
     batches: Layers,
     "user-check": UserCheck,
@@ -173,10 +179,15 @@ function MenuNode({ menu, siblingMenus, pathname, openMenus, setOpenMenus, close
 
 export default function Sidebar({ children }) {
     const pathname = usePathname();
+    const { user } = useUser();
     const [menus, setMenus] = useState([]);
     const [openMenus, setOpenMenus] = useState(new Set());
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [error, setError] = useState("");
+
+    const currentUserType = String(user?.user_type || "").toLowerCase().trim();
+    const isPlayer = currentUserType.includes("player") || currentUserType === "7";
+    const isSuperAdmin = currentUserType === "super admin" || currentUserType === "superadmin" || currentUserType.includes("super");
 
     // Prevent body scroll when mobile sidebar drawer is open
     useEffect(() => {
@@ -219,84 +230,158 @@ export default function Sidebar({ children }) {
                     menu_url: normalizeMenuPath(menu.menu_url),
                     parent_id: menu.parent_id == null ? null : Number(menu.parent_id),
                 }));
+
                 const session = JSON.parse(sessionStorage.getItem("auth_session") || "null");
                 const permissions = session?.permissions || JSON.parse(
                     sessionStorage.getItem("auth_permissions") || "[]"
                 );
-                const userType = String(session?.user?.user_type || "").toLowerCase().trim();
-                const isSuperAdmin =
+                const userType = String(session?.user?.user_type || user?.user_type || "").toLowerCase().trim();
+                const userIsSuperAdmin =
+                    userType === "super admin" ||
+                    userType === "superadmin" ||
                     userType.includes("super") ||
                     (Array.isArray(permissions) && (
                         permissions.includes("*") ||
                         permissions.some((p) => p === "*" || p?.permission_name === "*" || p?.menu_url === "*")
                     ));
+                const userIsPlayer = userType.includes("player") || userType === "7";
 
-                const allowedPaths = new Set(
-                    (Array.isArray(permissions) ? permissions : [])
-                        .map((permission) => {
-                            if (typeof permission === "string") return normalizeMenuPath(permission);
-                            return normalizeMenuPath(permission?.menu_url);
-                        })
-                        .filter(Boolean)
-                );
+                let filtered = [];
 
-                const allowedIds = isSuperAdmin
-                    ? new Set(allMenus.map((menu) => menu.id))
-                    : new Set(
-                        allMenus
-                            .filter(
-                                (menu) =>
-                                    allowedPaths.has(menu.menu_url) ||
-                                    (userType.includes("admin") && (
-                                        menu.menu_url === "/next_panel/public-users" ||
-                                        menu.menu_url === "/next_panel/products" ||
-                                        menu.menu_url === "/next_panel/product-categories" ||
-                                        menu.menu_url === "/next_panel/product-images" ||
-                                        menu.menu_url === "/next_panel/product-stock" ||
-                                        menu.menu_url === "/next_panel/orders" ||
-                                        menu.menu_key === "store-management" ||
-                                        menu.menu_key === "Product_Master"
-                                    ))
-                            )
-                            .map((menu) => menu.id)
-                    );
+                if (userIsSuperAdmin) {
+                    // Super admin has all menus
+                    filtered = [...allMenus];
+                } else if (userIsPlayer) {
+                    // PLAYER SPECIFIC MENU RULES:
+                    // 1. "Product master" (menu_key: 'Product_Master' or id: 54) and admin product management menus (55, 56, 57, 58, 60) MUST NOT be shown.
+                    // 2. Player's orders must be shown directly as "My Orders" at top level.
+                    // 3. Player related menus (Player Dashboard, My Orders, Fee Status, Ground Availability/Bookings, etc.) are shown.
+                    const playerAllowedUrls = new Set([
+                        "/next_panel/player-dashboard",
+                        "/next_panel/orders",
+                        "/next_panel/fee-status",
+                        "/next_panel/ground-availability",
+                        "/next_panel/ground-bookings",
+                    ]);
 
-                let changed = true;
-                while (changed) {
-                    changed = false;
-                    allMenus.forEach((menu) => {
-                        if (menu.parent_id && allowedIds.has(menu.id) && !allowedIds.has(menu.parent_id)) {
-                            allowedIds.add(menu.parent_id);
-                            changed = true;
+                    (Array.isArray(permissions) ? permissions : []).forEach((p) => {
+                        const url = typeof p === "string" ? normalizeMenuPath(p) : normalizeMenuPath(p?.menu_url);
+                        if (url && url !== "/" && !url.includes("product") && !url.includes("stock") && !url.includes("order-payments")) {
+                            playerAllowedUrls.add(url);
                         }
                     });
-                }
 
-                let filtered = allMenus.filter((menu) => allowedIds.has(menu.id));
+                    const playerItems = allMenus
+                        .filter((m) => {
+                            if (m.id === 54 || m.menu_key === "Product_Master" || m.menu_key === "store-management") return false;
+                            if (["product-categories", "products", "product-images", "product-stock", "order-payments"].includes(m.menu_key)) return false;
+                            return playerAllowedUrls.has(m.menu_url);
+                        })
+                        .map((m) => {
+                            // Present player items cleanly at top level
+                            if (m.menu_url === "/next_panel/orders" || m.menu_key === "orders") {
+                                return {
+                                    ...m,
+                                    parent_id: null,
+                                    menu_name: "My Orders",
+                                    menu_title: "My Orders",
+                                    menu_icon: "shopping-bag",
+                                    menu_order: 2,
+                                };
+                            }
+                            if (m.menu_url === "/next_panel/player-dashboard" || m.menu_key === "player-dashboard") {
+                                return {
+                                    ...m,
+                                    parent_id: null,
+                                    menu_name: "Player Dashboard",
+                                    menu_title: "Player Dashboard",
+                                    menu_icon: "player-dashboard",
+                                    menu_order: 1,
+                                };
+                            }
+                            if (m.menu_url === "/next_panel/fee-status" || m.menu_key === "match-fee-status") {
+                                return {
+                                    ...m,
+                                    parent_id: null,
+                                    menu_name: "My Fee Status",
+                                    menu_title: "My Fee Status",
+                                    menu_icon: "credit-card",
+                                    menu_order: 3,
+                                };
+                            }
+                            return {
+                                ...m,
+                                parent_id: null,
+                            };
+                        });
 
-                const isPlayer = userType.includes("player") || userType === "7";
-                const hasPlayerDashboard = filtered.some((m) => m.menu_url === "/next_panel/player-dashboard");
-
-                if (!hasPlayerDashboard) {
-                    if (isPlayer) {
-                        filtered.unshift({
+                    if (!playerItems.some((m) => m.menu_url === "/next_panel/player-dashboard")) {
+                        playerItems.unshift({
                             id: 99999,
                             parent_id: null,
                             menu_name: "Player Dashboard",
+                            menu_title: "Player Dashboard",
                             menu_url: "/next_panel/player-dashboard",
                             menu_icon: "player-dashboard",
                             menu_order: 1,
                         });
-                    } else if (isSuperAdmin || userType.includes("admin")) {
-                        filtered.push({
-                            id: 99999,
+                    }
+
+                    if (!playerItems.some((m) => m.menu_url === "/next_panel/orders")) {
+                        playerItems.push({
+                            id: 99998,
                             parent_id: null,
-                            menu_name: "Player Portal (Preview)",
-                            menu_url: "/next_panel/player-dashboard",
-                            menu_icon: "player-dashboard",
-                            menu_order: 99,
+                            menu_name: "My Orders",
+                            menu_title: "My Orders",
+                            menu_url: "/next_panel/orders",
+                            menu_icon: "shopping-bag",
+                            menu_order: 2,
                         });
                     }
+
+                    playerItems.sort((a, b) => (Number(a.menu_order) || 99) - (Number(b.menu_order) || 99));
+                    filtered = playerItems;
+                } else {
+                    // OTHER USER ROLES (Academy Admin, Branch Admin, Coach, Accountant, etc.):
+                    // Strictly filter based on assigned role permissions in DB
+                    const allowedPaths = new Set(
+                        (Array.isArray(permissions) ? permissions : [])
+                            .map((permission) => {
+                                if (typeof permission === "string") return normalizeMenuPath(permission);
+                                return normalizeMenuPath(permission?.menu_url);
+                            })
+                            .filter((p) => Boolean(p) && p !== "/")
+                    );
+
+                    const allowedMenuIds = new Set(
+                        (Array.isArray(permissions) ? permissions : [])
+                            .map((p) => (typeof p === "object" && p?.menu_id != null ? Number(p.menu_id) : null))
+                            .filter((id) => id !== null)
+                    );
+
+                    const allowedIds = new Set(
+                        allMenus
+                            .filter(
+                                (menu) =>
+                                    allowedPaths.has(menu.menu_url) ||
+                                    allowedMenuIds.has(menu.id)
+                            )
+                            .map((menu) => menu.id)
+                    );
+
+                    // Add parent menus for permitted children so the tree renders
+                    let changed = true;
+                    while (changed) {
+                        changed = false;
+                        allMenus.forEach((menu) => {
+                            if (menu.parent_id && allowedIds.has(menu.id) && !allowedIds.has(menu.parent_id)) {
+                                allowedIds.add(menu.parent_id);
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    filtered = allMenus.filter((menu) => allowedIds.has(menu.id));
                 }
 
                 setMenus(filtered);
@@ -307,7 +392,7 @@ export default function Sidebar({ children }) {
 
         loadMenus();
         return () => { cancelled = true; };
-    }, []);
+    }, [user]);
 
     const tree = useMemo(() => buildTree(menus), [menus]);
     const closeSidebar = () => setIsMobileOpen(false);
@@ -330,7 +415,11 @@ export default function Sidebar({ children }) {
             <aside className={`${styles.sidebar} ${isMobileOpen ? styles.sidebarOpen : ""}`}>
                 {/* Brand Logo Container */}
                 <div className={styles.brandContainer}>
-                    <Link href="/next_panel/dashboard" className={styles.brandLink} onClick={closeSidebar}>
+                    <Link
+                        href={isPlayer ? "/next_panel/player-dashboard" : "/next_panel/dashboard"}
+                        className={styles.brandLink}
+                        onClick={closeSidebar}
+                    >
                         <img
                             src="/images/website/logo.png"
                             alt="CST Pro Cricket Academy"
@@ -348,7 +437,9 @@ export default function Sidebar({ children }) {
                 </div>
 
                 <div className={styles.portalTagContainer}>
-                    <span className={styles.portalBadge}>Admin Portal</span>
+                    <span className={styles.portalBadge}>
+                        {isPlayer ? "Player Portal" : isSuperAdmin ? "Super Admin Portal" : (user?.user_type || "Admin Portal")}
+                    </span>
                 </div>
 
                 <div className={styles.navigationTitle}>Workspace Menu</div>

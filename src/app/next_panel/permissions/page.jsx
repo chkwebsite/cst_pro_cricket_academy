@@ -3,6 +3,7 @@
 import { ArrowUpRight, Edit, Search, SearchSlash, Trash2, UserShield } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import Pagination from "../components/Pagination";
 
 export default function PermissionsPage() {
     // STATES
@@ -10,6 +11,8 @@ export default function PermissionsPage() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
     const [permissions, setPermissions] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [search, setSearch] = useState("");
     const [module_name, setModule_name] = useState("");
     const [status, setStatus] = useState("");
@@ -41,6 +44,13 @@ export default function PermissionsPage() {
     useEffect(() => {
         loadPermission();
     }, [status]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [status, search, module_name]);
+
+    const totalPages = Math.ceil(permissions.length / PAGE_SIZE) || 1;
+    const pagedPermissions = permissions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -121,10 +131,10 @@ export default function PermissionsPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {Array.isArray(permissions) && permissions.map((item, idx) => {
+                                        {Array.isArray(pagedPermissions) && pagedPermissions.map((item, idx) => {
                                             return (
                                                 <tr key={item.id ?? idx}>
-                                                    <th>{idx + 1}</th>
+                                                    <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                     <td>{item.module_name}</td>
                                                     <td>{item.permission_name}</td>
                                                     <td>
@@ -156,6 +166,13 @@ export default function PermissionsPage() {
                                     </tbody>
                                 </table>
                             </div>
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={permissions.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         ))}
                 </div>
             </div>

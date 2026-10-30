@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
 import { formatPrice, formatTime } from "./slotUtils";
+import Pagination from "../components/Pagination";
 
 function GroundSlotsList() {
     const searchParams = useSearchParams();
@@ -37,6 +38,8 @@ function GroundSlotsList() {
     const [startTime, setStartTime] = useState("");
     const [status, setStatus] = useState("");
     const [groundId, setGroundId] = useState(searchParams.get("ground_id") || "");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Grounds for the filter dropdown
     useEffect(() => {
@@ -142,6 +145,9 @@ function GroundSlotsList() {
     const visible = groundId
         ? slots.filter((s) => String(s.ground_id) === String(groundId))
         : slots;
+
+    const totalPages = Math.ceil(visible.length / PAGE_SIZE) || 1;
+    const pagedSlots = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const selectedGround = grounds.find((g) => String(g.id) === String(groundId));
     const addHref = `/next_panel/ground-slots/new${groundId ? `?ground_id=${groundId}` : ""}`;
@@ -256,9 +262,9 @@ function GroundSlotsList() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visible.map((item, idx) => (
+                                    {pagedSlots.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <th>{idx + 1}</th>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                             <td>
                                                 <div>{item.ground_name}</div>
                                                 <small className="text-muted">{item.ground_code}</small>
@@ -298,6 +304,18 @@ function GroundSlotsList() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+
+                    {!loading && visible.length > 0 && (
+                        <div className="mt-3">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={visible.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

@@ -355,6 +355,13 @@ export default function AdmissionPlayerForm({ id = null }) {
         const file =
             e.target.files?.[0] || null;
 
+        if (file && file.size > 2 * 1024 * 1024) {
+            setError("Aadhaar card file must be less than 2MB");
+            e.target.value = "";
+            setAadhaarFile(null);
+            return;
+        }
+
         setAadhaarFile(file);
     };
 
@@ -1295,7 +1302,7 @@ export default function AdmissionPlayerForm({ id = null }) {
                                 <label className="form-label">
                                     Aadhaar Card
                                     (JPG, PNG, WEBP or PDF,
-                                    max 5MB)
+                                    max 2MB)
                                 </label>
 
                                 <input

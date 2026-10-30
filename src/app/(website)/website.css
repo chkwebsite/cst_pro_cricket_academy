@@ -4,6 +4,9 @@
    CST Cricket Academy - Custom styles (on top of Bootstrap 5)
    ========================================================== */
 :root {
+  --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-oswald: 'Oswald', sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
   --navy: #062f38;
   --navy-2: #0a4a55;
   --red: #d7263d;
@@ -43,6 +46,18 @@ h1, h2, h3, h4, h5, .display-font {
   font-family: var(--font-oswald), 'Oswald', sans-serif; 
   letter-spacing: .5px; 
   text-transform: uppercase; 
+}
+
+.font-oswald {
+  font-family: var(--font-oswald), 'Oswald', sans-serif !important;
+}
+
+.font-inter {
+  font-family: var(--font-inter), 'Inter', sans-serif !important;
+}
+
+.font-poppins {
+  font-family: var(--font-poppins), 'Poppins', sans-serif !important;
 }
 
 a { 

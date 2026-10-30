@@ -18,12 +18,15 @@ import {
     calculateStrikeRate,
     getPlayerDisplayName,
 } from "../components/cricketHelpers";
+import Pagination from "../components/Pagination";
 
 export default function MatchScorecardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [scorecards, setScorecards] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [matches, setMatches] = useState([]);
     const [inningsList, setInningsList] = useState([]);
     const [matchPlayers, setMatchPlayers] = useState([]);
@@ -132,6 +135,13 @@ export default function MatchScorecardPage() {
                 .some((v) => String(v).toLowerCase().includes(needle))
         );
     }, [scorecards, needle]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, matchId, inningsId]);
+
+    const totalPages = Math.ceil(visibleScorecards.length / PAGE_SIZE) || 1;
+    const pagedScorecards = visibleScorecards.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -342,7 +352,7 @@ export default function MatchScorecardPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visibleScorecards.map((item) => {
+                                    {pagedScorecards.map((item) => {
                                         const bowlerName = getPlayerNameById(item.dismissed_by_player_id);
                                         const fielderName = getPlayerNameById(item.fielder_player_id);
 
@@ -429,6 +439,13 @@ export default function MatchScorecardPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={visibleScorecards.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

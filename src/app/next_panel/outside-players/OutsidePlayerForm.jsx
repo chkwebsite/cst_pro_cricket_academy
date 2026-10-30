@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-const MAX_IMAGE_MB = 5;
+const MAX_IMAGE_MB = 2;
 
 const EMPTY_FORM = {
     player_name: "",

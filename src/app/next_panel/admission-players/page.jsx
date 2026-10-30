@@ -4,6 +4,7 @@ import { Edit, Search, SearchSlash, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 export default function AdmissionPlayersPage() {
     // STATES
@@ -18,6 +19,8 @@ export default function AdmissionPlayersPage() {
     const [roleId, setRoleId] = useState("");
     const [status, setStatus] = useState("");
     const [underAge, setUnderAge] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const {user} = useUser();
     const hasSessionUser = Boolean(user);
     const userAcademyId = user?.academy_id;
@@ -117,6 +120,9 @@ export default function AdmissionPlayersPage() {
             setError(error.message);
         }
     };
+
+    const totalPages = Math.ceil(players.length / PAGE_SIZE) || 1;
+    const pagedPlayers = players.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -234,9 +240,9 @@ export default function AdmissionPlayersPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {players.map((item, idx) => (
+                                        {pagedPlayers.map((item, idx) => (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>{item.admission_no}</td>
                                                 <td>{item.user_id ? item.user_id : "Not Registered"}</td>
                                                 <td>{item.first_name} {item.last_name || ""}</td>
@@ -276,6 +282,15 @@ export default function AdmissionPlayersPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={players.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )
                     )}

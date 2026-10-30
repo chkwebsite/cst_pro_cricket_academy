@@ -585,14 +585,14 @@ id,
 
             if (
                 profile_image.size >
-                5 * 1024 * 1024
+                2 * 1024 * 1024
             ) {
 
                 return NextResponse.json(
                     {
                         success: false,
                         message:
-                            "Image size must be less than 5MB"
+                            "Image size must be less than 2MB"
                     },
                     { status: 400 }
                 );

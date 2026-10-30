@@ -16,9 +16,12 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GalleryNavigationTabs from "../components/GalleryNavigationTabs";
+import Pagination from "../components/Pagination";
 
 export default function GalleryImagesPage() {
     const [images, setImages] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 12;
     const [albums, setAlbums] = useState([]);
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
@@ -82,6 +85,13 @@ export default function GalleryImagesPage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         loadImages();
     }, [albumId, status, loadImages]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [albumId, status, search]);
+
+    const totalPages = Math.ceil(images.length / PAGE_SIZE) || 1;
+    const pagedImages = images.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -277,7 +287,7 @@ export default function GalleryImagesPage() {
                     ) : viewMode === "grid" ? (
                         /* GRID CARDS VIEW */
                         <div className="row g-3">
-                            {images.map((img) => (
+                            {pagedImages.map((img) => (
                                 <div key={img.id} className="col-12 col-sm-6 col-md-4 col-xl-3">
                                     <div className="card h-100 border-0 shadow-sm rounded-4 overflow-hidden position-relative">
                                         <div
@@ -373,9 +383,9 @@ export default function GalleryImagesPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {images.map((img, idx) => (
+                                        {pagedImages.map((img, idx) => (
                                             <tr key={img.id}>
-                                                <td className="text-muted small">{idx + 1}</td>
+                                                <td className="text-muted small">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                                 <td>
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img
@@ -451,6 +461,18 @@ export default function GalleryImagesPage() {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    )}
+
+                    {!loading && images.length > 0 && (
+                        <div className="mt-3">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={images.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

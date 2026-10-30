@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useUser } from "../components/UserContext";
 import { BASE, STATUSES, STATUS_BADGE, formatDate, formatFee } from "./shared";
+import Pagination from "../components/Pagination";
 
 const EMPTY_FILTERS = { tournament_name: "", tournament_code: "", tournament_type: "", status: "" };
 
@@ -25,6 +26,8 @@ export default function TournamentsPage() {
         ? String(user.branch_id)
         : "";
     const [rows, setRows] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [matchTypes, setMatchTypes] = useState([]);
     const [matchTypesLoading, setMatchTypesLoading] = useState(true);
     const [loading, setLoading] = useState(true);
@@ -36,7 +39,10 @@ export default function TournamentsPage() {
     const [applied, setApplied] = useState(EMPTY_FILTERS);
 
     useEffect(() => {
-        const t = setTimeout(() => setApplied(filters), 350);
+        const t = setTimeout(() => {
+            setApplied(filters);
+            setPage(1);
+        }, 350);
         return () => clearTimeout(t);
     }, [filters]);
 
@@ -125,6 +131,8 @@ export default function TournamentsPage() {
 
     const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
     const hasFilters = Object.values(filters).some(Boolean);
+    const totalPages = Math.ceil(rows.length / PAGE_SIZE) || 1;
+    const pagedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -244,7 +252,7 @@ export default function TournamentsPage() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        rows.map((row) => (
+                                        pagedRows.map((row) => (
                                             <tr key={row.id}>
                                                 <td>
                                                     <div className="fw-semibold">{row.tournament_name}</div>
@@ -294,6 +302,13 @@ export default function TournamentsPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={rows.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     </div>
                 </div>
             </div>

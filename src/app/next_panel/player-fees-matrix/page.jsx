@@ -20,6 +20,7 @@ import {
     ChevronRight,
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const STATUS_CONFIG = {
     Paid: {
@@ -59,6 +60,8 @@ export default function PlayerFeesMatrixPage() {
     // Data state
     const [programs, setPrograms] = useState([]);
     const [matrixPayload, setMatrixPayload] = useState(null);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 15;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -155,6 +158,13 @@ export default function PlayerFeesMatrixPage() {
 
     const monthlyStats = matrixPayload?.monthlyStats || [];
     const rows = matrixPayload?.data || [];
+
+    useEffect(() => {
+        setPage(1);
+    }, [selectedYear, search, programId, paymentStatus]);
+
+    const totalPages = Math.ceil(rows.length / PAGE_SIZE) || 1;
+    const pagedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const collectionRate = stats.totalYearInvoiced > 0
         ? ((stats.totalYearPaid / stats.totalYearInvoiced) * 100).toFixed(1)
@@ -468,12 +478,12 @@ export default function PlayerFeesMatrixPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.map((row, index) => {
+                                    {pagedRows.map((row, index) => {
                                         return (
                                             <tr key={`${row.user_program_id}-${index}`}>
                                                 {/* Row Index */}
                                                 <td className="text-center sticky-col sticky-col-num bg-white text-muted small">
-                                                    {index + 1}
+                                                    {(page - 1) * PAGE_SIZE + index + 1}
                                                 </td>
 
                                                 {/* Player Info */}
@@ -658,6 +668,15 @@ export default function PlayerFeesMatrixPage() {
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+                        <div className="p-3 border-top">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={rows.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

@@ -222,6 +222,12 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
 
     const handleFileChange = (e) => {
         const file = e.target.files?.[0] || null;
+        if (file && file.size > 2 * 1024 * 1024) {
+            setError("Profile image must be less than 2MB");
+            e.target.value = "";
+            setProfileImage(null);
+            return;
+        }
         setProfileImage(file);
     };
 
@@ -541,7 +547,7 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
                     )}
 
                     <div className="mb-3">
-                        <label className="form-label">Profile Image (JPG, PNG or WEBP, max 5MB)</label>
+                        <label className="form-label">Profile Image (JPG, PNG or WEBP, max 2MB)</label>
                         <input
                             type="file"
                             name="profile_image"

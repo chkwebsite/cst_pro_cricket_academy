@@ -287,6 +287,15 @@ export async function POST(request) {
             String(user.user_type || "").toLowerCase().includes("player");
 
         if (isPlayer) {
+            // Remove any product management administrative menus
+            const filteredPlayerPerms = uniquePermissions.filter((item) => {
+                if (item.menu_id === 54 || item.menu_key === "Product_Master") return false;
+                if ([55, 56, 57, 58, 60].includes(item.menu_id)) return false;
+                return true;
+            });
+            uniquePermissions.length = 0;
+            uniquePermissions.push(...filteredPlayerPerms);
+
             const hasPlayerDashboard = uniquePermissions.some(
                 (item) => item.menu_url === "/next_panel/player-dashboard"
             );
@@ -297,7 +306,7 @@ export async function POST(request) {
                     permission_id: null,
                     module_name: "Player Dashboard",
                     permission_name: "view_player_dashboard",
-                    menu_id: 99999,
+                    menu_id: 61,
                     parent_id: null,
                     menu_key: "player-dashboard",
                     menu_name: "Player Dashboard",
@@ -306,6 +315,29 @@ export async function POST(request) {
                     menu_url: "/next_panel/player-dashboard",
                     menu_type: "link",
                     menu_order: 1,
+                    is_sidebar: 1,
+                    is_active: 1,
+                });
+            }
+
+            const hasOrders = uniquePermissions.some(
+                (item) => item.menu_url === "/next_panel/orders"
+            );
+            if (!hasOrders) {
+                uniquePermissions.push({
+                    user_permission_id: null,
+                    permission_id: null,
+                    module_name: "My Orders",
+                    permission_name: "view_orders",
+                    menu_id: 59,
+                    parent_id: null,
+                    menu_key: "orders",
+                    menu_name: "My Orders",
+                    menu_title: "My Orders",
+                    menu_icon: "shopping-bag",
+                    menu_url: "/next_panel/orders",
+                    menu_type: "link",
+                    menu_order: 2,
                     is_sidebar: 1,
                     is_active: 1,
                 });
@@ -330,9 +362,10 @@ export async function POST(request) {
                 user_type: user.user_type,
                 permissions: isSuperAdmin
                     ? ["*"]
-                    : (isPlayer
-                        ? Array.from(new Set([...uniquePermissions.map((item) => item.menu_url).filter(Boolean), "/next_panel/player-dashboard"]))
-                        : uniquePermissions.map((item) => item.menu_url).filter(Boolean)),
+                    : Array.from(new Set([
+                        ...uniquePermissions.map((item) => item.menu_url).filter(Boolean),
+                        ...(isPlayer ? ["/next_panel/player-dashboard", "/next_panel/orders"] : []),
+                    ])),
             },
             JWT_SECRET,
             {

@@ -14,9 +14,12 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import Pagination from "../components/Pagination";
 
 export default function ProductStockPage() {
     const [stockList, setStockList] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [branches, setBranches] = useState([]);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -90,6 +93,13 @@ export default function ProductStockPage() {
         fetchStock();
         return () => { cancelled = true; };
     }, [search, branchFilter, statusFilter, reloadCount]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, branchFilter, statusFilter]);
+
+    const totalPages = Math.ceil(stockList.length / PAGE_SIZE) || 1;
+    const pagedStock = stockList.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // KPI Metrics
     const inStockCount = stockList.filter((s) => s.stock_status === "In Stock").length;
@@ -354,7 +364,7 @@ export default function ProductStockPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {stockList.map((item, idx) => {
+                                {pagedStock.map((item, idx) => {
                                     const badgeClass =
                                         item.stock_status === "Out of Stock"
                                             ? "bg-danger"
@@ -364,7 +374,7 @@ export default function ProductStockPage() {
 
                                     return (
                                         <tr key={item.id}>
-                                            <td className="text-center text-muted small fw-medium">{idx + 1}</td>
+                                            <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                             <td>
                                                 <div className="fw-bold text-dark">{item.product_name}</div>
                                                 <div className="small text-muted">
@@ -404,6 +414,13 @@ export default function ProductStockPage() {
                             </tbody>
                         </table>
                     </div>
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={stockList.length}
+                        onPageChange={setPage}
+                        pageSize={PAGE_SIZE}
+                    />
                 )}
             </div>
 

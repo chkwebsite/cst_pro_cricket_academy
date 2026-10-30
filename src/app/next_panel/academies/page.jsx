@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Edit, GraduationCap, Image as ImageIcon, Plus, Search, Trash2 } from "lucide-react";
+import Pagination from "../components/Pagination";
 // import { useAuth } from "@/components/utils/AuthContext";
 
 export default function AcademiesPage() {
@@ -13,6 +14,8 @@ export default function AcademiesPage() {
     const [error, setError] = useState(null);
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     const loadAcademies = async () => {
         setLoading(true);
@@ -28,6 +31,7 @@ export default function AcademiesPage() {
             const json = await res.json();
             if (!res.ok) throw new Error(json.message || "Unable to load academies.");
             setAcademies(json.data || []);
+            setPage(1);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -67,6 +71,9 @@ export default function AcademiesPage() {
             setDeletingId(null);
         }
     };
+
+    const totalPages = Math.ceil(academies.length / PAGE_SIZE) || 1;
+    const pagedAcademies = academies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -147,7 +154,7 @@ export default function AcademiesPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {academies.map((academy) => (
+                                        {pagedAcademies.map((academy) => (
                                             <tr key={academy.id}>
                                                 <td>
                                                     <div className="d-flex align-items-center gap-2">
@@ -209,6 +216,15 @@ export default function AcademiesPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={academies.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )}
                     </div>

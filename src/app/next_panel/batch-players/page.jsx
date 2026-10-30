@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
 import BatchNavigationTabs from "../components/BatchNavigationTabs";
+import Pagination from "../components/Pagination";
 
 const STATUS_BADGE = {
     Active: "bg-success-subtle text-success border border-success",
@@ -43,6 +44,8 @@ export default function BatchPlayersPage() {
 
     // Data lists
     const [assignments, setAssignments] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [batches, setBatches] = useState([]);
     const [branches, setBranches] = useState([]);
     const [programs, setPrograms] = useState([]);
@@ -127,6 +130,13 @@ export default function BatchPlayersPage() {
         if (!hasSessionUser) return;
         loadAssignments();
     }, [hasSessionUser, batchId, branchId, programId, status]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, batchId, branchId, programId, status]);
+
+    const totalPages = Math.ceil(assignments.length / PAGE_SIZE) || 1;
+    const pagedAssignments = assignments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearchSubmit = (e) => {
         e.preventDefault();
@@ -375,9 +385,9 @@ export default function BatchPlayersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {assignments.map((item, index) => (
+                                    {pagedAssignments.map((item, index) => (
                                         <tr key={item.id}>
-                                            <td className="text-center text-muted small">{index + 1}</td>
+                                            <td className="text-center text-muted small">{(page - 1) * PAGE_SIZE + index + 1}</td>
                                             <td>
                                                 <div className="fw-bold text-dark">
                                                     {item.first_name} {item.last_name}
@@ -453,6 +463,15 @@ export default function BatchPlayersPage() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                        <div className="p-3 border-top">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={assignments.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

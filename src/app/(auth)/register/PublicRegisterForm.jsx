@@ -35,8 +35,9 @@ export default function PublicRegisterForm({ onSuccessRedirect = "/" }) {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 5 * 1024 * 1024) {
-            setError("Image size cannot exceed 5MB.");
+        if (file.size > 2 * 1024 * 1024) {
+            setError("Image size cannot exceed 2MB.");
+            e.target.value = "";
             return;
         }
 
@@ -362,7 +363,7 @@ export default function PublicRegisterForm({ onSuccessRedirect = "/" }) {
                                         disabled={submitting}
                                     />
                                     <div className="form-text small text-muted" style={{ fontSize: "0.75rem" }}>
-                                        JPG, PNG or WEBP (max 5MB).
+                                        JPG, PNG or WEBP (max 2MB).
                                     </div>
                                 </div>
                             </div>

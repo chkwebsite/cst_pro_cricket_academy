@@ -224,14 +224,14 @@ export async function POST(request) {
                 );
             }
 
-            // 5 MB limit
-            if (file.size > 5 * 1024 * 1024) {
+            // 2 MB limit
+            if (file.size > 2 * 1024 * 1024) {
                 await connection.rollback();
 
                 return NextResponse.json(
                     {
                         success: false,
-                        message: `${file.name} exceeds 5MB limit`,
+                        message: `${file.name} exceeds 2MB limit`,
                     },
                     { status: 400 }
                 );

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import GroundDetailsModal from "../components/GroundDetailsModal";
 import useCurrentUser from "../teams/useCurrentUser";
 import useTournamentOptions from "../tournament-teams/useTournamentOptions";
+import Pagination from "../components/Pagination";
 
 const ROUND_TYPES = ["League", "Round Robin", "Quarter Final", "Semi Final", "Final", "Qualifier", "Eliminator", "Custom"];
 const MATCH_STATUSES = ["Scheduled", "Live", "Completed", "Cancelled", "Postponed"];
@@ -33,6 +34,8 @@ export default function TournamentMatchesPage() {
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [rows, setRows] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [groundDetailsId, setGroundDetailsId] = useState(null);
 
     const [search, setSearch] = useState("");
@@ -48,6 +51,7 @@ export default function TournamentMatchesPage() {
         const timer = setTimeout(async () => {
             setLoading(true);
             setError(null);
+            setPage(1);
             try {
                 const params = new URLSearchParams();
                 if (search.trim()) params.set("search", search.trim());
@@ -101,6 +105,9 @@ export default function TournamentMatchesPage() {
             setError(err.message);
         }
     };
+
+    const totalPages = Math.ceil(rows.length / PAGE_SIZE) || 1;
+    const pagedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -192,9 +199,9 @@ export default function TournamentMatchesPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.map((item, idx) => (
+                                    {pagedRows.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <th>{idx + 1}</th>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                             <td>
                                                 <div>Match {item.match_no}{item.round_name ? ` · ${item.round_name}` : ""}</div>
                                                 <span className="badge text-bg-light border">{item.round_type}</span>
@@ -250,6 +257,13 @@ export default function TournamentMatchesPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={rows.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

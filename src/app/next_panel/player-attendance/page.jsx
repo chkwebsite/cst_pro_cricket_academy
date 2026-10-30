@@ -16,6 +16,7 @@ import {
     XCircle,
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const STATUS_BADGE = {
     Present: "bg-success text-white",
@@ -32,6 +33,8 @@ export default function PlayerAttendancePage() {
         userAcademyId !== null && userAcademyId !== undefined && userAcademyId !== "" && Number(userAcademyId) !== 0;
 
     const [attendanceList, setAttendanceList] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -86,6 +89,13 @@ export default function PlayerAttendancePage() {
         if (!hasSessionUser) return;
         loadAttendance();
     }, [hasSessionUser, attendanceDate, month, status, programId]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [attendanceDate, month, status, programId, search]);
+
+    const totalPages = Math.ceil(attendanceList.length / PAGE_SIZE) || 1;
+    const pagedAttendance = attendanceList.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -309,7 +319,7 @@ export default function PlayerAttendancePage() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    attendanceList.map((item) => (
+                                    pagedAttendance.map((item) => (
                                         <tr key={item.id}>
                                             <td className="ps-3 fw-medium">
                                                 {item.attendance_date ? item.attendance_date.slice(0, 10) : "—"}
@@ -356,6 +366,15 @@ export default function PlayerAttendancePage() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                    <div className="p-3 border-top">
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={attendanceList.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     </div>
                 </div>
             </div>

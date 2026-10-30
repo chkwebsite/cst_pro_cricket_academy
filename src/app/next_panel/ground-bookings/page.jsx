@@ -1,10 +1,11 @@
 "use client";
 
-import { CalendarCheck, Clock, Edit, Phone, Search, SearchSlash, Trash2, Trees } from "lucide-react";
+import { CalendarCheck, Clock, Edit, Eye, Phone, Search, SearchSlash, Trash2, Trees } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 import {
     BOOKING_STATUSES,
     PAYMENT_STATUSES,
@@ -37,6 +38,7 @@ function GroundBookingsList() {
         .replace(/[_-]+/g, " ");
     const isSuperAdmin = ["super admin", "superadmin", "admin"].includes(userRole);
     const isBranchAdmin = userRole === "branch admin";
+    const isPlayer = userRole.includes("player") || String(user?.user_type) === "7";
     const [scope, setScope] = useState({ academy_id: "", branch_id: "" });
 
     const [loading, setLoading] = useState(true);
@@ -247,17 +249,19 @@ function GroundBookingsList() {
                                 <h3 className="mb-0"><CalendarCheck /> Ground Bookings</h3>
                                 <p className="text-muted mb-0">Manage ground reservations, payments, and balances.</p>
                             </div>
-                            <div className="d-flex gap-2">
-                                <Link href="/next_panel/ground-slots" className="btn btn-outline-secondary px-3">
-                                    <Clock size={18} /> Slots
-                                </Link>
-                                <Link href="/next_panel/grounds" className="btn btn-outline-secondary px-3">
-                                    <Trees size={18} /> Grounds
-                                </Link>
-                                <Link href={addHref} className="btn btn-primary px-4">
-                                    <CalendarCheck size={18} /> New Booking
-                                </Link>
-                            </div>
+                            {!isPlayer && (
+                                <div className="d-flex gap-2">
+                                    <Link href="/next_panel/ground-slots" className="btn btn-outline-secondary px-3">
+                                        <Clock size={18} /> Slots
+                                    </Link>
+                                    <Link href="/next_panel/grounds" className="btn btn-outline-secondary px-3">
+                                        <Trees size={18} /> Grounds
+                                    </Link>
+                                    <Link href={addHref} className="btn btn-primary px-4">
+                                        <CalendarCheck size={18} /> New Booking
+                                    </Link>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -414,17 +418,41 @@ function GroundBookingsList() {
                                                 </span>
                                             </td>
                                             <td>
-                                                <div className="d-flex justify-content-start gap-2">
-                                                    {closed ? ( <button type="button" className="btn btn-outline-secondary" aria-label="Edit booking" disabled > <Edit size={16} /> </button> ) : ( <Link href={`/next_panel/ground-bookings/${item.id}/edit?academy_id=${item.academy_id}&branch_id=${item.branch_id}`} className="btn btn-outline-secondary" aria-label="Edit booking" > <Edit size={16} /> </Link> )}
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-outline-danger"
-                                                        onClick={() => handleDelete(item)}
-                                                        aria-label="Delete booking"
-                                                        disabled={closed}
+                                                <div className="d-flex justify-content-start align-items-center gap-2">
+                                                    <Link
+                                                        href={`/next_panel/ground-bookings/${item.id}`}
+                                                        className="btn btn-outline-primary"
+                                                        aria-label="View booking"
+                                                        title="View Booking"
                                                     >
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                        <Eye size={16} />
+                                                    </Link>
+                                                    {!isPlayer && (
+                                                        <>
+                                                            {closed ? (
+                                                                <button type="button" className="btn btn-outline-secondary" aria-label="Edit booking" disabled>
+                                                                    <Edit size={16} />
+                                                                </button>
+                                                            ) : (
+                                                                <Link
+                                                                    href={`/next_panel/ground-bookings/${item.id}/edit?academy_id=${item.academy_id}&branch_id=${item.branch_id}`}
+                                                                    className="btn btn-outline-secondary"
+                                                                    aria-label="Edit booking"
+                                                                >
+                                                                    <Edit size={16} />
+                                                                </Link>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-danger"
+                                                                onClick={() => handleDelete(item)}
+                                                                aria-label="Delete booking"
+                                                                disabled={closed}
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -438,27 +466,15 @@ function GroundBookingsList() {
                 </div>
 
                 {/* Pagination */}
-                {!loading && pagination.totalPages > 1 && (
-                    <div className="col-sm-12 d-flex justify-content-between align-items-center">
-                        <small className="text-muted">
-                            Page {pagination.page} of {pagination.totalPages} · {pagination.total} bookings
-                        </small>
-                        <div className="d-flex gap-2">
-                            <button
-                                className="btn btn-outline-secondary btn-sm"
-                                disabled={page <= 1}
-                                onClick={() => setPage((p) => p - 1)}
-                            >
-                                Previous
-                            </button>
-                            <button
-                                className="btn btn-outline-secondary btn-sm"
-                                disabled={page >= pagination.totalPages}
-                                onClick={() => setPage((p) => p + 1)}
-                            >
-                                Next
-                            </button>
-                        </div>
+                {!loading && pagination.total > 0 && (
+                    <div className="col-sm-12">
+                        <Pagination
+                            page={page}
+                            totalPages={pagination.totalPages}
+                            total={pagination.total}
+                            onPageChange={setPage}
+                            pageSize={LIMIT}
+                        />
                     </div>
                 )}
             </div>

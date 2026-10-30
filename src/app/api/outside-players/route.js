@@ -222,6 +222,16 @@ export async function POST(request) {
                 );
             }
 
+            if (profileImage.size > 2 * 1024 * 1024) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Profile image must be less than 2MB"
+                    },
+                    { status: 400 }
+                );
+            }
+
             const uploadDir = path.join(
                 process.cwd(),
                 "public",

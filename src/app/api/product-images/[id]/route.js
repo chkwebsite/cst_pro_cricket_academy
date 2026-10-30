@@ -32,8 +32,8 @@ async function saveImage(file) {
         throw new Error("Please select an image.");
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-        throw new Error("Image size must not exceed 5MB.");
+    if (file.size > 2 * 1024 * 1024) {
+        throw new Error("Image size must not exceed 2MB.");
     }
 
     const allowedTypes = {

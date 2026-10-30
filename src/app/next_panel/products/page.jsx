@@ -21,9 +21,12 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import Pagination from "../components/Pagination";
 
 export default function ProductsPage() {
     const [products, setProducts] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [categories, setCategories] = useState([]);
     const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -108,6 +111,13 @@ export default function ProductsPage() {
         fetchProducts();
         return () => { cancelled = true; };
     }, [search, categoryFilter, statusFilter, reloadCount]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, categoryFilter, statusFilter]);
+
+    const totalPages = Math.ceil(products.length / PAGE_SIZE) || 1;
+    const pagedProducts = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // Name change auto-slug generator
     const handleNameChange = (name) => {
@@ -259,6 +269,12 @@ export default function ProductsPage() {
     const handleUploadImage = async (e) => {
         const file = e.target.files?.[0];
         if (!file || !imageModalProduct) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            alert(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+            e.target.value = "";
+            return;
+        }
 
         const body = new FormData();
         body.append("product_id", String(imageModalProduct.id));
@@ -495,9 +511,9 @@ export default function ProductsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {products.map((item, idx) => (
+                                {pagedProducts.map((item, idx) => (
                                     <tr key={item.id}>
-                                        <td className="text-center text-muted small fw-medium">{idx + 1}</td>
+                                        <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                         <td>
                                             <div className="d-flex align-items-center gap-2">
                                                 <div
@@ -621,6 +637,13 @@ export default function ProductsPage() {
                             </tbody>
                         </table>
                     </div>
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={products.length}
+                        onPageChange={setPage}
+                        pageSize={PAGE_SIZE}
+                    />
                 )}
             </div>
 
@@ -818,7 +841,7 @@ export default function ProductsPage() {
                                             onChange={handleUploadImage}
                                         />
                                     </label>
-                                    <div className="text-muted small mt-2">JPG, PNG or WebP up to 5MB</div>
+                                    <div className="text-muted small mt-2">JPG, PNG or WebP up to 2MB</div>
                                 </div>
 
                                 {loadingImages ? (

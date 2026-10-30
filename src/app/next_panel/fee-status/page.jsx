@@ -1,9 +1,10 @@
 "use client";
 
-import { Edit, Eye, Search, SearchSlash, Trash2, Wallet } from "lucide-react";
+import { CreditCard, Edit, Eye, Search, SearchSlash, Trash2, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const FEE_TYPES = ["Tournament Team", "Tournament Player", "Match Team", "Match Player", "Ground Booking", "Other"];
 const FEE_STATUSES = ["Pending", "Partial", "Paid", "Cancelled"];
@@ -56,9 +57,18 @@ export default function FeeStatusPage() {
     const [status, setStatus] = useState("");
     const [academyId, setAcademyId] = useState("");
     const [academies, setAcademies] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     const { user } = useUser();
     const hasSessionUser = Boolean(user);
+    const userRole = String(user?.user_type || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+    const isPlayer = userRole.includes("player") || String(user?.user_type) === "7";
+
+    const availableFeeTypes = isPlayer
+        ? FEE_TYPES.filter((t) => t !== "Tournament Team" && t !== "Match Team")
+        : FEE_TYPES;
+
     const userAcademyId = user?.academy_id;
     const hasAssignedAcademy =
         userAcademyId !== null && userAcademyId !== undefined && userAcademyId !== "" && Number(userAcademyId) !== 0;
@@ -92,12 +102,17 @@ export default function FeeStatusPage() {
                 if (effectiveAcademyId) params.set("academy_id", effectiveAcademyId);
                 if (feeType) params.set("fee_type", feeType);
                 if (status) params.set("status", status);
+                if (isPlayer) {
+                    params.set("exclude_team_fees", "true");
+                    if (user?.id) params.set("user_id", String(user.id));
+                }
 
                 const query = params.toString();
                 const res = await fetch(`/api/fee-status${query ? `?${query}` : ""}`, { signal: controller.signal });
                 const json = await res.json();
                 if (!res.ok || !json.success) throw new Error(json.message || "Unable to load fee records.");
                 setFees(json.data || []);
+                setPage(1);
             } catch (err) {
                 if (err.name !== "AbortError") setError(err.message);
             } finally {
@@ -109,17 +124,24 @@ export default function FeeStatusPage() {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [hasSessionUser, effectiveAcademyId, feeType, status]);
+    }, [hasSessionUser, effectiveAcademyId, feeType, status, isPlayer, user?.id]);
 
     // The API has no text search, so this filters the loaded rows
     const needle = search.trim().toLowerCase();
+    const rawVisible = isPlayer
+        ? fees.filter((f) => f.fee_type !== "Tournament Team" && f.fee_type !== "Match Team")
+        : fees;
+
     const visible = needle
-        ? fees.filter((f) =>
+        ? rawVisible.filter((f) =>
               [payer(f), reference(f), f.academy_name, f.branch_name, f.remarks]
                   .filter(Boolean)
                   .some((v) => String(v).toLowerCase().includes(needle))
           )
-        : fees;
+        : rawVisible;
+
+    const totalPages = Math.ceil(visible.length / PAGE_SIZE) || 1;
+    const pagedItems = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const totals = visible.reduce(
         (acc, f) => {
@@ -164,9 +186,11 @@ export default function FeeStatusPage() {
                                 <h3 className="mb-0"><Wallet /> Fee Status</h3>
                                 <p className="text-muted mb-0">Track fees charged for tournaments, matches and ground bookings.</p>
                             </div>
-                            <Link href="/next_panel/fee-status/new" className="btn btn-primary px-4">
-                                <Wallet size={18} /> Add Fee
-                            </Link>
+                            {!isPlayer && (
+                                <Link href="/next_panel/fee-status/new" className="btn btn-primary px-4">
+                                    <Wallet size={18} /> Add Fee
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -191,9 +215,9 @@ export default function FeeStatusPage() {
                             <input type="text" className="form-control" placeholder="Payer, tournament, match" value={search} onChange={(e) => setSearch(e.target.value)} />
                         </div>
 
-                        <select className="form-select" value={feeType} onChange={(e) => setFeeType(e.target.value)} style={{ maxWidth: "200px" }}>
+                        <select className="form-select" value={feeType} onChange={(e) => { setFeeType(e.target.value); setPage(1); }} style={{ maxWidth: "200px" }}>
                             <option value="">Choose Fee Type</option>
-                            {FEE_TYPES.map((t) => (
+                            {availableFeeTypes.map((t) => (
                                 <option key={t} value={t}>{t}</option>
                             ))}
                         </select>
@@ -236,11 +260,12 @@ export default function FeeStatusPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visible.map((item, idx) => {
+                                    {pagedItems.map((item, idx) => {
                                         const due = Number(item.fee_amount || 0) - Number(item.paid_amount || 0);
+                                        const canPay = isPlayer && due > 0 && item.status !== "Paid" && item.status !== "Cancelled";
                                         return (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>
                                                     <div>{item.academy_name || "—"}</div>
                                                     {item.branch_name && <small className="text-muted">{item.branch_name}</small>}
@@ -257,16 +282,29 @@ export default function FeeStatusPage() {
                                                     <span className={`badge ${STATUS_BADGE[item.status] || "bg-secondary"}`}>{item.status}</span>
                                                 </td>
                                                 <td>
-                                                    <div className="d-flex justify-content-start gap-2">
-                                                        <Link href={`/next_panel/fee-status/${item.id}`} className="btn btn-outline-primary" aria-label="View fee details">
+                                                    <div className="d-flex justify-content-start align-items-center gap-2">
+                                                        <Link href={`/next_panel/fee-status/${item.id}`} className="btn btn-outline-primary" aria-label="View fee details" title="View Details">
                                                             <Eye size={16} />
                                                         </Link>
-                                                        <Link href={`/next_panel/fee-status/${item.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit fee">
-                                                            <Edit size={16} />
-                                                        </Link>
-                                                        <button type="button" className="btn btn-outline-danger" onClick={() => handleDelete(item)} aria-label="Delete fee">
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        {canPay && (
+                                                            <Link
+                                                                href={`/next_panel/fee-payments/new?fee_status_id=${item.id}`}
+                                                                className="btn btn-sm btn-success d-inline-flex align-items-center gap-1"
+                                                                title="Pay Fee"
+                                                            >
+                                                                <CreditCard size={15} /> Pay Fee
+                                                            </Link>
+                                                        )}
+                                                        {!isPlayer && (
+                                                            <>
+                                                                <Link href={`/next_panel/fee-status/${item.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit fee">
+                                                                    <Edit size={16} />
+                                                                </Link>
+                                                                <button type="button" className="btn btn-outline-danger" onClick={() => handleDelete(item)} aria-label="Delete fee">
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -283,6 +321,18 @@ export default function FeeStatusPage() {
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+                    )}
+
+                    {!loading && visible.length > 0 && (
+                        <div className="mt-3">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={visible.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

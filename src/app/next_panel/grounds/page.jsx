@@ -4,6 +4,7 @@ import { Edit, Eye, Search, SearchSlash, Trash2, Trees, MapPin, Phone } from "lu
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 export default function GroundsPage() {
     const [loading, setLoading] = useState(true);
@@ -18,6 +19,8 @@ export default function GroundsPage() {
     const [status, setStatus] = useState("");
     const [academyId, setAcademyId] = useState("");
     const [academies, setAcademies] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const {user} = useUser();
     const hasSessionUser = Boolean(user);
     const userAcademyId = user?.academy_id;
@@ -122,6 +125,9 @@ export default function GroundsPage() {
             .split(",")
             .map((f) => f.trim())
             .filter(Boolean);
+
+    const totalPages = Math.ceil(grounds.length / PAGE_SIZE) || 1;
+    const pagedGrounds = grounds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -241,9 +247,9 @@ export default function GroundsPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {grounds.map((item, idx) => (
+                                    {pagedGrounds.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <th>{idx + 1}</th>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                             <td>{item.academy_name || "—"}</td>
                                             <td>
                                                 <div>{item.ground_name}</div>
@@ -310,6 +316,18 @@ export default function GroundsPage() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+
+                    {!loading && grounds.length > 0 && (
+                        <div className="mt-3">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={grounds.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

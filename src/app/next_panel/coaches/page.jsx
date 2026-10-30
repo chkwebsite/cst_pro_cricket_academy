@@ -24,6 +24,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const SPECIALIZATION_BADGES = {
     Batting: "bg-danger text-white",
@@ -50,6 +51,8 @@ export default function CoachesPage() {
     const [specializationFilter, setSpecializationFilter] = useState("");
     const [employmentTypeFilter, setEmploymentTypeFilter] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Modal
     const [selectedCoach, setSelectedCoach] = useState(null);
@@ -141,12 +144,16 @@ export default function CoachesPage() {
             }
 
             setCoaches(list);
+            setPage(1);
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
         }
     };
+
+    const totalPages = Math.ceil(coaches.length / PAGE_SIZE) || 1;
+    const pagedCoaches = coaches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -513,7 +520,7 @@ export default function CoachesPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                coaches.map((coach) => {
+                                pagedCoaches.map((coach) => {
                                     const specs = coach.specialization
                                         ? coach.specialization.split(",").map((s) => s.trim()).filter(Boolean)
                                         : [];
@@ -676,6 +683,18 @@ export default function CoachesPage() {
                     </table>
                 </div>
             </div>
+
+            {!loading && coaches.length > 0 && (
+                <div className="mt-3">
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={coaches.length}
+                        onPageChange={setPage}
+                        pageSize={PAGE_SIZE}
+                    />
+                </div>
+            )}
 
             {/* Coach Detail Modal */}
             {selectedCoach && (

@@ -41,6 +41,7 @@ import {
     statusBadge,
     toDateInput,
 } from "./bookingRequestUtils";
+import Pagination from "../components/Pagination";
 
 function GroundBookingRequestsList() {
     const router = useRouter();
@@ -58,6 +59,8 @@ function GroundBookingRequestsList() {
     const [selectedStatus, setSelectedStatus] = useState(searchParams.get("status") || "");
     const [selectedDate, setSelectedDate] = useState(searchParams.get("date") || "");
     const [selectedPurpose, setSelectedPurpose] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Modal state for quick view & status update
     const [activeModalRequest, setActiveModalRequest] = useState(null);
@@ -130,6 +133,9 @@ function GroundBookingRequestsList() {
         if (!selectedPurpose) return requests;
         return requests.filter((r) => r.booking_purpose === selectedPurpose);
     }, [requests, selectedPurpose]);
+
+    const totalPages = Math.ceil(filteredRequests.length / PAGE_SIZE) || 1;
+    const pagedRequests = filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // KPI Counters
     const kpis = useMemo(() => {
@@ -526,7 +532,7 @@ function GroundBookingRequestsList() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredRequests.map((req) => {
+                                        {pagedRequests.map((req) => {
                                             const cleanPhone = String(req.mobile || "").replace(/[^0-9]/g, "");
                                             const waNumber = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
                                             const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(
@@ -720,6 +726,18 @@ function GroundBookingRequestsList() {
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+
+                        {!loading && filteredRequests.length > 0 && (
+                            <div className="p-3 border-top">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={filteredRequests.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )}
                     </div>

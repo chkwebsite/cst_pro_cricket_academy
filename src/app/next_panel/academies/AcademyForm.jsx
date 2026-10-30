@@ -69,6 +69,11 @@ export default function AcademyForm({
 
     const handleLogoPick = (event) => {
         const file = event.target.files?.[0] || null;
+        if (file && file.size > 2 * 1024 * 1024) {
+            alert("Academy logo size must be less than 2MB");
+            event.target.value = "";
+            return;
+        }
         onLogoFileChange?.(file);
 
         if (file) {

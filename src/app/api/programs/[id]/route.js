@@ -12,7 +12,7 @@ const ALLOWED_MIME_TYPES = [
     "image/gif"
 ];
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
 async function saveProgramImage(file) {
     if (!file || typeof file !== "object" || !file.name || typeof file.arrayBuffer !== "function") {
@@ -24,7 +24,7 @@ async function saveProgramImage(file) {
     }
 
     if (file.size > MAX_FILE_SIZE) {
-        throw new Error("Program image must be less than 5MB");
+        throw new Error("Program image must be less than 2MB");
     }
 
     const extension = (path.extname(file.name) || ".jpg").toLowerCase();

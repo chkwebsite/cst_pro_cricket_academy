@@ -4,6 +4,7 @@ import { Edit, Search, SearchSlash, Trash2, Briefcase } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 export default function StaffPage() {
     // STATES
@@ -17,6 +18,8 @@ export default function StaffPage() {
     const [branchId, setBranchId] = useState("");
     const [roleId, setRoleId] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const {user} = useUser();
     const hasSessionUser = Boolean(user);
     const userAcademyId = user?.academy_id;
@@ -136,6 +139,9 @@ export default function StaffPage() {
         return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     };
     console.log("staff", staff);
+    const totalPages = Math.ceil(staff.length / PAGE_SIZE) || 1;
+    const pagedStaff = staff.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     return (
         <div className="container-fluid">
             <div className="row g-3">
@@ -221,9 +227,9 @@ export default function StaffPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {staff.map((item, idx) => (
+                                        {pagedStaff.map((item, idx) => (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>{item.appointment_no}</td>
                                                 <td>{item.first_name} {item.last_name || ""}</td>
                                                 <td>{item.role_name || "—"}</td>
@@ -258,6 +264,15 @@ export default function StaffPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={staff.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             </div>
                         )
                     )}

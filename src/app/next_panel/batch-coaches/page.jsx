@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
 import BatchNavigationTabs from "../components/BatchNavigationTabs";
+import Pagination from "../components/Pagination";
 
 const ROLE_BADGE = {
     "Head Coach": "bg-primary text-white",
@@ -42,6 +43,8 @@ export default function BatchCoachesPage() {
 
     // Data lists
     const [assignments, setAssignments] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [batches, setBatches] = useState([]);
     const [batchesCount, setBatchesCount] = useState(0);
     const [playersCount, setPlayersCount] = useState(0);
@@ -121,6 +124,13 @@ export default function BatchCoachesPage() {
         if (!hasSessionUser) return;
         loadAssignments();
     }, [hasSessionUser, batchId, coachRole, status]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, batchId, coachRole, status]);
+
+    const totalPages = Math.ceil(assignments.length / PAGE_SIZE) || 1;
+    const pagedAssignments = assignments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearchSubmit = (e) => {
         e.preventDefault();
@@ -353,9 +363,9 @@ export default function BatchCoachesPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {assignments.map((item, index) => (
+                                    {pagedAssignments.map((item, index) => (
                                         <tr key={item.id}>
-                                            <td className="text-center text-muted small">{index + 1}</td>
+                                            <td className="text-center text-muted small">{(page - 1) * PAGE_SIZE + index + 1}</td>
                                             <td>
                                                 <div className="fw-bold text-dark">
                                                     {item.coach_first_name} {item.coach_last_name}
@@ -432,6 +442,15 @@ export default function BatchCoachesPage() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                        <div className="p-3 border-top">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={assignments.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

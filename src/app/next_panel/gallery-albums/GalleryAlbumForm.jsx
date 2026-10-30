@@ -184,6 +184,13 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
     const handleImageChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                setError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                e.target.value = "";
+                setImageFile(null);
+                setImagePreview(null);
+                return;
+            }
             setImageFile(file);
             setImagePreview(URL.createObjectURL(file));
         }
@@ -529,7 +536,7 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
 
                                 <div className="col-md-8">
                                     <label className="form-label fw-semibold">
-                                        Upload Cover Photo (Max 5MB)
+                                        Upload Cover Photo (Max 2MB)
                                     </label>
                                     <input
                                         type="file"

@@ -4,6 +4,7 @@ import { ArrowBigLeft, ArrowLeft, Ban, Edit, MapPin, Search, SearchSlash, Swords
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import GroundDetailsModal from "../components/GroundDetailsModal";
+import Pagination from "../components/Pagination";
 
 const MATCH_TYPES = ["Practice", "Friendly", "League", "Tournament", "Knockout"];
 const MATCH_STATUSES = ["Scheduled", "Live", "Completed", "Cancelled", "Postponed"];
@@ -30,6 +31,8 @@ export default function MatchesPage() {
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [matches, setMatches] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [groundDetailsId, setGroundDetailsId] = useState(null);
 
     // Filters (all supported server-side by GET /api/matches)
@@ -49,6 +52,7 @@ export default function MatchesPage() {
         const timer = setTimeout(async () => {
             setLoading(true);
             setError(null);
+            setPage(1);
             try {
                 const params = new URLSearchParams();
                 if (search.trim()) params.set("search", search.trim());
@@ -107,6 +111,9 @@ export default function MatchesPage() {
             setError(err.message);
         }
     };
+
+    const totalPages = Math.ceil(matches.length / PAGE_SIZE) || 1;
+    const pagedMatches = matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -223,11 +230,11 @@ export default function MatchesPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {matches.map((item, idx) => {
+                                    {pagedMatches.map((item, idx) => {
                                         const closed = item.status === "Completed" || item.status === "Cancelled";
                                         return (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>
                                                     <div>{item.match_no || `Match #${item.id}`}</div>
                                                     <span className="badge text-bg-light border">{item.match_type}</span>
@@ -334,6 +341,13 @@ export default function MatchesPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={matches.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

@@ -57,9 +57,17 @@ SELECT
             values.push(fulfillment_branch_id);
         }
 
-        if (customer_user_id !== null && customer_user_id !== "" && customer_user_id !== undefined) {
+        const customer_email = searchParams.get("customer_email");
+
+        if (customer_user_id && customer_email) {
+            sql += " AND (o.customer_user_id = ? OR LOWER(o.customer_email) = LOWER(?))";
+            values.push(customer_user_id, customer_email);
+        } else if (customer_user_id !== null && customer_user_id !== "" && customer_user_id !== undefined) {
             sql += " AND o.customer_user_id = ?";
             values.push(customer_user_id);
+        } else if (customer_email) {
+            sql += " AND LOWER(o.customer_email) = LOWER(?)";
+            values.push(customer_email);
         }
 
         if (public_user_id !== null && public_user_id !== "" && public_user_id !== undefined) {

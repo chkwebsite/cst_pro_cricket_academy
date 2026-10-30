@@ -21,6 +21,7 @@ import {
     AlertCircle,
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const STATUS_BADGE = {
     Success: "bg-success text-white",
@@ -45,6 +46,8 @@ function PlayerPaymentsContent() {
         userAcademyId !== null && userAcademyId !== undefined && userAcademyId !== "" && Number(userAcademyId) !== 0;
 
     const [payments, setPayments] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [feeInfo, setFeeInfo] = useState(null);
     const [loadingFeeInfo, setLoadingFeeInfo] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -120,6 +123,13 @@ function PlayerPaymentsContent() {
         e.preventDefault();
         loadPayments();
     };
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, paymentMode, paymentStatus, fromDate, toDate]);
+
+    const totalPages = Math.ceil(payments.length / PAGE_SIZE) || 1;
+    const pagedPayments = payments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = () => {
         setSearch("");
@@ -442,7 +452,7 @@ function PlayerPaymentsContent() {
                                     </td>
                                 </tr>
                             ) : (
-                                payments.map((p) => (
+                                pagedPayments.map((p) => (
                                     <tr key={p.id}>
                                         <td>
                                             <Link
@@ -516,6 +526,13 @@ function PlayerPaymentsContent() {
                         </tbody>
                     </table>
                 </div>
+                <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    total={payments.length}
+                    onPageChange={setPage}
+                    pageSize={PAGE_SIZE}
+                />
             </div>
         </div>
     );

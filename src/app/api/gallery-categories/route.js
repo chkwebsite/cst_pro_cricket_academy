@@ -118,10 +118,10 @@ export async function POST(request) {
                 }, { status: 400 });
             }
 
-            if (featured_image.size > 5 * 1024 * 1024) {
+            if (featured_image.size > 2 * 1024 * 1024) {
                 return NextResponse.json({
                     success: false,
-                    message: "Image size must be less than or equal to 5MB"
+                    message: "Image size must be less than or equal to 2MB"
                 }, { status: 400 });
             }
 

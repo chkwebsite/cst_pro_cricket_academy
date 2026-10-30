@@ -3,7 +3,7 @@ import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
 
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -18,7 +18,7 @@ async function saveImage(file) {
         throw Object.assign(new Error("Only JPG, PNG and WEBP images are allowed"), { statusCode: 400 });
     }
     if (file.size > MAX_IMAGE_SIZE) {
-        throw Object.assign(new Error("Image must not exceed 5MB"), { statusCode: 400 });
+        throw Object.assign(new Error("Image must not exceed 2MB"), { statusCode: 400 });
     }
 
     const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "gallery-images");

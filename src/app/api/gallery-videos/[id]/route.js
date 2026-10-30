@@ -88,6 +88,7 @@ export async function PUT(request, context) {
       if (videoFile && typeof videoFile.arrayBuffer === "function" && videoFile.size > 0) {
         const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
         if (!VIDEO_TYPES.includes(videoFile.type)) return jsonError("Only MP4, WEBM and MOV videos are allowed.");
+        if (videoFile.size > 20 * 1024 * 1024) return jsonError("Video file must not exceed 20MB.");
         const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "gallery-videos");
         await fs.mkdir(uploadDir, { recursive: true });
         const ext = path.extname(videoFile.name || "").toLowerCase() || ".mp4";
@@ -104,6 +105,7 @@ export async function PUT(request, context) {
     if (thumbnailFile && typeof thumbnailFile.arrayBuffer === "function" && thumbnailFile.size > 0) {
       const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
       if (!IMAGE_TYPES.includes(thumbnailFile.type)) return jsonError("Thumbnail must be JPG, PNG or WEBP.");
+      if (thumbnailFile.size > 2 * 1024 * 1024) return jsonError("Thumbnail must not exceed 2MB.");
       const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "gallery-video-thumbnails");
       await fs.mkdir(uploadDir, { recursive: true });
       const ext = path.extname(thumbnailFile.name || "").toLowerCase() || ".jpg";

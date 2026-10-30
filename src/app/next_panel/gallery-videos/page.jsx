@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GalleryNavigationTabs from "../components/GalleryNavigationTabs";
+import Pagination from "../components/Pagination";
 
 function getEmbedUrl(type, url) {
     if (!url) return null;
@@ -43,6 +44,8 @@ function getEmbedUrl(type, url) {
 
 export default function GalleryVideosPage() {
     const [videos, setVideos] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 12;
     const [albums, setAlbums] = useState([]);
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
@@ -107,6 +110,13 @@ export default function GalleryVideosPage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         loadVideos();
     }, [albumId, videoType, status, loadVideos]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [albumId, videoType, status, search]);
+
+    const totalPages = Math.ceil(videos.length / PAGE_SIZE) || 1;
+    const pagedVideos = videos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -278,7 +288,7 @@ export default function GalleryVideosPage() {
                         </div>
                     ) : (
                         <div className="row g-3">
-                            {videos.map((vid) => {
+                            {pagedVideos.map((vid) => {
                                 const typeBadgeClass =
                                     vid.video_type === "YouTube"
                                         ? "bg-danger text-white"
@@ -393,6 +403,15 @@ export default function GalleryVideosPage() {
                                     </div>
                                 );
                             })}
+                        </div>
+                        <div className="mt-4">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={videos.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

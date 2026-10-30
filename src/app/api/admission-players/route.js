@@ -14,7 +14,7 @@ const uploadDir = path.join(
     "admission-players"
 );
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 
 const ALLOWED_FILE_TYPES = [
     "image/jpeg",
@@ -70,7 +70,7 @@ async function saveAadhaarFile(file) {
 
     if (file.size > MAX_FILE_SIZE) {
         throw new Error(
-            "Aadhaar card file must be less than 5MB"
+            "Aadhaar card file must be less than 2MB"
         );
     }
 

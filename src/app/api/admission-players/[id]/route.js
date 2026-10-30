@@ -334,10 +334,10 @@ export async function PUT(request, { params }) {
             }
 
 
-            if (aadhaarFile.size > 5 * 1024 * 1024) {
+            if (aadhaarFile.size > 2 * 1024 * 1024) {
                 return NextResponse.json({
                     success: false,
-                    message: "Aadhaar card file must be less than 5MB"
+                    message: "Aadhaar card file must be less than 2MB"
                 }, { status: 400 });
             }
 

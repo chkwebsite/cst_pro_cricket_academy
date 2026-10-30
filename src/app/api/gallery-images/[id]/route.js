@@ -75,8 +75,8 @@ export async function PUT(request, { params }) {
             if (!ALLOWED_TYPES[imageFile.type]) {
                 return NextResponse.json({ success: false, message: "Only JPG, PNG and WEBP images are allowed" }, { status: 400 });
             }
-            if (imageFile.size > 5 * 1024 * 1024) {
-                return NextResponse.json({ success: false, message: "Image must not exceed 5MB" }, { status: 400 });
+            if (imageFile.size > 2 * 1024 * 1024) {
+                return NextResponse.json({ success: false, message: "Image must not exceed 2MB" }, { status: 400 });
             }
             const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "gallery-images");
             await fs.mkdir(uploadDir, { recursive: true });

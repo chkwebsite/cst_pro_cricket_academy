@@ -19,6 +19,7 @@ import {
     XCircle,
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const STATUS_BADGE = {
     Paid: "bg-success text-white",
@@ -35,6 +36,8 @@ export default function PlayerProgramFeesPage() {
         userAcademyId !== null && userAcademyId !== undefined && userAcademyId !== "" && Number(userAcademyId) !== 0;
 
     const [fees, setFees] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -87,6 +90,13 @@ export default function PlayerProgramFeesPage() {
         if (!hasSessionUser) return;
         loadFees();
     }, [hasSessionUser, month, status, programId]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, month, status, programId]);
+
+    const totalPages = Math.ceil(fees.length / PAGE_SIZE) || 1;
+    const pagedFees = fees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -343,7 +353,7 @@ export default function PlayerProgramFeesPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                fees.map((f) => {
+                                pagedFees.map((f) => {
                                     const due = Number(f.due_amount) || 0;
                                     const canPay = due > 0 && f.payment_status !== "Cancelled";
 
@@ -427,6 +437,13 @@ export default function PlayerProgramFeesPage() {
                         </tbody>
                     </table>
                 </div>
+                <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    total={fees.length}
+                    onPageChange={setPage}
+                    pageSize={PAGE_SIZE}
+                />
             </div>
         </div>
     );

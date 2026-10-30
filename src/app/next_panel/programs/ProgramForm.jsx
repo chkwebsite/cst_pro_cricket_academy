@@ -164,8 +164,8 @@ export default function ProgramForm({ id = null }) {
                 setError("Only JPG, JPEG, PNG, WEBP and GIF images are allowed");
                 return;
             }
-            if (file.size > 5 * 1024 * 1024) {
-                setError("Image size must be less than 5MB");
+            if (file.size > 2 * 1024 * 1024) {
+                setError("Image size must be less than 2MB");
                 return;
             }
             setError("");
@@ -331,7 +331,7 @@ export default function ProgramForm({ id = null }) {
                                         </button>
                                     )}
                                 </div>
-                                <small className="text-muted">JPG, PNG, WEBP or GIF. Max 5MB.</small>
+                                <small className="text-muted">JPG, PNG, WEBP or GIF. Max 2MB.</small>
                             </div>
                             <input
                                 ref={fileInputRef}

@@ -3,12 +3,15 @@
 import { Edit, Search, SearchSlash, Trash2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
+import Pagination from "../components/Pagination";
 
 export default function RolePermissionsPage() {
     // STATES
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [rolePermissions, setRolePermissions] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [search, setSearch] = useState("");
 
     const loadRolePermissions = async () => {
@@ -43,6 +46,13 @@ export default function RolePermissionsPage() {
             item.permission_name?.toLowerCase().includes(term)
         );
     }, [search, rolePermissions]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search]);
+
+    const totalPages = Math.ceil(filteredRolePermissions.length / PAGE_SIZE) || 1;
+    const pagedRolePermissions = filteredRolePermissions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -121,9 +131,9 @@ export default function RolePermissionsPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredRolePermissions.map((item, idx) => (
+                                        {pagedRolePermissions.map((item, idx) => (
                                             <tr key={item.id}>
-                                                <th>{idx + 1}</th>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>{item.role_name}</td>
                                                 <td>{item.module_name}</td>
                                                 <td>{item.permission_name}</td>
@@ -156,6 +166,13 @@ export default function RolePermissionsPage() {
                                     </tbody>
                                 </table>
                             </div>
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={filteredRolePermissions.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         )
                     )}
                 </div>

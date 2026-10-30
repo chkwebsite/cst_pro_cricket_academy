@@ -15,9 +15,12 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import Pagination from "../components/Pagination";
 
 export default function ProductCategoriesPage() {
     const [categories, setCategories] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -72,6 +75,13 @@ export default function ProductCategoriesPage() {
         loadData();
         return () => { cancelled = true; };
     }, [search, statusFilter, reloadCount]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, statusFilter]);
+
+    const totalPages = Math.ceil(categories.length / PAGE_SIZE) || 1;
+    const pagedCategories = categories.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // Slug generator helper
     const handleNameChange = (name) => {
@@ -331,9 +341,9 @@ export default function ProductCategoriesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {categories.map((item, idx) => (
+                                {pagedCategories.map((item, idx) => (
                                     <tr key={item.id}>
-                                        <td className="text-center text-muted small fw-medium">{idx + 1}</td>
+                                        <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                         <td>
                                             {item.category_image ? (
                                                 <img
@@ -403,6 +413,13 @@ export default function ProductCategoriesPage() {
                             </tbody>
                         </table>
                     </div>
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={categories.length}
+                        onPageChange={setPage}
+                        pageSize={PAGE_SIZE}
+                    />
                 )}
             </div>
 
@@ -492,7 +509,7 @@ export default function ProductCategoriesPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Category Image</label>
+                                        <label className="form-label small fw-semibold text-secondary">Category Image (Max 2MB)</label>
                                         <input
                                             type="file"
                                             className="form-control"
@@ -500,6 +517,11 @@ export default function ProductCategoriesPage() {
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) {
+                                                    if (file.size > 2 * 1024 * 1024) {
+                                                        alert(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                                                        e.target.value = "";
+                                                        return;
+                                                    }
                                                     setFormData({ ...formData, image: file });
                                                     setImagePreview(URL.createObjectURL(file));
                                                 }

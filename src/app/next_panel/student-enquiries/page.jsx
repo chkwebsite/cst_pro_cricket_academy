@@ -29,12 +29,15 @@ import {
     formatDate,
     formatDateTime,
 } from "./enquiryHelpers";
+import Pagination from "../components/Pagination";
 
 export default function StudentEnquiriesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
     const [enquiries, setEnquiries] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [branches, setBranches] = useState([]);
     const [programs, setPrograms] = useState([]);
 
@@ -113,6 +116,13 @@ export default function StudentEnquiriesPage() {
             controller.abort();
         };
     }, [search, statusFilter, sourceFilter, branchFilter, programFilter, reload]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, statusFilter, sourceFilter, branchFilter, programFilter]);
+
+    const totalPages = Math.ceil(enquiries.length / PAGE_SIZE) || 1;
+    const pagedEnquiries = enquiries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -424,7 +434,7 @@ export default function StudentEnquiriesPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {enquiries.map((item) => {
+                                    {pagedEnquiries.map((item) => {
                                         const followupsDone = Number(item.total_followups) || 0;
                                         const isClosed = ["Converted", "Not Interested", "Closed"].includes(item.enquiry_status);
                                         const isMaxFollowups = followupsDone >= 5;
@@ -536,6 +546,13 @@ export default function StudentEnquiriesPage() {
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={enquiries.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     )}
                 </div>
             </div>

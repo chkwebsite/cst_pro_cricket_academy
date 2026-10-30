@@ -23,6 +23,7 @@ import {
     Award,
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import Pagination from "../components/Pagination";
 
 const STATUS_BADGE = {
     Active: "bg-success-subtle text-success border border-success",
@@ -58,6 +59,8 @@ export default function IndividualTrainingPage() {
 
     // Data lists
     const [trainings, setTrainings] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [branches, setBranches] = useState([]);
     const [coaches, setCoaches] = useState([]);
 
@@ -168,6 +171,13 @@ export default function IndividualTrainingPage() {
         if (!hasSessionUser) return;
         loadTrainings();
     }, [hasSessionUser, branchId, coachId, trainingDay, status]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, branchId, coachId, trainingDay, status]);
+
+    const totalPages = Math.ceil(trainings.length / PAGE_SIZE) || 1;
+    const pagedTrainings = trainings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearchSubmit = (e) => {
         e.preventDefault();
@@ -512,7 +522,7 @@ export default function IndividualTrainingPage() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    trainings.map((item) => {
+                                    pagedTrainings.map((item) => {
                                         const playerName =
                                             `${item.player_first_name || ""} ${item.player_last_name || ""}`.trim() ||
                                             `Player #${item.user_program_id}`;
@@ -649,6 +659,15 @@ export default function IndividualTrainingPage() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                    <div className="p-3 border-top">
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={trainings.length}
+                            onPageChange={setPage}
+                            pageSize={PAGE_SIZE}
+                        />
                     </div>
                 </div>
 

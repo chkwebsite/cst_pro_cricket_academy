@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
 import BatchNavigationTabs from "../components/BatchNavigationTabs";
+import Pagination from "../components/Pagination";
 
 export default function BatchesPage() {
     const { user } = useUser();
@@ -35,6 +36,8 @@ export default function BatchesPage() {
     const [programId, setProgramId] = useState("");
     const [ageGroupId, setAgeGroupId] = useState("");
     const [status, setStatus] = useState("");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Data lists
     const [batches, setBatches] = useState([]);
@@ -167,6 +170,9 @@ export default function BatchesPage() {
         const totalCapacity = batches.reduce((sum, b) => sum + (Number(b.max_players) || 0), 0);
         return { total, active, totalCapacity };
     }, [batches]);
+
+    const totalPages = Math.ceil(batches.length / PAGE_SIZE) || 1;
+    const pagedBatches = batches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // Format 24hr time to 12hr AM/PM
     const formatTime = (timeStr) => {
@@ -388,7 +394,7 @@ export default function BatchesPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {batches.map((batch, index) => {
+                                    {pagedBatches.map((batch, index) => {
                                         const days = batch.training_days
                                             ? (Array.isArray(batch.training_days)
                                                   ? batch.training_days
@@ -397,7 +403,7 @@ export default function BatchesPage() {
 
                                         return (
                                             <tr key={batch.id}>
-                                                <td className="text-center text-muted small">{index + 1}</td>
+                                                <td className="text-center text-muted small">{(page - 1) * PAGE_SIZE + index + 1}</td>
                                                 <td>
                                                     <div className="fw-bold text-dark">
                                                         <Link
@@ -504,6 +510,18 @@ export default function BatchesPage() {
                                     })}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+
+                    {!loading && batches.length > 0 && (
+                        <div className="mt-3">
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={batches.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         </div>
                     )}
                 </div>

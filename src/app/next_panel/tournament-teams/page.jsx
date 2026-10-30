@@ -8,6 +8,7 @@ import useOrgOptions, { inAcademy } from "../teams/useOrgOptions";
 import { PAYMENT_STATUSES, REG_STATUSES } from "./TournamentTeamForm";
 import useTeamOptions from "./useTeamOptions";
 import useTournamentOptions from "./useTournamentOptions";
+import Pagination from "../components/Pagination";
 
 const fmtDate = (v) => (v ? String(v).slice(0, 10) : "—");
 const fmtFee = (v) => (v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
@@ -35,6 +36,8 @@ export default function TournamentTeamsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [rows, setRows] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
     // Filters (all supported server-side by GET /api/tournament-teams)
     const [tournamentId, setTournamentId] = useState("");
@@ -72,6 +75,7 @@ export default function TournamentTeamsPage() {
         const timer = setTimeout(async () => {
             setLoading(true);
             setError(null);
+            setPage(1);
             try {
                 const params = new URLSearchParams();
                 if (effectiveAcademyId) params.set("academy_id", effectiveAcademyId);
@@ -140,6 +144,9 @@ export default function TournamentTeamsPage() {
             setError(err.message);
         }
     };
+
+    const totalPages = Math.ceil(rows.length / PAGE_SIZE) || 1;
+    const pagedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <div className="container-fluid">
@@ -307,9 +314,9 @@ export default function TournamentTeamsPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {rows.map((r, idx) => (
+                                            {pagedRows.map((r, idx) => (
                                                 <tr key={r.id} className={isMine(r) ? "table-warning" : ""}>
-                                                    <th>{idx + 1}</th>
+                                                    <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                     <td>
                                                         <div>{r.tournament_name}</div>
                                                         <small className="text-muted">{r.tournament_code || "—"}</small>
@@ -377,6 +384,13 @@ export default function TournamentTeamsPage() {
                                         </tbody>
                                     </table>
                                 </div>
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={rows.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
                             )}
                         </div>
                     </>

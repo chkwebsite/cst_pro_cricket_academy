@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Edit, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
+import Pagination from "../components/Pagination";
 // import { useAuth } from "@/components/utils/AuthContext";
 
 export default function RolesPage() {
     // const { user: userInfo } = useAuth();
     const [roles, setRoles] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
     const [error, setError] = useState(null);
@@ -38,6 +41,13 @@ export default function RolesPage() {
     useEffect(() => {
         loadRoles();
     }, [status]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [status, search]);
+
+    const totalPages = Math.ceil(roles.length / PAGE_SIZE) || 1;
+    const pagedRoles = roles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSearch = (event) => {
         event.preventDefault();
@@ -146,7 +156,7 @@ export default function RolesPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {roles.map((role) => (
+                                        {pagedRoles.map((role) => (
                                             <tr key={role.id}>
                                                 <td>
                                                     <span className="fw-semibold">{role.role_name}</span>
@@ -195,6 +205,13 @@ export default function RolesPage() {
                                     </tbody>
                                 </table>
                             </div>
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                total={roles.length}
+                                onPageChange={setPage}
+                                pageSize={PAGE_SIZE}
+                            />
                         )}
                     </div>
                 </div>

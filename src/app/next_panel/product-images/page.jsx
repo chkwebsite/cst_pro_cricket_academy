@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Pagination from "../components/Pagination";
 import {
     Check,
     CheckCircle2,
@@ -27,6 +28,8 @@ import {
 
 export default function ProductImagesPage() {
     const [images, setImages] = useState([]);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 12;
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -112,6 +115,13 @@ export default function ProductImagesPage() {
             cancelled = true;
         };
     }, [search, selectedProductId, primaryFilter, statusFilter, reloadCount]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, selectedProductId, primaryFilter, statusFilter]);
+
+    const totalPages = Math.ceil(images.length / PAGE_SIZE) || 1;
+    const pagedImages = images.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // Open Add Modal
     const handleOpenCreate = () => {
@@ -209,8 +219,9 @@ export default function ProductImagesPage() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 5 * 1024 * 1024) {
-            setFormError("Image file size must be less than 5MB.");
+        if (file.size > 2 * 1024 * 1024) {
+            setFormError("Image file size must be less than 2MB.");
+            e.target.value = "";
             return;
         }
 
@@ -464,7 +475,7 @@ export default function ProductImagesPage() {
             ) : viewMode === "grid" ? (
                 /* GRID VIEW */
                 <div className="row g-3">
-                    {images.map((item) => (
+                    {pagedImages.map((item) => (
                         <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={item.id}>
                             <div className="card border-0 shadow-sm rounded-3 overflow-hidden h-100 bg-white">
                                 {/* Photo Container */}
@@ -590,7 +601,7 @@ export default function ProductImagesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {images.map((item) => (
+                                {pagedImages.map((item) => (
                                     <tr key={item.id}>
                                         <td>
                                             <div
@@ -670,6 +681,18 @@ export default function ProductImagesPage() {
                 </div>
             )}
 
+            {!loading && !error && images.length > 0 && (
+                <div className="mt-3">
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={images.length}
+                        onPageChange={setPage}
+                        pageSize={PAGE_SIZE}
+                    />
+                </div>
+            )}
+
             {/* Upload / Edit Modal */}
             {modalOpen && (
                 <div
@@ -734,7 +757,7 @@ export default function ProductImagesPage() {
                                             onChange={handleFileChange}
                                         />
                                         <div className="form-text extra-small" style={{ fontSize: "0.75rem" }}>
-                                            Supports JPG, PNG, WebP (Max 5MB).
+                                            Supports JPG, PNG, WebP (Max 2MB).
                                         </div>
 
                                         {imagePreview && (
