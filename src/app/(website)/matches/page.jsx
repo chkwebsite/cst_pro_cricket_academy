@@ -13,6 +13,31 @@ import {
     Trophy,
 } from "lucide-react";
 
+const isTodayMatch = (dateStr) => {
+    if (!dateStr) return false;
+    const d = String(dateStr).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    return d === todayIST || d === todayLocal;
+};
+
+const getEffectiveStatus = (m) => {
+    const raw = String(m?.status || "").trim();
+    const lower = raw.toLowerCase();
+    if (lower === "completed" || lower === "cancelled") {
+        return raw;
+    }
+    if (isTodayMatch(m?.match_date)) {
+        return "Live";
+    }
+    return raw || "Scheduled";
+};
+
 export default function MatchesPage() {
     const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -43,7 +68,7 @@ export default function MatchesPage() {
     const filteredMatches = useMemo(() => {
         if (filterTab === "ALL") return matches;
         return matches.filter((m) => {
-            const s = (m.status || "").toLowerCase();
+            const s = getEffectiveStatus(m).toLowerCase();
             if (filterTab === "LIVE") return s === "live";
             if (filterTab === "UPCOMING") return s === "scheduled" || s === "upcoming";
             if (filterTab === "COMPLETED") return s === "completed";
@@ -52,7 +77,7 @@ export default function MatchesPage() {
     }, [matches, filterTab]);
 
     const liveCount = useMemo(
-        () => matches.filter((m) => (m.status || "").toLowerCase() === "live").length,
+        () => matches.filter((m) => getEffectiveStatus(m).toLowerCase() === "live").length,
         [matches]
     );
 
@@ -180,8 +205,9 @@ export default function MatchesPage() {
                     ) : (
                         <div className="row g-4">
                             {filteredMatches.map((m) => {
-                                const isLive = (m.status || "").toLowerCase() === "live";
-                                const isCompleted = (m.status || "").toLowerCase() === "completed";
+                                const effectiveStatus = getEffectiveStatus(m);
+                                const isLive = effectiveStatus.toLowerCase() === "live";
+                                const isCompleted = effectiveStatus.toLowerCase() === "completed";
 
                                 return (
                                     <div key={m.id} className="col-12 col-md-6 col-xl-4">
@@ -203,7 +229,7 @@ export default function MatchesPage() {
                                                         </span>
                                                     ) : (
                                                         <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 small">
-                                                            Scheduled
+                                                            {effectiveStatus}
                                                         </span>
                                                     )}
                                                 </div>

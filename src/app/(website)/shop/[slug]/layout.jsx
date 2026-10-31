@@ -6,7 +6,7 @@ async function getProductMeta(slug) {
       `SELECT p.id, p.product_name, p.slug, p.description, p.price, p.sale_price, c.category_name,
               (SELECT pi.image_path FROM cst_product_images pi WHERE pi.product_id = p.id AND pi.status = 1 AND pi.is_primary = 1 LIMIT 1) AS primary_image
        FROM cst_products p
-       LEFT JOIN cst_categories c ON c.id = p.category_id
+       LEFT JOIN cst_product_categories c ON c.id = p.category_id
        WHERE (p.slug = ? OR p.id = ?) AND p.is_deleted = 0
        LIMIT 1`,
       [slug, slug]

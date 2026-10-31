@@ -62,6 +62,21 @@ export async function GET(request, { params }) {
 
         connection = await pool.getConnection();
 
+        // Auto-update match status to 'Live' when match_date is today and status is not Completed or Cancelled
+        try {
+            const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+            await connection.execute(
+                `UPDATE cst_matches
+                 SET status = 'Live', updated_at = NOW()
+                 WHERE id = ?
+                   AND (match_date = CURDATE() OR match_date = DATE(DATE_ADD(NOW(), INTERVAL 330 MINUTE)) OR match_date = ?)
+                   AND status NOT IN ('Completed', 'Cancelled', 'Live')`,
+                [matchId, todayIST]
+            );
+        } catch (autoLiveErr) {
+            console.error("Auto-update live match error:", autoLiveErr);
+        }
+
         const [rows] = await connection.execute(
             `
     SELECT
@@ -626,6 +641,18 @@ export async function PUT(request, { params }) {
             }
         }
 
+        // Auto-set status to 'Live' if match date is today and status is 'Scheduled'
+        let finalStatus = status;
+        const matchDateStr = String(match_date).slice(0, 10);
+        const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+        const todayLocal = new Date().toLocaleDateString("en-CA");
+        if (
+            (matchDateStr === todayIST || matchDateStr === todayLocal) &&
+            (!finalStatus || finalStatus === "Scheduled")
+        ) {
+            finalStatus = "Live";
+        }
+
         // Update match
         await connection.execute(
             `
@@ -663,7 +690,7 @@ export async function PUT(request, { params }) {
                 booking_id || null,
                 toss_winner_team_id || null,
                 toss_decision || null,
-                status,
+                finalStatus,
                 remarks || null,
                 created_by || null,
                 matchId,

@@ -117,6 +117,20 @@ export async function GET(request) {
     try {
         connection = await pool.getConnection();
 
+        // Auto-update tournament matches to 'Live' when scheduled_date is today
+        try {
+            const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+            await connection.execute(
+                `UPDATE cst_tournament_matches
+                 SET status = 'Live', updated_at = NOW()
+                 WHERE (scheduled_date = CURDATE() OR scheduled_date = DATE(DATE_ADD(NOW(), INTERVAL 330 MINUTE)) OR scheduled_date = ?)
+                   AND status NOT IN ('Completed', 'Cancelled', 'Live')`,
+                [todayIST]
+            );
+        } catch (autoLiveErr) {
+            console.error("Auto-update live tournament matches error:", autoLiveErr);
+        }
+
         const { searchParams } = new URL(request.url);
 
         const id = searchParams.get("id");

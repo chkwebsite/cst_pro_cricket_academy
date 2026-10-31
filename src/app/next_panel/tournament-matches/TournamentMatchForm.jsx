@@ -10,6 +10,19 @@ import GroundBookingForm from "../ground-bookings/GroundBookingForm";
 const ROUND_TYPES = ["League", "Round Robin", "Quarter Final", "Semi Final", "Final", "Qualifier", "Eliminator", "Custom"];
 const MATCH_STATUSES = ["Scheduled", "Live", "Completed", "Cancelled", "Postponed"];
 
+const isTodayMatch = (dateVal) => {
+    if (!dateVal) return false;
+    const d = String(dateVal).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    return d === todayIST || d === todayLocal;
+};
+
 const EMPTY_FORM = {
     tournament_id: "",
     match_id: "",
@@ -247,6 +260,9 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                 next.ground_id = "";
                 next.booking_id = "";
                 next.scheduled_time = "";
+                if (isTodayMatch(value) && (!prev.status || prev.status === "Scheduled")) {
+                    next.status = "Live";
+                }
             }
             if (name === "booking_id") {
                 const booking = bookings.find((item) => Number(item.id) === Number(value));
@@ -300,6 +316,11 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
         if (a !== null && a === b) return setError("Team A and Team B must be different");
         if (winner !== null && winner !== a && winner !== b) return setError("Winner must be Team A or Team B");
 
+        let submitStatus = formData.status;
+        if (isTodayMatch(formData.scheduled_date) && submitStatus === "Scheduled") {
+            submitStatus = "Live";
+        }
+
         try {
             setLoading(true);
             setError("");
@@ -319,7 +340,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     scheduled_time: formData.scheduled_time || null,
                     ground_id: optionalId(formData.ground_id),
                     booking_id: optionalId(formData.booking_id),
-                    status: formData.status,
+                    status: submitStatus,
                     winner_team_id: winner,
                 }),
             });

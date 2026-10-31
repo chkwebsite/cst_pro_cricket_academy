@@ -11,6 +11,19 @@ import GroundBookingForm from "../ground-bookings/GroundBookingForm";
 const MATCH_TYPES = ["Practice", "Friendly", "League", "Tournament", "Knockout"];
 const MATCH_STATUSES = ["Scheduled", "Live", "Completed", "Cancelled", "Postponed"];
 
+const isTodayMatch = (dateVal) => {
+    if (!dateVal) return false;
+    const d = String(dateVal).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    return d === todayIST || d === todayLocal;
+};
+
 const EMPTY_FORM = {
     match_no: "",
     match_type: "Friendly",
@@ -221,11 +234,17 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                     tossWinner = Number(d.toss_winner_team_id) === Number(d.team_a_id) ? "A" : "B";
                 }
 
+                let initialStatus = d.status || "Scheduled";
+                const dateStr = d.match_date ? String(d.match_date).slice(0, 10) : "";
+                if (isTodayMatch(dateStr) && initialStatus === "Scheduled") {
+                    initialStatus = "Live";
+                }
+
                 setFormData({
                     match_no: d.match_no || "",
                     match_type: d.match_type || "Friendly",
-                    status: d.status || "Scheduled",
-                    match_date: d.match_date ? String(d.match_date).slice(0, 10) : "",
+                    status: initialStatus,
+                    match_date: dateStr,
                     match_time: d.booking_id && d.match_time ? String(d.match_time).slice(0, 5) : "",
                     team_a_id: d.team_a_id ?? "",
                     team_b_id: d.team_b_id ?? "",
@@ -269,6 +288,9 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                 next.ground_id = "";
                 next.booking_id = "";
                 next.match_time = "";
+                if (isTodayMatch(value) && (!prev.status || prev.status === "Scheduled")) {
+                    next.status = "Live";
+                }
             }
             if (name === "booking_id") {
                 const booking = bookings.find((item) => Number(item.id) === Number(value));
@@ -320,6 +342,11 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
         const tossWinnerTeamId =
             formData.toss_winner === "A" ? teamA : formData.toss_winner === "B" ? teamB : null;
 
+        let submitStatus = formData.status;
+        if (isTodayMatch(formData.match_date) && submitStatus === "Scheduled") {
+            submitStatus = "Live";
+        }
+
         try {
             setLoading(true);
             setError("");
@@ -330,7 +357,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                 body: JSON.stringify({
                     match_no: formData.match_no.trim() || null,
                     match_type: formData.match_type,
-                    status: formData.status,
+                    status: submitStatus,
                     match_date: formData.match_date,
                     match_time: formData.match_time || null,
                     team_a_id: teamA,

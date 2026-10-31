@@ -26,6 +26,31 @@ const formatDate = (value) => {
 // "18:30:00" -> "18:30"
 const formatTime = (value) => (value ? String(value).slice(0, 5) : "");
 
+const isTodayMatch = (dateStr) => {
+    if (!dateStr) return false;
+    const d = String(dateStr).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    return d === todayIST || d === todayLocal;
+};
+
+const getEffectiveStatus = (item) => {
+    const raw = String(item?.status || "").trim();
+    const lower = raw.toLowerCase();
+    if (lower === "completed" || lower === "cancelled") {
+        return raw || "Completed";
+    }
+    if (isTodayMatch(item?.match_date)) {
+        return "Live";
+    }
+    return raw || "Scheduled";
+};
+
 export default function MatchesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -232,7 +257,8 @@ export default function MatchesPage() {
                                 </thead>
                                 <tbody>
                                     {pagedMatches.map((item, idx) => {
-                                        const closed = item.status === "Completed" || item.status === "Cancelled";
+                                        const effStatus = getEffectiveStatus(item);
+                                        const closed = effStatus === "Completed" || effStatus === "Cancelled";
                                         return (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
@@ -291,8 +317,9 @@ export default function MatchesPage() {
                                                     )}
                                                 </td>
                                                 <td>
-                                                    <span className={`badge ${STATUS_BADGE[item.status] || "bg-secondary"}`}>
-                                                        {item.status}
+                                                    <span className={`badge ${STATUS_BADGE[effStatus] || "bg-secondary"} ${effStatus === 'Live' ? 'd-inline-flex align-items-center gap-1' : ''}`}>
+                                                        {effStatus === 'Live' && <span className="spinner-grow spinner-grow-sm" style={{ width: "6px", height: "6px" }} />}
+                                                        {effStatus}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -305,7 +332,7 @@ export default function MatchesPage() {
                                                         >
                                                             <Trophy size={16} />
                                                         </Link>
-                                                        {item.status === "Cancelled" ? (
+                                                        {effStatus === "Cancelled" ? (
                                                             <button
                                                                 type="button"
                                                                 className="btn btn-outline-secondary"
@@ -329,7 +356,7 @@ export default function MatchesPage() {
                                                             className="btn btn-outline-danger"
                                                             onClick={() => handleCancel(item)}
                                                             disabled={closed}
-                                                            title={closed ? `A ${item.status.toLowerCase()} match cannot be cancelled` : "Cancel match"}
+                                                            title={closed ? `A ${effStatus.toLowerCase()} match cannot be cancelled` : "Cancel match"}
                                                             aria-label="Cancel match"
                                                         >
                                                             <Ban size={16} />

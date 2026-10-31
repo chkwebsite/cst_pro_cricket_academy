@@ -26,6 +26,31 @@ const formatDate = (value) => {
 };
 const formatTime = (value) => (value ? String(value).slice(0, 5) : "");
 
+const isTodayMatch = (dateStr) => {
+    if (!dateStr) return false;
+    const d = String(dateStr).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    return d === todayIST || d === todayLocal;
+};
+
+const getEffectiveStatus = (item) => {
+    const raw = String(item?.status || "").trim();
+    const lower = raw.toLowerCase();
+    if (lower === "completed" || lower === "cancelled") {
+        return raw || "Completed";
+    }
+    if (isTodayMatch(item?.scheduled_date || item?.match_date)) {
+        return "Live";
+    }
+    return raw || "Scheduled";
+};
+
 export default function TournamentMatchesPage() {
     const me = useCurrentUser();
     const { tournaments } = useTournamentOptions(me);
@@ -241,7 +266,15 @@ export default function TournamentMatchesPage() {
                                             </td>
                                             <td>{item.winner_team_name || "—"}</td>
                                             <td>
-                                                <span className={`badge ${STATUS_BADGE[item.status] || "bg-secondary"}`}>{item.status}</span>
+                                                {(() => {
+                                                    const effStatus = getEffectiveStatus(item);
+                                                    return (
+                                                        <span className={`badge ${STATUS_BADGE[effStatus] || "bg-secondary"} ${effStatus === 'Live' ? 'd-inline-flex align-items-center gap-1' : ''}`}>
+                                                            {effStatus === 'Live' && <span className="spinner-grow spinner-grow-sm" style={{ width: "6px", height: "6px" }} />}
+                                                            {effStatus}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
                                             <td>
                                                 <div className="d-flex justify-content-start gap-2">

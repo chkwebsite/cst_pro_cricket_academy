@@ -31,6 +31,31 @@ import {
     oversToBalls,
 } from "./cricketHelpers";
 
+const isTodayMatch = (dateStr) => {
+    if (!dateStr) return false;
+    const d = String(dateStr).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    return d === todayIST || d === todayLocal;
+};
+
+const getEffectiveStatus = (m) => {
+    const raw = String(m?.status || "").trim();
+    const lower = raw.toLowerCase();
+    if (lower === "completed" || lower === "cancelled") {
+        return raw || "Completed";
+    }
+    if (isTodayMatch(m?.match_date)) {
+        return "Live";
+    }
+    return raw || "Scheduled";
+};
+
 export default function MatchCenterView({ initialMatchId = null }) {
     const [matches, setMatches] = useState([]);
     const [selectedMatchId, setSelectedMatchId] = useState(initialMatchId ? String(initialMatchId) : "");
@@ -276,11 +301,14 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                     onChange={(e) => setSelectedMatchId(e.target.value)}
                                 >
                                     <option value="">Select a Match...</option>
-                                    {matches.map((m) => (
-                                        <option key={m.id} value={m.id}>
-                                            {m.match_no ? `Match ${m.match_no}` : `Match #${m.id}`}: {m.team_a_name} vs {m.team_b_name}
-                                        </option>
-                                    ))}
+                                    {matches.map((m) => {
+                                        const eff = getEffectiveStatus(m);
+                                        return (
+                                            <option key={m.id} value={m.id}>
+                                                {m.match_no ? `Match ${m.match_no}` : `Match #${m.id}`}: {m.team_a_name} vs {m.team_b_name} {eff === "Live" ? "🔴 (Live)" : `(${eff})`}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                                 <button
                                     type="button"
@@ -307,36 +335,43 @@ export default function MatchCenterView({ initialMatchId = null }) {
                 )}
 
                 {/* Match Details Banner */}
-                {matchDetails && (
-                    <div className="col-12">
-                        <div className="card border-0 rounded-4 shadow-sm p-4 bg-dark text-white">
-                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                                <div>
-                                    <div className="badge bg-primary px-3 py-1 mb-2">
-                                        {matchDetails.match_type} Match · {matchDetails.match_no ? `Match ${matchDetails.match_no}` : `#${matchDetails.id}`}
+                {matchDetails && (() => {
+                    const currentStatus = getEffectiveStatus(matchDetails);
+                    const isLive = currentStatus === "Live";
+                    const isCompleted = currentStatus === "Completed";
+
+                    return (
+                        <div className="col-12">
+                            <div className="card border-0 rounded-4 shadow-sm p-4 bg-dark text-white">
+                                <div className="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                                    <div>
+                                        <div className="badge bg-primary px-3 py-1 mb-2">
+                                            {matchDetails.match_type} Match · {matchDetails.match_no ? `Match ${matchDetails.match_no}` : `#${matchDetails.id}`}
+                                        </div>
+                                        <h2 className="fs-3 fw-bold mb-1">
+                                            {matchDetails.team_a_name} <span className="text-warning">vs</span> {matchDetails.team_b_name}
+                                        </h2>
+                                        <div className="text-secondary small d-flex flex-wrap gap-3">
+                                            <span>Date: {formatDate(matchDetails.match_date)}</span>
+                                            {matchDetails.ground_name && <span>Venue: {matchDetails.ground_name}</span>}
+                                            {matchDetails.toss_winner_team_name && (
+                                                <span>
+                                                    Toss: {matchDetails.toss_winner_team_name} ({matchDetails.toss_decision || "opted to bat"})
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                    <h2 className="fs-3 fw-bold mb-1">
-                                        {matchDetails.team_a_name} <span className="text-warning">vs</span> {matchDetails.team_b_name}
-                                    </h2>
-                                    <div className="text-secondary small d-flex flex-wrap gap-3">
-                                        <span>Date: {formatDate(matchDetails.match_date)}</span>
-                                        {matchDetails.ground_name && <span>Venue: {matchDetails.ground_name}</span>}
-                                        {matchDetails.toss_winner_team_name && (
-                                            <span>
-                                                Toss: {matchDetails.toss_winner_team_name} ({matchDetails.toss_decision || "opted to bat"})
-                                            </span>
-                                        )}
+                                    <div className="text-end">
+                                        <span className={`badge ${isLive ? "bg-danger d-inline-flex align-items-center gap-1" : isCompleted ? "bg-success" : "bg-secondary"} fs-6 px-3 py-2`}>
+                                            {isLive && <span className="spinner-grow spinner-grow-sm" style={{ width: "8px", height: "8px" }} />}
+                                            Status: {currentStatus}
+                                        </span>
                                     </div>
-                                </div>
-                                <div className="text-end">
-                                    <span className="badge bg-secondary fs-6 px-3 py-2">
-                                        Status: {matchDetails.status}
-                                    </span>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Innings Tabs */}
                 <div className="col-12">
