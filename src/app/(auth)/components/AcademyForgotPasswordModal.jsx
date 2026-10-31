@@ -108,6 +108,9 @@ export default function AcademyForgotPasswordModal({ isOpen, onClose, onSuccess 
             setUserName(data.user_name || "");
             setAppointmentNo(data.appointment_no || "");
             setTimeLeft(data.expires_in_seconds || 600);
+            if (data.otp_code) {
+                setOtpCode(String(data.otp_code));
+            }
             setStep(2);
             setSuccessMsg(data.message);
         } catch (err) {
@@ -356,14 +359,25 @@ export default function AcademyForgotPasswordModal({ isOpen, onClose, onSuccess 
                                     </div>
                                 </div>
 
-                                <div className="alert alert-info py-2 px-3 rounded-3 small mb-3">
-                                    <div className="d-flex align-items-start gap-2">
-                                        <Key size={16} className="text-primary flex-shrink-0 mt-1" />
-                                        <span>
-                                            Please ask your <strong>Branch Admin</strong> or <strong>Academy Admin</strong> to provide your 6-digit verification code.
-                                        </span>
+                                {otpCode ? (
+                                    <div className="alert alert-success py-2 px-3 rounded-3 small mb-3">
+                                        <div className="d-flex align-items-center gap-2">
+                                            <Key size={16} className="text-success flex-shrink-0" />
+                                            <span>
+                                                6-Digit verification code <strong>{otpCode}</strong> has been auto-filled! Click <strong>Confirm &amp; Proceed</strong> to continue.
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="alert alert-info py-2 px-3 rounded-3 small mb-3">
+                                        <div className="d-flex align-items-start gap-2">
+                                            <Key size={16} className="text-primary flex-shrink-0 mt-1" />
+                                            <span>
+                                                Please ask your <strong>Branch Admin</strong> or <strong>Academy Admin</strong> to provide your 6-digit verification code.
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="mb-3 text-center">
                                     <label className="form-label fw-semibold small text-dark mb-2">

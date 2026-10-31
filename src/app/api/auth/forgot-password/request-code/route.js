@@ -119,10 +119,11 @@ export async function POST(request) {
 
         return NextResponse.json({
             success: true,
-            message: `A 6-digit verification code has been generated for ${displayName}. It is valid for 10 minutes. Please obtain this code from your Branch Admin or Academy Admin to proceed.`,
+            message: `A 6-digit verification code has been generated for ${displayName} and auto-filled.`,
             user_id: user.id,
             user_name: displayName,
             appointment_no: user.appointment_no,
+            otp_code: otpCode,
             expires_in_seconds: 600,
         });
     } catch (error) {
