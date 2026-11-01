@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,11 +75,22 @@ export async function GET(request) {
     let connection;
 
     try {
-        connection = await pool.getConnection();
-        await ensurePublicUsersTableAndMenu(connection);
-
         const { searchParams } = new URL(request.url);
         const search = String(searchParams.get("search") || "").trim();
+
+        // Listing all users requires admin authorization; specific search (e.g. phone checkout check) is permitted
+        if (!search) {
+            const authUser = await getAuthUser(request);
+            if (!authUser) {
+                return NextResponse.json(
+                    { success: false, message: "Unauthorized. Authentication required to view public users list." },
+                    { status: 401 }
+                );
+            }
+        }
+
+        connection = await pool.getConnection();
+        await ensurePublicUsersTableAndMenu(connection);
         const status = searchParams.get("status");
         const page = Math.max(Number(searchParams.get("page") || 1), 1);
         const limit = Math.min(Math.max(Number(searchParams.get("limit") || 50), 1), 200);

@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 export async function GET(request) {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+        return NextResponse.json(
+            { success: false, message: "Unauthorized. Authentication required." },
+            { status: 401 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -113,6 +122,13 @@ export async function GET(request) {
 ===================================================== */
 
 export async function POST(request) {
+    const authUser = await getAuthUser(request);
+    if (!authUser || !authUser.isSuperAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Access denied. Only Super Admin can create roles." },
+            { status: 403 }
+        );
+    }
 
     const connection = await pool.getConnection();
 

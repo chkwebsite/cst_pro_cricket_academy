@@ -280,6 +280,10 @@ export async function GET(request) {
                 fs.paid_amount,
                 fs.balance_amount,
                 fs.status AS fee_status,
+                mt.match_no,
+                mt.match_date,
+                t.tournament_name,
+                t.start_date AS tournament_start_date,
                 u.first_name AS created_by_first_name,
                 u.last_name AS created_by_last_name,
                 pu.first_name,
@@ -295,6 +299,10 @@ export async function GET(request) {
                 ON mp.id = fs.match_player_id
              LEFT JOIN cst_tournament_team_players ttp
                 ON ttp.id = fs.tournament_team_player_id
+             LEFT JOIN cst_matches mt
+                ON mt.id = COALESCE(fs.match_id, mp.match_id)
+             LEFT JOIN cst_tournaments t
+                ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
              LEFT JOIN cst_users pu
                 ON pu.id = COALESCE(fs.user_id, mp.user_id, ttp.user_id)
              LEFT JOIN cst_outside_players op

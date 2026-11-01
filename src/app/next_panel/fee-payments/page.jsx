@@ -24,6 +24,23 @@ const formatDateTime = (value) => {
     return d.toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
+const formatDate = (value) => {
+    if (!value) return "";
+    const clean = String(value).slice(0, 10);
+    const parts = clean.split("-");
+    if (parts.length === 3 && parts[0].length === 4) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yy = d.getFullYear();
+        return `${dd}/${mm}/${yy}`;
+    }
+    return String(value);
+};
+
 const payer = (f) => {
     if (f.first_name || f.last_name) return `${f.first_name || ""} ${f.last_name || ""}`.trim();
     if (f.outside_player_name) return f.outside_player_name;
@@ -225,6 +242,11 @@ export default function FeePaymentsPage() {
                                                 <small className="text-muted d-block mt-1">
                                                     Fee #{item.fee_status_id} · ₹{money(item.paid_amount)} / ₹{money(item.fee_amount)} ({item.fee_status})
                                                 </small>
+                                                {(item.match_date || item.tournament_start_date) && (
+                                                    <small className="text-primary d-block mt-0.5" style={{ fontSize: "11.5px" }}>
+                                                        {item.match_date ? `Match: ${formatDate(item.match_date)}` : `Tournament: ${formatDate(item.tournament_start_date)}`}
+                                                    </small>
+                                                )}
                                             </td>
                                             <td>{payer(item)}</td>
                                             <td>

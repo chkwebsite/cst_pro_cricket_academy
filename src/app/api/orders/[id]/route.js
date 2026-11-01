@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 const VALID_FULFILLMENT_TYPES = ["Delivery", "Pickup"];
 
@@ -227,6 +228,14 @@ o.*,
 
 // PUT: Update an order
 export async function PUT(request, context) {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+        return NextResponse.json(
+            { success: false, message: "Unauthorized. Authentication required to update orders." },
+            { status: 401 }
+        );
+    }
+
     let connection;
 
     try {
@@ -489,6 +498,14 @@ export async function PUT(request, context) {
 
 // DELETE: Delete an order
 export async function DELETE(request, context) {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Unauthorized. Admin authorization required to delete orders." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
 import crypto from "crypto";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 // GET: All orders with filters
 export async function GET(request) {
@@ -45,6 +46,25 @@ SELECT
     `;
 
         const values = [];
+
+        // If not a customer looking up their specific order, require admin auth & scope
+        const isSpecificLookup = Boolean(order_no || customer_user_id || customer_email || public_user_id);
+        if (!isSpecificLookup) {
+            const authUser = await getAuthUser(request);
+            if (!authUser) {
+                return NextResponse.json(
+                    { success: false, message: "Unauthorized. Authentication required to view full orders list." },
+                    { status: 401 }
+                );
+            }
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND o.fulfillment_branch_id = ?";
+                values.push(authUser.branch_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND o.academy_id = ?";
+                values.push(authUser.academy_id);
+            }
+        }
 
         // ID filters
         if (academy_id !== null && academy_id !== "" && academy_id !== undefined) {

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import fs from "fs/promises";
 import path from "path";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 // =====================================================
 // GET SINGLE USER
@@ -12,6 +13,14 @@ export async function GET(
     request,
     { params }
 ) {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+        return NextResponse.json(
+            { success: false, message: "Unauthorized. Authentication required." },
+            { status: 401 }
+        );
+    }
+
     let connection;
 
     try {
@@ -115,6 +124,26 @@ export async function GET(
 
 export async function PUT(request, { params }) {
 
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+        return NextResponse.json(
+            { success: false, message: "Unauthorized. Authentication required." },
+            { status: 401 }
+        );
+    }
+
+    const { id } = await params;
+    const userId = Number(id);
+
+    const isSelf = Number(authUser.id) === userId;
+    const isAdmin = authUser.isSuperAdmin || authUser.isAcademyAdmin || authUser.isBranchAdmin;
+    if (!isSelf && !isAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Access denied. Insufficient privileges to update this user." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     let transactionStarted = false;
@@ -127,15 +156,6 @@ export async function PUT(request, { params }) {
 
 
     try {
-
-        // =====================================================
-        // GET USER ID
-        // =====================================================
-
-        const { id } = await params;
-
-        const userId = Number(id);
-
 
         if (!userId || Number.isNaN(userId)) {
 

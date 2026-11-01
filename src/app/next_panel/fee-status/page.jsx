@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, Edit, Eye, Search, SearchSlash, Trash2, Wallet } from "lucide-react";
+import { Calendar, CreditCard, Edit, Eye, Search, SearchSlash, Trash2, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
@@ -17,6 +17,69 @@ const STATUS_BADGE = {
 };
 
 const money = (v) => Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const formatDate = (value) => {
+    if (!value) return "";
+    const clean = String(value).slice(0, 10);
+    const parts = clean.split("-");
+    if (parts.length === 3 && parts[0].length === 4) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yy = d.getFullYear();
+        return `${dd}/${mm}/${yy}`;
+    }
+    return String(value);
+};
+
+const getFeeDateInfo = (f) => {
+    if (f.match_date) {
+        return {
+            date: formatDate(f.match_date),
+            time: f.match_time ? String(f.match_time).slice(0, 5) : null,
+            label: "Match Date",
+            isMatch: true,
+        };
+    }
+    if (f.fee_type === "Tournament Player" || f.fee_type === "Tournament Team") {
+        if (f.tournament_start_date) {
+            const start = formatDate(f.tournament_start_date);
+            const end = formatDate(f.tournament_end_date);
+            const range = end && end !== start ? `${start} - ${end}` : start;
+            return {
+                date: range,
+                time: null,
+                label: "Tournament Date",
+                isMatch: false,
+            };
+        }
+    }
+    if (f.booking_date) {
+        return {
+            date: formatDate(f.booking_date),
+            time: null,
+            label: "Booking Date",
+            isMatch: false,
+        };
+    }
+    if (f.created_at) {
+        return {
+            date: formatDate(f.created_at),
+            time: null,
+            label: "Date",
+            isMatch: false,
+        };
+    }
+    return {
+        date: "—",
+        time: null,
+        label: "",
+        isMatch: false,
+    };
+};
 
 // What the fee is for, as one readable line
 const reference = (f) => {
@@ -133,11 +196,21 @@ export default function FeeStatusPage() {
         : fees;
 
     const visible = needle
-        ? rawVisible.filter((f) =>
-              [payer(f), reference(f), f.academy_name, f.branch_name, f.remarks]
+        ? rawVisible.filter((f) => {
+              const dateInfo = getFeeDateInfo(f);
+              return [
+                  payer(f),
+                  reference(f),
+                  dateInfo.date,
+                  f.match_date,
+                  f.tournament_start_date,
+                  f.academy_name,
+                  f.branch_name,
+                  f.remarks,
+              ]
                   .filter(Boolean)
-                  .some((v) => String(v).toLowerCase().includes(needle))
-          )
+                  .some((v) => String(v).toLowerCase().includes(needle));
+          })
         : rawVisible;
 
     const totalPages = Math.ceil(visible.length / PAGE_SIZE) || 1;
@@ -251,6 +324,7 @@ export default function FeeStatusPage() {
                                         <th>#</th>
                                         <th>Academy</th>
                                         <th>Fee For</th>
+                                        <th>Match Date</th>
                                         <th>Payer</th>
                                         <th className="text-end">Fee</th>
                                         <th className="text-end">Paid</th>
@@ -263,6 +337,7 @@ export default function FeeStatusPage() {
                                     {pagedItems.map((item, idx) => {
                                         const due = Number(item.fee_amount || 0) - Number(item.paid_amount || 0);
                                         const canPay = isPlayer && due > 0 && item.status !== "Paid" && item.status !== "Cancelled";
+                                        const dateInfo = getFeeDateInfo(item);
                                         return (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
@@ -273,6 +348,25 @@ export default function FeeStatusPage() {
                                                 <td>
                                                     <span className="badge text-bg-light border">{item.fee_type}</span>
                                                     <small className="text-muted d-block mt-1">{reference(item)}</small>
+                                                </td>
+                                                <td>
+                                                    <div className="d-flex align-items-center gap-1 text-nowrap">
+                                                        <Calendar size={14} className={dateInfo.isMatch ? "text-primary" : "text-secondary"} />
+                                                        <span className="fw-medium">{dateInfo.date}</span>
+                                                        {dateInfo.time && <small className="text-muted ms-1">({dateInfo.time})</small>}
+                                                    </div>
+                                                    {dateInfo.label && (
+                                                        <small
+                                                            className={`badge ${
+                                                                dateInfo.isMatch
+                                                                    ? "bg-primary-subtle text-primary border border-primary-subtle"
+                                                                    : "bg-light text-secondary border"
+                                                            } mt-1`}
+                                                            style={{ fontSize: "10.5px" }}
+                                                        >
+                                                            {dateInfo.label}
+                                                        </small>
+                                                    )}
                                                 </td>
                                                 <td>{payer(item)}</td>
                                                 <td className="text-end">₹{money(item.fee_amount)}</td>
@@ -313,7 +407,7 @@ export default function FeeStatusPage() {
                                 </tbody>
                                 <tfoot>
                                     <tr className="fw-semibold">
-                                        <td colSpan={4} className="text-end">Total (excluding cancelled)</td>
+                                        <td colSpan={5} className="text-end">Total (excluding cancelled)</td>
                                         <td className="text-end">₹{money(totals.fee)}</td>
                                         <td className="text-end">₹{money(totals.paid)}</td>
                                         <td className="text-end">₹{money(totals.fee - totals.paid)}</td>

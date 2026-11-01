@@ -56,6 +56,23 @@ const calcStatus = (fee, paid) => {
 
 const optionalId = (value) => (String(value).trim() === "" ? null : Number(value));
 
+const formatDate = (value) => {
+    if (!value) return "";
+    const clean = String(value).slice(0, 10);
+    const parts = clean.split("-");
+    if (parts.length === 3 && parts[0].length === 4) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yy = d.getFullYear();
+        return `${dd}/${mm}/${yy}`;
+    }
+    return String(value);
+};
+
 export default function FeeStatusForm({ id = null }) {
     const router = useRouter();
     const isEdit = Boolean(id);
@@ -697,7 +714,7 @@ export default function FeeStatusForm({ id = null }) {
                                                 <option value="">Choose Match</option>
                                                 {matches.map((m) => (
                                                     <option key={m.id} value={m.id}>
-                                                        {m.match_no || `Match #${m.id}`} — {m.team_a_name} vs {m.team_b_name}
+                                                        {m.match_no || `Match #${m.id}`} — {m.team_a_name} vs {m.team_b_name} {m.match_date ? `(${formatDate(m.match_date)})` : ""}
                                                     </option>
                                                 ))}
                                             </select>

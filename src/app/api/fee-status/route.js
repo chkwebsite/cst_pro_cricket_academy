@@ -356,8 +356,13 @@ export async function GET(request) {
                 a.academy_name,
                 b.branch_name,
                 t.tournament_name,
+                t.start_date AS tournament_start_date,
+                t.end_date AS tournament_end_date,
                 mt.match_no,
                 mt.match_date,
+                mt.match_time,
+                mt.match_type,
+                gb.booking_date,
                 g.ground_name,
                 COALESCE(u.first_name, ttp_u.first_name, mp_u.first_name) AS first_name,
                 COALESCE(u.last_name, ttp_u.last_name, mp_u.last_name) AS last_name,
@@ -371,10 +376,14 @@ export async function GET(request) {
                 ON a.id = fs.academy_id
              LEFT JOIN cst_branch b
                 ON b.id = fs.branch_id
+             LEFT JOIN cst_tournament_team_players ttp
+                ON ttp.id = fs.tournament_team_player_id
+             LEFT JOIN cst_match_players mp
+                ON mp.id = fs.match_player_id
              LEFT JOIN cst_tournaments t
-                ON t.id = fs.tournament_id
+                ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
              LEFT JOIN cst_matches mt
-                ON mt.id = fs.match_id
+                ON mt.id = COALESCE(fs.match_id, mp.match_id)
              LEFT JOIN cst_ground_bookings gb
                 ON gb.id = fs.ground_booking_id
              LEFT JOIN cst_ground g
@@ -387,8 +396,6 @@ export async function GET(request) {
                 ON tt.id = fs.tournament_team_id
              LEFT JOIN cst_teams tt_team
                 ON tt_team.id = tt.team_id
-             LEFT JOIN cst_tournament_team_players ttp
-                ON ttp.id = fs.tournament_team_player_id
              LEFT JOIN cst_users ttp_u
                 ON ttp_u.id = ttp.user_id
              LEFT JOIN cst_outside_players ttp_op
@@ -397,8 +404,6 @@ export async function GET(request) {
                 ON mt_team.id = fs.match_team_id
              LEFT JOIN cst_teams mt_t
                 ON mt_t.id = mt_team.team_id
-             LEFT JOIN cst_match_players mp
-                ON mp.id = fs.match_player_id
              LEFT JOIN cst_users mp_u
                 ON mp_u.id = mp.user_id
              LEFT JOIN cst_outside_players mp_op

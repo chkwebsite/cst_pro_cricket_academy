@@ -148,8 +148,14 @@ export async function GET(request, context) {
                 a.academy_name,
                 b.branch_name,
                 t.tournament_name,
+                t.start_date AS tournament_start_date,
+                t.end_date AS tournament_end_date,
                 m.match_no,
                 m.match_date,
+                m.match_time,
+                m.match_type,
+                gb.booking_date,
+                g.ground_name,
                 COALESCE(u.first_name, ttp_u.first_name, mp_u.first_name) AS first_name,
                 COALESCE(u.last_name, ttp_u.last_name, mp_u.last_name) AS last_name,
                 COALESCE(op.player_name, ttp_op.player_name, mp_op.player_name) AS outside_player_name,
@@ -160,10 +166,18 @@ export async function GET(request, context) {
                 ON a.id = fs.academy_id
              LEFT JOIN cst_branch b
                 ON b.id = fs.branch_id
+             LEFT JOIN cst_tournament_team_players ttp
+                ON ttp.id = fs.tournament_team_player_id
+             LEFT JOIN cst_match_players mp
+                ON mp.id = fs.match_player_id
              LEFT JOIN cst_tournaments t
-                ON t.id = fs.tournament_id
+                ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
              LEFT JOIN cst_matches m
-                ON m.id = fs.match_id
+                ON m.id = COALESCE(fs.match_id, mp.match_id)
+             LEFT JOIN cst_ground_bookings gb
+                ON gb.id = fs.ground_booking_id
+             LEFT JOIN cst_ground g
+                ON g.id = gb.ground_id
              LEFT JOIN cst_users u
                 ON u.id = fs.user_id
              LEFT JOIN cst_outside_players op

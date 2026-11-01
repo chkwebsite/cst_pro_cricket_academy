@@ -12,6 +12,23 @@ const STATUS_BADGE = {
 
 const money = (v) => Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const formatDate = (value) => {
+    if (!value) return "";
+    const clean = String(value).slice(0, 10);
+    const parts = clean.split("-");
+    if (parts.length === 3 && parts[0].length === 4) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yy = d.getFullYear();
+        return `${dd}/${mm}/${yy}`;
+    }
+    return String(value);
+};
+
 export default async function FeeStatusDetailPage({ params }) {
     const { id } = await params;
 
@@ -29,22 +46,28 @@ export default async function FeeStatusDetailPage({ params }) {
                 a.academy_name,
                 b.branch_name,
                 t.tournament_name,
+                t.start_date AS tournament_start_date,
+                t.end_date AS tournament_end_date,
                 mt.match_no,
                 mt.match_date,
+                mt.match_time,
                 mt.match_type,
                 team_a.team_name AS team_a_name,
                 team_b.team_name AS team_b_name,
                 mteam_t.team_name AS match_team_name,
                 tt_team.team_name AS tournament_team_name,
+                gb.booking_date,
                 g.ground_name,
-                u.first_name,
-                u.last_name,
-                op.player_name AS outside_player_name
+                COALESCE(u.first_name, ttp_u.first_name, mp_u.first_name) AS first_name,
+                COALESCE(u.last_name, ttp_u.last_name, mp_u.last_name) AS last_name,
+                COALESCE(op.player_name, ttp_op.player_name, mp_op.player_name) AS outside_player_name
             FROM cst_fee_status fs
             LEFT JOIN cst_academy a ON a.id = fs.academy_id
             LEFT JOIN cst_branch b ON b.id = fs.branch_id
-            LEFT JOIN cst_tournaments t ON t.id = fs.tournament_id
-            LEFT JOIN cst_matches mt ON mt.id = fs.match_id
+            LEFT JOIN cst_tournament_team_players ttp ON ttp.id = fs.tournament_team_player_id
+            LEFT JOIN cst_match_players mp ON mp.id = fs.match_player_id
+            LEFT JOIN cst_tournaments t ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
+            LEFT JOIN cst_matches mt ON mt.id = COALESCE(fs.match_id, mp.match_id)
             LEFT JOIN cst_teams team_a ON team_a.id = mt.team_a_id
             LEFT JOIN cst_teams team_b ON team_b.id = mt.team_b_id
             LEFT JOIN cst_match_teams mteam ON mteam.id = fs.match_team_id
@@ -54,7 +77,11 @@ export default async function FeeStatusDetailPage({ params }) {
             LEFT JOIN cst_ground_bookings gb ON gb.id = fs.ground_booking_id
             LEFT JOIN cst_ground g ON g.id = gb.ground_id
             LEFT JOIN cst_users u ON u.id = fs.user_id
+            LEFT JOIN cst_users ttp_u ON ttp_u.id = ttp.user_id
+            LEFT JOIN cst_users mp_u ON mp_u.id = mp.user_id
             LEFT JOIN cst_outside_players op ON op.id = fs.outside_player_id
+            LEFT JOIN cst_outside_players ttp_op ON ttp_op.id = ttp.outside_player_id
+            LEFT JOIN cst_outside_players mp_op ON mp_op.id = mp.outside_player_id
             WHERE fs.id = ?
             LIMIT 1
             `,
@@ -74,18 +101,29 @@ export default async function FeeStatusDetailPage({ params }) {
     const due = Number(fee.fee_amount || 0) - Number(fee.paid_amount || 0);
     const payerName = [fee.first_name, fee.last_name].filter(Boolean).join(" ") || fee.outside_player_name || fee.tournament_team_name || fee.match_team_name || "—";
     const fixtureTeams = [fee.team_a_name, fee.team_b_name].filter(Boolean).join(" vs ");
+    const matchTimeStr = fee.match_time ? String(fee.match_time).slice(0, 5) : null;
+    const tournamentDateStr = fee.tournament_start_date
+        ? (fee.tournament_end_date && fee.tournament_end_date !== fee.tournament_start_date
+            ? `${formatDate(fee.tournament_start_date)} - ${formatDate(fee.tournament_end_date)}`
+            : formatDate(fee.tournament_start_date))
+        : null;
 
     const refs = [
-        ["Tournament", fee.tournament_name || fee.tournament_id],
-        ["Tournament Team", fee.tournament_team_name ? `${fee.tournament_team_name} (#${fee.tournament_team_id})` : fee.tournament_team_id],
-        ["Tournament Player ID", fee.tournament_team_player_id],
+        ["Match Date", fee.match_date ? formatDate(fee.match_date) : null],
+        ["Match Time", matchTimeStr],
         ["Match", fee.match_no || fixtureTeams || (fee.match_id ? "Match details unavailable" : null)],
         ["Fixture", fixtureTeams],
         ["Match Type", fee.match_type],
+        ["Tournament", fee.tournament_name || fee.tournament_id],
+        ["Tournament Date", tournamentDateStr],
+        ["Tournament Team", fee.tournament_team_name ? `${fee.tournament_team_name} (#${fee.tournament_team_id})` : fee.tournament_team_id],
+        ["Tournament Player ID", fee.tournament_team_player_id],
         ["Match Team", fee.match_team_name ? `${fee.match_team_name} (#${fee.match_team_id})` : fee.match_team_id],
         ["Match Player ID", fee.match_player_id],
+        ["Booking Date", fee.booking_date ? formatDate(fee.booking_date) : null],
         ["Ground", fee.ground_name],
         ["Ground Booking ID", fee.ground_booking_id],
+        ["Created At", formatDate(fee.created_at)],
     ].filter(([, v]) => v !== null && v !== undefined && v !== "");
 
     return (

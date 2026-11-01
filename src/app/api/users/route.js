@@ -5,6 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 import pool from "@/app/components/lib/db";
 import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // =====================================================
@@ -16,6 +17,14 @@ export async function GET(request) {
     const connection = await pool.getConnection();
 
     try {
+        const authUser = await getAuthUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
         await ensurePlayerAccess(connection);
 
         const { searchParams } = new URL(request.url);
@@ -63,31 +72,33 @@ u.id,
         const values = [];
 
 
-        // =====================================================
-        // ACADEMY FILTER
-        // =====================================================
-
-        if (academy_id) {
-
-            sql += `
-                AND u.academy_id = ?
-    `;
-
-            values.push(academy_id);
-        }
-
-
-        // =====================================================
-        // BRANCH FILTER
-        // =====================================================
-
-        if (branch_id) {
-
-            sql += `
-                AND u.branch_id = ?
-    `;
-
-            values.push(branch_id);
+        // Role-based Academy & Branch Scoping (RBAC & IDOR Protection)
+        if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND u.branch_id = ? AND u.academy_id = ?";
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND u.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND u.branch_id = ?";
+                values.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND u.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND u.branch_id = ?";
+                values.push(branch_id);
+            }
+        } else {
+            if (academy_id) {
+                sql += " AND u.academy_id = ?";
+                values.push(academy_id);
+            }
+            if (branch_id) {
+                sql += " AND u.branch_id = ?";
+                values.push(branch_id);
+            }
         }
 
 
@@ -221,6 +232,14 @@ u.id,
 
 
 export async function POST(request) {
+
+    const authUser = await getAuthUser(request);
+    if (!authUser || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Access denied. Administrator authorization required." },
+            { status: 403 }
+        );
+    }
 
     const connection = await pool.getConnection();
 
