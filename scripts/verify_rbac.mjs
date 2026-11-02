@@ -49,18 +49,34 @@ async function main() {
         { role: ROLES.ACCOUNTANT, path: "/next_panel/academies", expected: false },
         { role: ROLES.ACCOUNTANT, path: "/next_panel/menu", expected: false },
 
-        // Coach: only batches, batch players, attendance, fee dues, dashboard
-        { role: ROLES.COACH, path: "/next_panel/dashboard", expected: true },
-        { role: ROLES.COACH, path: "/next_panel/batches", expected: true },
-        { role: ROLES.COACH, path: "/next_panel/batch-players", expected: true },
-        { role: ROLES.COACH, path: "/next_panel/player-attendance", expected: true },
-        { role: ROLES.COACH, path: "/next_panel/fee-status", expected: true },
-        { role: ROLES.COACH, path: "/next_panel/player-program-fees", expected: true },
-        { role: ROLES.COACH, path: "/next_panel/staff", expected: false },
-        { role: ROLES.COACH, path: "/next_panel/admission-players", expected: false },
-        { role: ROLES.COACH, path: "/next_panel/academies", expected: false },
-        { role: ROLES.COACH, path: "/next_panel/branches", expected: false },
-        { role: ROLES.COACH, path: "/next_panel/menu", expected: false },
+        // Management: operational access, no system menu/roles
+        { role: ROLES.MANAGEMENT, path: "/next_panel/dashboard", expected: true },
+        { role: ROLES.MANAGEMENT, path: "/next_panel/batches", expected: true },
+        { role: ROLES.MANAGEMENT, path: "/next_panel/student-enquiries", expected: true },
+        { role: ROLES.MANAGEMENT, path: "/next_panel/matches", expected: true },
+        { role: ROLES.MANAGEMENT, path: "/next_panel/menu", expected: false },
+        { role: ROLES.MANAGEMENT, path: "/next_panel/permissions", expected: false },
+        { role: ROLES.MANAGEMENT, path: "/next_panel/academies", expected: false },
+
+        // Staff: branch operational, attendance, enquiries
+        { role: ROLES.STAFF, path: "/next_panel/dashboard", expected: true },
+        { role: ROLES.STAFF, path: "/next_panel/batches", expected: true },
+        { role: ROLES.STAFF, path: "/next_panel/player-attendance", expected: true },
+        { role: ROLES.STAFF, path: "/next_panel/student-enquiries", expected: true },
+        { role: ROLES.STAFF, path: "/next_panel/grounds", expected: true },
+        { role: ROLES.STAFF, path: "/next_panel/fee-status", expected: false },
+        { role: ROLES.STAFF, path: "/next_panel/staff", expected: false },
+        { role: ROLES.STAFF, path: "/next_panel/menu", expected: false },
+
+        // Player: only dashboard, player-dashboard, my-orders
+        { role: ROLES.PLAYER, path: "/next_panel/dashboard", expected: true },
+        { role: ROLES.PLAYER, path: "/next_panel/player-dashboard", expected: true },
+        { role: ROLES.PLAYER, path: "/next_panel/orders", expected: true },
+        { role: ROLES.PLAYER, path: "/next_panel/batches", expected: false },
+        { role: ROLES.PLAYER, path: "/next_panel/admission-players", expected: false },
+        { role: ROLES.PLAYER, path: "/next_panel/fee-status", expected: false },
+        { role: ROLES.PLAYER, path: "/next_panel/menu", expected: false },
+        { role: ROLES.PLAYER, path: "/next_panel/staff", expected: false },
     ];
 
     let rbacPassed = 0;
@@ -119,7 +135,7 @@ async function main() {
     // Verify coach fee dues filter: only 'Pending' and 'Partial'
     if (coachProgramIds.length > 0) {
         const [fees] = await pool.query(
-            `SELECT id, user_program_id, month, year, amount, payment_status 
+            `SELECT id, user_program_id, fee_month, total_amount, paid_amount, due_amount, payment_status 
              FROM cst_player_program_fees 
              WHERE user_program_id IN (?) AND payment_status IN ('Pending', 'Partial')`,
             [coachProgramIds]

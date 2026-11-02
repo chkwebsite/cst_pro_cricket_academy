@@ -107,10 +107,16 @@ const ADMIN_ONLY_APIS = [
     "/api/outside-players",
     "/api/staff",
     "/api/student-enquiries-flowup",
+    "/api/individual-training",
+    "/api/batches",
+    "/api/batch-coaches",
+    "/api/batch-players",
+    "/api/player-attendance",
 ];
 
 // Resource APIs where GET is public/viewable, but modifications (POST, PUT, PATCH, DELETE) require admin auth
 const PROTECTED_MUTATIONS = [
+    "/api/student-enquiries",
     "/api/matches",
     "/api/match-innings",
     "/api/match-players",
@@ -137,10 +143,6 @@ const PROTECTED_MUTATIONS = [
     "/api/age-groups",
     "/api/teams",
     "/api/team-players",
-    "/api/batches",
-    "/api/batch-coaches",
-    "/api/batch-players",
-    "/api/player-attendance",
     "/api/public-users",
 ];
 
@@ -205,6 +207,32 @@ export function proxy(request) {
                             message: "Unauthorized. Administrator authentication required.",
                         },
                         { status: 401 }
+                    )
+                );
+            }
+
+            const userType = String(payload?.user_type || payload?.role || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            const PLAYER_RESTRICTED = [
+                "/api/users",
+                "/api/roles",
+                "/api/permissions",
+                "/api/role-permissions",
+                "/api/menu-permissions",
+                "/api/user-roles",
+                "/api/user-branches",
+                "/api/staff",
+                "/api/student-enquiries",
+                "/api/student-enquiries-flowup",
+                "/api/password-resets",
+            ];
+            if (userType.includes("player") && PLAYER_RESTRICTED.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+                return applySecurityHeaders(
+                    NextResponse.json(
+                        {
+                            success: false,
+                            message: "Forbidden. Players cannot access administrative management endpoints.",
+                        },
+                        { status: 403 }
                     )
                 );
             }
@@ -334,6 +362,61 @@ export function proxy(request) {
                 `${PANEL_PREFIX}/player-program-fees`,
             ];
             const isAllowed = allowedForCoach.some((a) => matchesMenuPath(pathname, a));
+            if (!isAllowed) {
+                return applySecurityHeaders(NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url)));
+            }
+            return applySecurityHeaders(NextResponse.next());
+        }
+
+        // Management
+        if (userType.includes("management")) {
+            const forbiddenForManagement = [
+                `${PANEL_PREFIX}/menu`,
+                `${PANEL_PREFIX}/menu-permissions`,
+                `${PANEL_PREFIX}/menu-management`,
+                `${PANEL_PREFIX}/permissions`,
+                `${PANEL_PREFIX}/roles`,
+                `${PANEL_PREFIX}/role-permissions`,
+                `${PANEL_PREFIX}/user-roles`,
+                `${PANEL_PREFIX}/academies`,
+            ];
+            const isForbidden = forbiddenForManagement.some((f) => matchesMenuPath(pathname, f));
+            if (isForbidden) {
+                return applySecurityHeaders(NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url)));
+            }
+            return applySecurityHeaders(NextResponse.next());
+        }
+
+        // Staff / Ground Staff
+        if (userType.includes("staff")) {
+            const allowedForStaff = [
+                `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/batches`,
+                `${PANEL_PREFIX}/batch-players`,
+                `${PANEL_PREFIX}/player-attendance`,
+                `${PANEL_PREFIX}/student-enquiries`,
+                `${PANEL_PREFIX}/student-enquiries-flowup`,
+                `${PANEL_PREFIX}/grounds`,
+                `${PANEL_PREFIX}/ground-bookings`,
+                `${PANEL_PREFIX}/ground-slots`,
+                `${PANEL_PREFIX}/ground-availability`,
+            ];
+            const isAllowed = allowedForStaff.some((a) => matchesMenuPath(pathname, a));
+            if (!isAllowed) {
+                return applySecurityHeaders(NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url)));
+            }
+            return applySecurityHeaders(NextResponse.next());
+        }
+
+        // Player
+        if (userType.includes("player")) {
+            const allowedForPlayer = [
+                `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/player-dashboard`,
+                `${PANEL_PREFIX}/my-orders`,
+                `${PANEL_PREFIX}/orders`,
+            ];
+            const isAllowed = allowedForPlayer.some((a) => matchesMenuPath(pathname, a));
             if (!isAllowed) {
                 return applySecurityHeaders(NextResponse.redirect(new URL(NO_PERMISSION_PATH, request.url)));
             }

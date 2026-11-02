@@ -196,10 +196,11 @@ export async function POST(request) {
         }
 
         // Check user
+        let userAppointmentNo = body.appointment_no || null;
         if (user_id) {
             const [userRows] = await connection.query(
                 `
-                SELECT id
+                SELECT id, appointment_no
                 FROM cst_users
                 WHERE id = ?
                 LIMIT 1
@@ -216,6 +217,13 @@ export async function POST(request) {
                     { status: 404 }
                 );
             }
+            if (!userAppointmentNo) {
+                userAppointmentNo = userRows[0].appointment_no;
+            }
+        }
+
+        if (!userAppointmentNo) {
+            userAppointmentNo = `UB-${user_id || "0"}-${branch_id}`;
         }
 
         // Check branch
@@ -270,14 +278,16 @@ export async function POST(request) {
             (
                 user_id,
                 branch_id,
+                appointment_no,
                 is_primary,
                 status
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             `,
             [
                 user_id || null,
                 branch_id,
+                userAppointmentNo,
                 is_primary ? 1 : 0,
                 status ? 1 : 0,
             ]

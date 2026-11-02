@@ -275,7 +275,7 @@ export default function FeePaymentForm({ id = null }) {
                                     ))}
                                 </select>
                                 <div className="form-text">
-                                    Refunded and Cancelled can't be set back to Paid; record a new payment instead.
+                                    Refunded and Cancelled cannot be set back to Paid; record a new payment instead.
                                 </div>
                             </div>
                         )}

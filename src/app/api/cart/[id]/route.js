@@ -47,7 +47,7 @@ export async function GET(request, context) {
 c.*,
     pu.name AS public_user_name,
         pu.email AS public_user_email,
-            cu.name AS customer_user_name,
+            CONCAT(cu.first_name, ' ', COALESCE(cu.last_name, '')) AS customer_user_name,
                 cu.email AS customer_user_email
              FROM cst_cart c
              LEFT JOIN cst_public_users pu

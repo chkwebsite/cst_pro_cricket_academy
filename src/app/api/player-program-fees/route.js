@@ -158,14 +158,14 @@ f.id,
         const authUser = await getAuthUser(request);
         if (authUser) {
             if (authUser.isCoach) {
-                // Coach: ONLY batch players assigned to this coach AND ONLY Pending or Partial fee status!
-                sql += ` AND f.admission_players_id IN (
+                // Coach: ONLY batch players assigned to this coach, and ONLY pending/partial dues
+                sql += ` AND f.payment_status != 'Paid' AND f.admission_players_id IN (
                     SELECT up.admission_players_id
                     FROM cst_user_programs up
                     JOIN cst_batch_players bp ON bp.user_program_id = up.id
                     JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
                     WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
-                ) AND f.payment_status IN ('Pending', 'Partial')`;
+                )`;
                 values.push(authUser.id);
             } else if (authUser.isBranchAdmin && authUser.branch_id) {
                 sql += " AND f.branch_id = ? AND f.academy_id = ?";

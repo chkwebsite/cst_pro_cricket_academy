@@ -20,7 +20,7 @@ sc.*,
     mp.team_id,
     mp.user_id,
     mp.outside_player_id,
-    u.name AS player_name
+    COALESCE(CONCAT(u.first_name, ' ', COALESCE(u.last_name, '')), op.player_name, '') AS player_name
              FROM cst_match_scorecard sc
              INNER JOIN cst_match_innings mi
                 ON mi.id = sc.innings_id
@@ -28,6 +28,8 @@ sc.*,
                 ON mp.id = sc.match_player_id
              LEFT JOIN cst_users u
                 ON u.id = mp.user_id
+             LEFT JOIN cst_outside_players op
+                ON op.id = mp.outside_player_id
              WHERE sc.id = ?
     LIMIT 1`,
             [id]

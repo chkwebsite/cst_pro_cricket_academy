@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import MenuTree from "./components/MenuTree";
 import MenuFormModal from "./components/MenuFormModal";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -21,11 +21,14 @@ export default function MenuManagementPage() {
     const [confirmTarget, setConfirmTarget] = useState(null); // menu pending delete
 
     const [toast, setToast] = useState(null); // { message, isError }
+    const toastTimerRef = useRef(null);
 
     const notify = useCallback((message, isError = false) => {
         setToast({ message, isError });
-        window.clearTimeout(notify._t);
-        notify._t = window.setTimeout(() => setToast(null), 3200);
+        if (toastTimerRef.current) {
+            window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => setToast(null), 3200);
     }, []);
 
     const fetchMenus = useCallback(async () => {

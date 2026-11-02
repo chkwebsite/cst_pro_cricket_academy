@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
 import Pagination from "../components/Pagination";
 
-const FEE_TYPES = ["Tournament Team", "Tournament Player", "Match Team", "Match Player", "Ground Booking", "Other"];
+const FEE_TYPES = ["Tournament Team", "Tournament Player", "Match Team", "Match Player", "Ground Booking", "Program Fee", "Other"];
 const FEE_STATUSES = ["Pending", "Partial", "Paid", "Cancelled"];
 
 const STATUS_BADGE = {
@@ -57,6 +57,14 @@ const getFeeDateInfo = (f) => {
             };
         }
     }
+    if (f.fee_type === "Program Fee") {
+        return {
+            date: formatDate(f.due_date || f.fee_month || f.created_at),
+            time: null,
+            label: f.due_date ? "Due Date" : "Fee Month",
+            isMatch: false,
+        };
+    }
     if (f.booking_date) {
         return {
             date: formatDate(f.booking_date),
@@ -94,12 +102,23 @@ const reference = (f) => {
             return f.match_no || `Match #${f.match_id}`;
         case "Ground Booking":
             return f.ground_name || `Booking #${f.ground_booking_id}`;
+        case "Program Fee": {
+            const parts = [f.program_name || "Training Program"];
+            if (f.fee_month) {
+                const d = new Date(f.fee_month);
+                if (!Number.isNaN(d.getTime())) {
+                    parts.push(d.toLocaleDateString("en-US", { month: "short", year: "numeric" }));
+                }
+            }
+            return parts.join(" · ");
+        }
         default:
-            return "—";
+            return f.remarks || "—";
     }
 };
 
 const payer = (f) => {
+    if (f.player_name && f.player_name.trim()) return f.player_name.trim();
     if (f.first_name || f.last_name) return `${f.first_name || ""} ${f.last_name || ""}`.trim();
     if (f.outside_player_name) return f.outside_player_name;
     if (f.outside_player_id) return `Outside player #${f.outside_player_id}`;
@@ -118,6 +137,8 @@ export default function FeeStatusPage() {
     const [search, setSearch] = useState(""); // client-side only
     const [feeType, setFeeType] = useState("");
     const [status, setStatus] = useState("");
+    const [batchId, setBatchId] = useState("");
+    const [batches, setBatches] = useState([]);
     const [academyId, setAcademyId] = useState("");
     const [academies, setAcademies] = useState([]);
     const [page, setPage] = useState(1);
@@ -127,6 +148,7 @@ export default function FeeStatusPage() {
     const hasSessionUser = Boolean(user);
     const userRole = String(user?.user_type || "").trim().toLowerCase().replace(/[_-]+/g, " ");
     const isPlayer = userRole.includes("player") || String(user?.user_type) === "7";
+    const isCoach = userRole.includes("coach") || String(user?.user_type) === "3" || Boolean(user?.isCoach);
 
     const availableFeeTypes = isPlayer
         ? FEE_TYPES.filter((t) => t !== "Tournament Team" && t !== "Match Team")
@@ -153,6 +175,22 @@ export default function FeeStatusPage() {
         })();
     }, [hasSessionUser, hasAssignedAcademy, userAcademyId]);
 
+    // Batches
+    useEffect(() => {
+        if (!hasSessionUser) return;
+        (async () => {
+            try {
+                const res = await fetch("/api/batches");
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    setBatches(Array.isArray(json.data) ? json.data : []);
+                }
+            } catch {
+                /* filter just stays empty */
+            }
+        })();
+    }, [hasSessionUser]);
+
     useEffect(() => {
         if (!hasSessionUser) return;
 
@@ -165,6 +203,7 @@ export default function FeeStatusPage() {
                 if (effectiveAcademyId) params.set("academy_id", effectiveAcademyId);
                 if (feeType) params.set("fee_type", feeType);
                 if (status) params.set("status", status);
+                if (batchId) params.set("batch_id", batchId);
                 if (isPlayer) {
                     params.set("exclude_team_fees", "true");
                     if (user?.id) params.set("user_id", String(user.id));
@@ -187,7 +226,7 @@ export default function FeeStatusPage() {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [hasSessionUser, effectiveAcademyId, feeType, status, isPlayer, user?.id]);
+    }, [hasSessionUser, effectiveAcademyId, feeType, status, batchId, isPlayer, user?.id]);
 
     // The API has no text search, so this filters the loaded rows
     const needle = search.trim().toLowerCase();
@@ -206,6 +245,7 @@ export default function FeeStatusPage() {
                   f.tournament_start_date,
                   f.academy_name,
                   f.branch_name,
+                  f.batch_name,
                   f.remarks,
               ]
                   .filter(Boolean)
@@ -231,6 +271,7 @@ export default function FeeStatusPage() {
         setSearch("");
         setFeeType("");
         setStatus("");
+        setBatchId("");
         setAcademyId("");
     };
 
@@ -239,7 +280,10 @@ export default function FeeStatusPage() {
         setError(null);
         setNotice(null);
         try {
-            const res = await fetch(`/api/fee-status/${item.id}`, { method: "DELETE" });
+            const isPpf = item.fee_type === "Program Fee";
+            const targetId = isPpf ? (item.program_fee_id || String(item.id).replace("ppf_", "")) : item.id;
+            const endpoint = isPpf ? `/api/player-program-fees/${targetId}` : `/api/fee-status/${targetId}`;
+            const res = await fetch(endpoint, { method: "DELETE" });
             const json = await res.json();
             if (!res.ok || !json.success) throw new Error(json.message || "Unable to delete fee record");
             setFees((current) => current.filter((f) => f.id !== item.id));
@@ -299,6 +343,18 @@ export default function FeeStatusPage() {
                             <option value="">Choose Status</option>
                             {FEE_STATUSES.map((s) => (
                                 <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+
+                        <select
+                            className="form-select"
+                            value={batchId}
+                            onChange={(e) => { setBatchId(e.target.value); setPage(1); }}
+                            style={{ maxWidth: "200px" }}
+                        >
+                            <option value="">{isCoach ? "All My Batches" : "All Batches"}</option>
+                            {batches.map((b) => (
+                                <option key={b.id} value={b.id}>{b.batch_name}</option>
                             ))}
                         </select>
 
@@ -368,7 +424,14 @@ export default function FeeStatusPage() {
                                                         </small>
                                                     )}
                                                 </td>
-                                                <td>{payer(item)}</td>
+                                                <td>
+                                                    <div className="fw-semibold text-dark">{payer(item)}</div>
+                                                    {item.batch_name && (
+                                                        <span className="badge bg-primary-subtle text-primary border border-primary-subtle mt-1" style={{ fontSize: "10.5px" }}>
+                                                            {item.batch_name}
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="text-end">₹{money(item.fee_amount)}</td>
                                                 <td className="text-end">₹{money(item.paid_amount)}</td>
                                                 <td className="text-end">{item.status === "Cancelled" ? "—" : `₹${money(due)}`}</td>
@@ -377,12 +440,25 @@ export default function FeeStatusPage() {
                                                 </td>
                                                 <td>
                                                     <div className="d-flex justify-content-start align-items-center gap-2">
-                                                        <Link href={`/next_panel/fee-status/${item.id}`} className="btn btn-outline-primary" aria-label="View fee details" title="View Details">
+                                                        <Link
+                                                            href={
+                                                                item.fee_type === "Program Fee"
+                                                                    ? `/next_panel/player-program-fees/${item.program_fee_id || String(item.id).replace("ppf_", "")}`
+                                                                    : `/next_panel/fee-status/${item.id}`
+                                                            }
+                                                            className="btn btn-outline-primary"
+                                                            aria-label="View fee details"
+                                                            title="View Details"
+                                                        >
                                                             <Eye size={16} />
                                                         </Link>
                                                         {canPay && (
                                                             <Link
-                                                                href={`/next_panel/fee-payments/new?fee_status_id=${item.id}`}
+                                                                href={
+                                                                    item.fee_type === "Program Fee"
+                                                                        ? `/next_panel/player-payments/new?player_program_fee_id=${item.program_fee_id || String(item.id).replace("ppf_", "")}`
+                                                                        : `/next_panel/fee-payments/new?fee_status_id=${item.id}`
+                                                                }
                                                                 className="btn btn-sm btn-success d-inline-flex align-items-center gap-1"
                                                                 title="Pay Fee"
                                                             >
@@ -391,7 +467,15 @@ export default function FeeStatusPage() {
                                                         )}
                                                         {!isPlayer && (
                                                             <>
-                                                                <Link href={`/next_panel/fee-status/${item.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit fee">
+                                                                <Link
+                                                                    href={
+                                                                        item.fee_type === "Program Fee"
+                                                                            ? `/next_panel/player-program-fees/${item.program_fee_id || String(item.id).replace("ppf_", "")}/edit`
+                                                                            : `/next_panel/fee-status/${item.id}/edit`
+                                                                    }
+                                                                    className="btn btn-outline-secondary"
+                                                                    aria-label="Edit fee"
+                                                                >
                                                                     <Edit size={16} />
                                                                 </Link>
                                                                 <button type="button" className="btn btn-outline-danger" onClick={() => handleDelete(item)} aria-label="Delete fee">

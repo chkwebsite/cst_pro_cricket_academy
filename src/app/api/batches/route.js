@@ -44,36 +44,36 @@ b.*,
         const params = [];
 
         const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isCoach) {
-                // Coach only sees their assigned batches
-                sql += ` AND b.id IN (
-                    SELECT batch_id FROM cst_batch_coaches
-                    WHERE coach_user_id = ? AND status = 1 AND is_deleted = 0
-                )`;
-                params.push(authUser.id);
-            } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                sql += " AND b.branch_id = ? AND b.academy_id = ?";
-                params.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                sql += " AND b.academy_id = ?";
-                params.push(authUser.academy_id);
-                if (branch_id) {
-                    sql += " AND b.branch_id = ?";
-                    params.push(branch_id);
-                }
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                sql += " AND b.academy_id = ?";
-                params.push(authUser.academy_id);
-            } else {
-                if (academy_id) {
-                    sql += " AND b.academy_id = ?";
-                    params.push(academy_id);
-                }
-                if (branch_id) {
-                    sql += " AND b.branch_id = ?";
-                    params.push(branch_id);
-                }
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (authUser.isCoach) {
+            // Coach only sees their assigned batches
+            sql += ` AND b.id IN (
+                SELECT batch_id FROM cst_batch_coaches
+                WHERE coach_user_id = ? AND status = 1 AND is_deleted = 0
+            )`;
+            params.push(authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND b.branch_id = ? AND b.academy_id = ?";
+            params.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND b.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND b.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
             }
         } else {
             if (academy_id) {

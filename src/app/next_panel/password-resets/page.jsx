@@ -26,10 +26,11 @@ export default function PasswordResetsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [copiedId, setCopiedId] = useState(null);
     const [adminInfo, setAdminInfo] = useState(null);
-    const [now, setNow] = useState(Date.now());
+    const [now, setNow] = useState(0);
 
     // Update current timestamp every second to render live countdown timers
     useEffect(() => {
+        setNow(Date.now());
         const interval = setInterval(() => {
             setNow(Date.now());
         }, 1000);

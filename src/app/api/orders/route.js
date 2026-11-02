@@ -11,6 +11,7 @@ export async function GET(request) {
         const academy_id = searchParams.get("academy_id");
         const fulfillment_branch_id = searchParams.get("fulfillment_branch_id");
         const customer_user_id = searchParams.get("customer_user_id");
+        const customer_email = searchParams.get("customer_email");
         const public_user_id = searchParams.get("public_user_id");
 
         const fulfillment_type = searchParams.get("fulfillment_type");
@@ -76,8 +77,6 @@ SELECT
             sql += " AND o.fulfillment_branch_id = ?";
             values.push(fulfillment_branch_id);
         }
-
-        const customer_email = searchParams.get("customer_email");
 
         if (customer_user_id && customer_email) {
             sql += " AND (o.customer_user_id = ? OR LOWER(o.customer_email) = LOWER(?))";

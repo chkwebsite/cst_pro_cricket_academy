@@ -180,15 +180,27 @@ export async function PUT(request, context) {
         }
 
         const existing = existingRows[0];
-        const formData = await request.formData();
+        const contentType = request.headers.get("content-type") || "";
+        let academyIdValue, categoryName, slug, description, sortOrderValue, statusValue, image = null;
 
-        const academyIdValue = formData.get("academy_id");
-        const categoryName = formData.get("category_name")?.trim();
-        const slug = formData.get("slug")?.trim().toLowerCase();
-        const description = formData.get("description")?.trim() || null;
-        const sortOrderValue = formData.get("sort_order");
-        const statusValue = formData.get("status");
-        const image = formData.get("category_image");
+        if (contentType.includes("multipart/form-data")) {
+            const formData = await request.formData();
+            academyIdValue = formData.get("academy_id");
+            categoryName = formData.get("category_name")?.trim();
+            slug = formData.get("slug")?.trim().toLowerCase();
+            description = formData.get("description")?.trim() || null;
+            sortOrderValue = formData.get("sort_order");
+            statusValue = formData.get("status");
+            image = formData.get("category_image");
+        } else {
+            const body = await request.json();
+            academyIdValue = body.academy_id;
+            categoryName = body.category_name?.trim();
+            slug = (body.slug || body.category_name?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""))?.trim();
+            description = body.description?.trim() || null;
+            sortOrderValue = body.sort_order;
+            statusValue = body.status;
+        }
 
         if (!categoryName || !slug) {
             return NextResponse.json(
@@ -224,6 +236,7 @@ export async function PUT(request, context) {
 
         if (
             academyIdValue !== null &&
+            academyIdValue !== undefined &&
             academyIdValue !== "" &&
             academyIdValue !== "null"
         ) {
@@ -238,12 +251,12 @@ export async function PUT(request, context) {
         }
 
         const sortOrder =
-            sortOrderValue === null || sortOrderValue === ""
+            sortOrderValue === null || sortOrderValue === undefined || sortOrderValue === ""
                 ? 0
                 : Number(sortOrderValue);
 
         const status =
-            statusValue === null || statusValue === ""
+            statusValue === null || statusValue === undefined || statusValue === ""
                 ? 1
                 : Number(statusValue);
 

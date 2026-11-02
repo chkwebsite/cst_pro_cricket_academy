@@ -11,7 +11,7 @@ export async function POST(request) {
     try {
         const body = await request.json();
 
-        const login = String(body.login ?? "").trim();
+        const login = String(body.login ?? body.email ?? "").trim();
         const password = String(body.password ?? "");
 
         if (!login) {
@@ -386,6 +386,7 @@ export async function POST(request) {
             {
                 success: true,
                 message: "Login successful",
+                token,
 
                 user: userData,
 

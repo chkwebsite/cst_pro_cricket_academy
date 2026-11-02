@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 // GET: List batch coach assignments
@@ -78,14 +79,43 @@ bc.*,
             params.push(is_deleted);
         }
 
-        if (academy_id) {
-            sql += " AND b.academy_id = ?";
-            params.push(academy_id);
+        const authUser = await getAuthUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
         }
 
-        if (branch_id) {
-            sql += " AND b.branch_id = ?";
-            params.push(branch_id);
+        if (authUser.isCoach) {
+            sql += " AND bc.coach_user_id = ?";
+            params.push(authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND b.branch_id = ? AND b.academy_id = ?";
+            params.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND b.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND b.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
+            }
+        } else {
+            if (academy_id) {
+                sql += " AND b.academy_id = ?";
+                params.push(academy_id);
+            }
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
+            }
         }
 
         if (search) {

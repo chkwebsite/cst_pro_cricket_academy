@@ -71,8 +71,10 @@ export async function getAuthUser(request) {
             isSuperAdmin: role === ROLES.SUPER_ADMIN,
             isAcademyAdmin: role === ROLES.ACADEMY_ADMIN,
             isBranchAdmin: role === ROLES.BRANCH_ADMIN,
+            isManagement: role === ROLES.MANAGEMENT,
             isAccountant: role === ROLES.ACCOUNTANT,
             isCoach: role === ROLES.COACH,
+            isStaff: role === ROLES.STAFF || role === ROLES.GROUND_STAFF,
             isPlayer: role === ROLES.PLAYER,
         };
     } catch (err) {
@@ -86,14 +88,20 @@ export async function getAuthUser(request) {
 export async function getCoachBatchIds(connectionOrPool, coachUserId) {
     if (!coachUserId) return [];
     try {
-        const [rows] = await connectionOrPool.query(
-            `SELECT DISTINCT batch_id
+        let sql = `SELECT DISTINCT batch_id
              FROM cst_batch_coaches
-             WHERE coach_user_id = ?
-               AND status = 1
-               AND is_deleted = 0`,
-            [coachUserId]
-        );
+             WHERE status = 1
+               AND is_deleted = 0`;
+        const params = [];
+        if (Array.isArray(coachUserId)) {
+            if (coachUserId.length === 0) return [];
+            sql += ` AND coach_user_id IN (?)`;
+            params.push(coachUserId);
+        } else {
+            sql += ` AND coach_user_id = ?`;
+            params.push(coachUserId);
+        }
+        const [rows] = await connectionOrPool.query(sql, params);
         return rows.map((r) => Number(r.batch_id)).filter(Boolean);
     } catch (err) {
         console.error("getCoachBatchIds error:", err);
@@ -104,8 +112,13 @@ export async function getCoachBatchIds(connectionOrPool, coachUserId) {
 /**
  * Helper to fetch player user_program_ids assigned to a Coach's batches
  */
-export async function getCoachUserProgramIds(connectionOrPool, coachUserId) {
-    const batchIds = await getCoachBatchIds(connectionOrPool, coachUserId);
+export async function getCoachUserProgramIds(connectionOrPool, coachUserIdOrBatchIds) {
+    let batchIds = [];
+    if (Array.isArray(coachUserIdOrBatchIds)) {
+        batchIds = coachUserIdOrBatchIds;
+    } else {
+        batchIds = await getCoachBatchIds(connectionOrPool, coachUserIdOrBatchIds);
+    }
     if (!batchIds.length) return [];
     try {
         const [rows] = await connectionOrPool.query(
@@ -125,8 +138,13 @@ export async function getCoachUserProgramIds(connectionOrPool, coachUserId) {
 /**
  * Helper to fetch admission_players_ids in Coach's batches
  */
-export async function getCoachAdmissionPlayerIds(connectionOrPool, coachUserId) {
-    const userProgramIds = await getCoachUserProgramIds(connectionOrPool, coachUserId);
+export async function getCoachAdmissionPlayerIds(connectionOrPool, coachUserIdOrProgramIds) {
+    let userProgramIds = [];
+    if (Array.isArray(coachUserIdOrProgramIds)) {
+        userProgramIds = coachUserIdOrProgramIds;
+    } else {
+        userProgramIds = await getCoachUserProgramIds(connectionOrPool, coachUserIdOrProgramIds);
+    }
     if (!userProgramIds.length) return [];
     try {
         const [rows] = await connectionOrPool.query(

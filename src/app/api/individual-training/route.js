@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthUser } from "@/app/components/lib/rbac";
 
 
 const VALID_DAYS = [
@@ -220,12 +221,45 @@ export async function GET(request) {
     let connection;
 
     try {
+        const authUser = await getAuthUser(request);
+        if (!authUser) {
+            return errorResponse("Unauthorized. Authentication required.", 401);
+        }
+
         connection = await pool.getConnection();
 
         const params = new URL(request.url).searchParams;
 
         const conditions = ["it.is_deleted = 0"];
         const values = [];
+
+        // Role-based scoping
+        if (authUser.isPlayer) {
+            conditions.push("it.user_program_id IN (SELECT id FROM cst_user_programs WHERE user_id = ?)");
+            values.push(authUser.id);
+        } else if (authUser.isCoach) {
+            conditions.push("it.coach_user_id = ?");
+            values.push(authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            conditions.push("it.branch_id = ? AND it.academy_id = ?");
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            conditions.push("it.academy_id = ?");
+            values.push(authUser.academy_id);
+            const bId = params.get("branch_id");
+            if (bId) {
+                conditions.push("it.branch_id = ?");
+                values.push(bId);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            conditions.push("it.academy_id = ?");
+            values.push(authUser.academy_id);
+            const bId = params.get("branch_id");
+            if (bId) {
+                conditions.push("it.branch_id = ?");
+                values.push(bId);
+            }
+        }
 
         const filters = {
             academy_id: "it.academy_id",
@@ -242,6 +276,11 @@ export async function GET(request) {
                 if (key === "status" && !VALID_STATUSES.includes(value)) {
                     return errorResponse("Invalid status filter.");
                 }
+
+                // If role already applied filter, don't duplicate
+                if (authUser.isBranchAdmin && key === "branch_id") continue;
+                if (authUser.isCoach && key === "coach_user_id") continue;
+                if ((authUser.isAcademyAdmin || !authUser.isSuperAdmin) && key === "academy_id") continue;
 
                 conditions.push(`${ column } = ?`);
                 values.push(value);

@@ -17,8 +17,10 @@ async function main() {
         { module: "Super Power", name: "super_pawer_all" },
         { module: "Academy Admin", name: "academy_admin" },
         { module: "Branch Admin", name: "branch_admin" },
+        { module: "Management", name: "management" },
         { module: "Accountant", name: "accountant" },
         { module: "Coach", name: "coach" },
+        { module: "Staff", name: "staff" },
         { module: "Player Dashboard", name: "view_player_dashboard" },
         { module: "Ground Staff", name: "ground_staff" },
     ];
@@ -113,8 +115,52 @@ async function main() {
         ...findMenuIdsByUrls(coachUrls),
     ]));
 
+    // Management Menus: Operational modules, Batches, Players, Coaches, Staff, Enquiries, Matches, Tournaments, Grounds
+    const managementUrls = [
+        "/dashboard",
+        "/batches",
+        "/batch-coaches",
+        "/batch-players",
+        "/admission-players",
+        "/outside-players",
+        "/coaches",
+        "/staff",
+        "/student-enquiries",
+        "/student-enquiries-flowup",
+        "/player-attendance",
+        "/matches",
+        "/match-management",
+        "/tournaments",
+        "/tournament-management",
+        "/grounds",
+        "/ground-bookings",
+        "/products",
+        "/orders",
+    ];
+    const managementMenuIds = Array.from(new Set([
+        ...findMenuIdsByUrls(managementUrls),
+    ]));
+
+    // Staff Menus: Dashboard, Batches, Attendance, Enquiries, Grounds
+    const staffUrls = [
+        "/dashboard",
+        "/batches",
+        "/batch-players",
+        "/player-attendance",
+        "/student-enquiries",
+        "/student-enquiries-flowup",
+        "/grounds",
+        "/ground-bookings",
+        "/ground-slots",
+        "/ground-availability",
+    ];
+    const staffMenuIds = Array.from(new Set([
+        ...findMenuIdsByUrls(staffUrls),
+    ]));
+
     // 3. Link Menus to Permissions in cst_menu_permissions
     async function syncMenuPerms(permId, menuIds) {
+        if (!permId) return;
         // Clear existing
         await pool.query("DELETE FROM cst_menu_permissions WHERE permission_id = ?", [permId]);
         for (const mid of menuIds) {
@@ -127,8 +173,10 @@ async function main() {
 
     const acadAdminPermId = permMap.get("academy_admin");
     const branchAdminPermId = permMap.get("branch_admin");
+    const managementPermId = permMap.get("management");
     const accountantPermId = permMap.get("accountant");
     const coachPermId = permMap.get("coach");
+    const staffPermId = permMap.get("staff");
 
     console.log(`Syncing Academy Admin menus (${academyAdminMenuIds.length} menus)...`);
     await syncMenuPerms(acadAdminPermId, academyAdminMenuIds);
@@ -136,20 +184,22 @@ async function main() {
     console.log(`Syncing Branch Admin menus (${branchAdminMenuIds.length} menus)...`);
     await syncMenuPerms(branchAdminPermId, branchAdminMenuIds);
 
+    console.log(`Syncing Management menus (${managementMenuIds.length} menus)...`);
+    await syncMenuPerms(managementPermId, managementMenuIds);
+
     console.log(`Syncing Accountant menus (${accountantMenuIds.length} menus)...`);
     await syncMenuPerms(accountantPermId, accountantMenuIds);
 
     console.log(`Syncing Coach menus (${coachMenuIds.length} menus)...`);
     await syncMenuPerms(coachPermId, coachMenuIds);
 
+    console.log(`Syncing Staff menus (${staffMenuIds.length} menus)...`);
+    await syncMenuPerms(staffPermId, staffMenuIds);
+
     // 4. Link Roles to Permissions in cst_role_permissions
-    // cst_roles:
-    // 1: Super Admin -> super_pawer_all (3)
-    // 2: Academy Admin(CST) -> academy_admin (acadAdminPermId)
-    // 3: Branch Admin(CST) -> branch_admin (branchAdminPermId)
-    // 4: Accountent(CST) -> accountant (accountantPermId)
-    // 5: Coach(CST) -> coach (coachPermId)
-    // 6: Academy Admin(SM) -> academy_admin (acadAdminPermId)
+    const [allRoles] = await pool.query("SELECT id, role_name FROM cst_roles");
+    const findRoleId = (name) => allRoles.find(r => r.role_name.toLowerCase().includes(name.toLowerCase()))?.id;
+
     const roleMappings = [
         { roleId: 1, permId: permMap.get("super_pawer_all") },
         { roleId: 2, permId: acadAdminPermId },
@@ -157,7 +207,10 @@ async function main() {
         { roleId: 4, permId: accountantPermId },
         { roleId: 5, permId: coachPermId },
         { roleId: 6, permId: acadAdminPermId },
-    ];
+        { roleId: findRoleId("Management"), permId: managementPermId },
+        { roleId: findRoleId("Staff(CST)"), permId: staffPermId },
+        { roleId: findRoleId("Ground Staff"), permId: permMap.get("ground_staff") },
+    ].filter(rm => rm.roleId && rm.permId);
 
     for (const rm of roleMappings) {
         const [existing] = await pool.query(

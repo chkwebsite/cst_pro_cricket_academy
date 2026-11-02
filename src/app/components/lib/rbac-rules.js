@@ -7,10 +7,12 @@ export const ROLES = {
     SUPER_ADMIN: "SUPER_ADMIN",
     ACADEMY_ADMIN: "ACADEMY_ADMIN",
     BRANCH_ADMIN: "BRANCH_ADMIN",
+    MANAGEMENT: "MANAGEMENT",
     ACCOUNTANT: "ACCOUNTANT",
     COACH: "COACH",
-    PLAYER: "PLAYER",
+    STAFF: "STAFF",
     GROUND_STAFF: "GROUND_STAFF",
+    PLAYER: "PLAYER",
     PUBLIC_USER: "PUBLIC_USER",
 };
 
@@ -25,11 +27,13 @@ export function getUserRole(user) {
         .replace(/[^a-z0-9]/g, "");
 
     if (raw.includes("super")) return ROLES.SUPER_ADMIN;
+    if (raw.includes("management")) return ROLES.MANAGEMENT;
     if (raw.includes("academyadmin") || raw.includes("academy")) return ROLES.ACADEMY_ADMIN;
     if (raw.includes("branchadmin") || raw.includes("branch")) return ROLES.BRANCH_ADMIN;
     if (raw.includes("account") || raw.includes("accountant") || raw.includes("accountent")) return ROLES.ACCOUNTANT;
     if (raw.includes("coach")) return ROLES.COACH;
     if (raw.includes("groundstaff") || raw.includes("staffground")) return ROLES.GROUND_STAFF;
+    if (raw.includes("staff")) return ROLES.STAFF;
     if (raw.includes("player") || raw === "7" || String(user.user_type) === "7") return ROLES.PLAYER;
     if (raw.includes("public")) return ROLES.PUBLIC_USER;
 
@@ -159,6 +163,28 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/Settings",
     ],
 
+    [ROLES.MANAGEMENT]: [
+        "/next_panel/dashboard",
+        "/next_panel/batches",
+        "/next_panel/batch-coaches",
+        "/next_panel/batch-players",
+        "/next_panel/admission-players",
+        "/next_panel/outside-players",
+        "/next_panel/coaches",
+        "/next_panel/staff",
+        "/next_panel/student-enquiries",
+        "/next_panel/student-enquiries-flowup",
+        "/next_panel/player-attendance",
+        "/next_panel/matches",
+        "/next_panel/match-management",
+        "/next_panel/tournaments",
+        "/next_panel/tournament-management",
+        "/next_panel/grounds",
+        "/next_panel/ground-bookings",
+        "/next_panel/products",
+        "/next_panel/orders",
+    ],
+
     [ROLES.ACCOUNTANT]: [
         "/next_panel/dashboard",
         "/next_panel/fee-status",
@@ -186,6 +212,19 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/dashboard",
         "/next_panel/my-orders",
         "/next_panel/orders",
+    ],
+
+    [ROLES.STAFF]: [
+        "/next_panel/dashboard",
+        "/next_panel/batches",
+        "/next_panel/batch-players",
+        "/next_panel/player-attendance",
+        "/next_panel/student-enquiries",
+        "/next_panel/student-enquiries-flowup",
+        "/next_panel/grounds",
+        "/next_panel/ground-bookings",
+        "/next_panel/ground-slots",
+        "/next_panel/ground-availability",
     ],
 
     [ROLES.GROUND_STAFF]: [

@@ -12,6 +12,11 @@ const FEE_TYPES = [
     "Other",
 ];
 
+const ALL_GET_FEE_TYPES = [
+    ...FEE_TYPES,
+    "Program Fee",
+];
+
 const FEE_STATUSES = [
     "Pending",
     "Partial",
@@ -253,14 +258,31 @@ export async function GET(request) {
         const conditions = [];
         const values = [];
 
+        const batchId = searchParams.get("batch_id");
+
         const authUser = await getAuthUser(request);
         if (authUser) {
             if (authUser.isCoach) {
-                // Coach: ONLY Pending or Partial fee status
-                conditions.push("fs.status IN ('Pending', 'Partial')");
                 if (authUser.academy_id) {
                     conditions.push("fs.academy_id = ?");
                     values.push(authUser.academy_id);
+                }
+                // Coach: MUST only see players enrolled in their assigned batch(es)
+                conditions.push(`COALESCE(fs.user_id, ttp.user_id, mp.user_id) IN (
+                    SELECT DISTINCT COALESCE(up.user_id, ap.user_id)
+                    FROM cst_batch_coaches bc
+                    JOIN cst_batch_players bp ON bp.batch_id = bc.batch_id AND (bp.status = 'Active' OR bp.status = 1)
+                    JOIN cst_user_programs up ON up.id = bp.user_program_id AND up.is_deleted = 0
+                    LEFT JOIN cst_admission_players ap ON ap.id = up.admission_players_id AND ap.is_deleted = 0
+                    WHERE bc.coach_user_id = ?
+                      AND bc.status = 1
+                      AND bc.is_deleted = 0
+                      ${batchId && isPositiveInt(batchId) ? "AND bc.batch_id = ?" : ""}
+                      AND COALESCE(up.user_id, ap.user_id) IS NOT NULL
+                )`);
+                values.push(authUser.id);
+                if (batchId && isPositiveInt(batchId)) {
+                    values.push(Number(batchId));
                 }
             } else if (authUser.isBranchAdmin && authUser.branch_id) {
                 conditions.push("fs.branch_id = ? AND fs.academy_id = ?");
@@ -314,15 +336,17 @@ export async function GET(request) {
         const feeType = searchParams.get("fee_type");
 
         if (feeType) {
-            if (!FEE_TYPES.includes(feeType)) {
+            if (!ALL_GET_FEE_TYPES.includes(feeType)) {
                 return NextResponse.json(
                     { success: false, message: "Invalid fee_type." },
                     { status: 400 }
                 );
             }
 
-            conditions.push("fs.fee_type = ?");
-            values.push(feeType);
+            if (feeType !== "Program Fee") {
+                conditions.push("fs.fee_type = ?");
+                values.push(feeType);
+            }
         }
 
         const status = searchParams.get("status");
@@ -344,79 +368,253 @@ export async function GET(request) {
             conditions.push("fs.fee_type NOT IN ('Tournament Team', 'Match Team')");
         }
 
+        // If batch_id filter passed and user is NOT a coach (coaches are handled above)
+        if ((!authUser || !authUser.isCoach) && batchId && isPositiveInt(batchId)) {
+            conditions.push(`COALESCE(fs.user_id, ttp.user_id, mp.user_id) IN (
+                SELECT DISTINCT COALESCE(up.user_id, ap.user_id)
+                FROM cst_batch_players bp
+                JOIN cst_user_programs up ON up.id = bp.user_program_id AND up.is_deleted = 0
+                LEFT JOIN cst_admission_players ap ON ap.id = up.admission_players_id AND ap.is_deleted = 0
+                WHERE bp.batch_id = ?
+                  AND (bp.status = 'Active' OR bp.status = 1)
+                  AND COALESCE(up.user_id, ap.user_id) IS NOT NULL
+            )`);
+            values.push(Number(batchId));
+        }
+
         const whereClause = conditions.length
             ? `WHERE ${conditions.join(" AND ")}`
             : "";
 
         connection = await pool.getConnection();
 
-        const [rows] = await connection.execute(
-            `SELECT
-                fs.*,
-                a.academy_name,
-                b.branch_name,
-                t.tournament_name,
-                t.start_date AS tournament_start_date,
-                t.end_date AS tournament_end_date,
-                mt.match_no,
-                mt.match_date,
-                mt.match_time,
-                mt.match_type,
-                gb.booking_date,
-                g.ground_name,
-                COALESCE(u.first_name, ttp_u.first_name, mp_u.first_name) AS first_name,
-                COALESCE(u.last_name, ttp_u.last_name, mp_u.last_name) AS last_name,
-                COALESCE(op.player_name, ttp_op.player_name, mp_op.player_name) AS outside_player_name,
-                tt_team.team_name AS tournament_team_name,
-                mt_t.team_name AS match_team_name,
-                op.player_name,
-                op.id AS outside_player_record_id
-             FROM cst_fee_status fs
-             LEFT JOIN cst_academy a
-                ON a.id = fs.academy_id
-             LEFT JOIN cst_branch b
-                ON b.id = fs.branch_id
-             LEFT JOIN cst_tournament_team_players ttp
-                ON ttp.id = fs.tournament_team_player_id
-             LEFT JOIN cst_match_players mp
-                ON mp.id = fs.match_player_id
-             LEFT JOIN cst_tournaments t
-                ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
-             LEFT JOIN cst_matches mt
-                ON mt.id = COALESCE(fs.match_id, mp.match_id)
-             LEFT JOIN cst_ground_bookings gb
-                ON gb.id = fs.ground_booking_id
-             LEFT JOIN cst_ground g
-                ON g.id = gb.ground_id
-             LEFT JOIN cst_users u
-                ON u.id = fs.user_id
-             LEFT JOIN cst_outside_players op
-                ON op.id = fs.outside_player_id
-             LEFT JOIN cst_tournament_teams tt
-                ON tt.id = fs.tournament_team_id
-             LEFT JOIN cst_teams tt_team
-                ON tt_team.id = tt.team_id
-             LEFT JOIN cst_users ttp_u
-                ON ttp_u.id = ttp.user_id
-             LEFT JOIN cst_outside_players ttp_op
-                ON ttp_op.id = ttp.outside_player_id
-             LEFT JOIN cst_match_teams mt_team
-                ON mt_team.id = fs.match_team_id
-             LEFT JOIN cst_teams mt_t
-                ON mt_t.id = mt_team.team_id
-             LEFT JOIN cst_users mp_u
-                ON mp_u.id = mp.user_id
-             LEFT JOIN cst_outside_players mp_op
-                ON mp_op.id = mp.outside_player_id
-             ${whereClause}
-             ORDER BY fs.id DESC`,
-            values
-        );
+        let rows = [];
+        if (!feeType || feeType !== "Program Fee") {
+            const [fsRows] = await connection.execute(
+                `SELECT
+                    fs.*,
+                    a.academy_name,
+                    b.branch_name,
+                    t.tournament_name,
+                    t.start_date AS tournament_start_date,
+                    t.end_date AS tournament_end_date,
+                    mt.match_no,
+                    mt.match_date,
+                    mt.match_time,
+                    mt.match_type,
+                    gb.booking_date,
+                    g.ground_name,
+                    batch_info.batch_id,
+                    batch_info.batch_name,
+                    COALESCE(u.first_name, ttp_u.first_name, mp_u.first_name) AS first_name,
+                    COALESCE(u.last_name, ttp_u.last_name, mp_u.last_name) AS last_name,
+                    COALESCE(op.player_name, ttp_op.player_name, mp_op.player_name) AS outside_player_name,
+                    tt_team.team_name AS tournament_team_name,
+                    mt_t.team_name AS match_team_name,
+                    op.player_name,
+                    op.id AS outside_player_record_id,
+                    NULL AS program_name,
+                    NULL AS fee_month,
+                    NULL AS due_date,
+                    NULL AS program_fee_id
+                 FROM cst_fee_status fs
+                 LEFT JOIN cst_academy a
+                    ON a.id = fs.academy_id
+                 LEFT JOIN cst_branch b
+                    ON b.id = fs.branch_id
+                 LEFT JOIN cst_tournament_team_players ttp
+                    ON ttp.id = fs.tournament_team_player_id
+                 LEFT JOIN cst_match_players mp
+                    ON mp.id = fs.match_player_id
+                 LEFT JOIN cst_tournaments t
+                    ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
+                 LEFT JOIN cst_matches mt
+                    ON mt.id = COALESCE(fs.match_id, mp.match_id)
+                 LEFT JOIN cst_ground_bookings gb
+                    ON gb.id = fs.ground_booking_id
+                 LEFT JOIN cst_ground g
+                    ON g.id = gb.ground_id
+                 LEFT JOIN cst_users u
+                    ON u.id = fs.user_id
+                 LEFT JOIN cst_outside_players op
+                    ON op.id = fs.outside_player_id
+                 LEFT JOIN cst_tournament_teams tt
+                    ON tt.id = fs.tournament_team_id
+                 LEFT JOIN cst_teams tt_team
+                    ON tt_team.id = tt.team_id
+                 LEFT JOIN cst_users ttp_u
+                    ON ttp_u.id = ttp.user_id
+                 LEFT JOIN cst_outside_players ttp_op
+                    ON ttp_op.id = ttp.outside_player_id
+                 LEFT JOIN cst_match_teams mt_team
+                    ON mt_team.id = fs.match_team_id
+                 LEFT JOIN cst_teams mt_t
+                    ON mt_t.id = mt_team.team_id
+                 LEFT JOIN cst_users mp_u
+                    ON mp_u.id = mp.user_id
+                 LEFT JOIN cst_outside_players mp_op
+                    ON mp_op.id = mp.outside_player_id
+                 LEFT JOIN (
+                     SELECT
+                         COALESCE(up.user_id, ap.user_id) AS player_user_id,
+                         MAX(b.id) AS batch_id,
+                         MAX(b.batch_name) AS batch_name
+                     FROM cst_batch_players bp
+                     JOIN cst_batches b ON b.id = bp.batch_id
+                     JOIN cst_user_programs up ON up.id = bp.user_program_id
+                     LEFT JOIN cst_admission_players ap ON ap.id = up.admission_players_id
+                     WHERE (bp.status = 'Active' OR bp.status = 1)
+                       AND b.is_deleted = 0
+                     GROUP BY player_user_id
+                 ) batch_info ON batch_info.player_user_id = COALESCE(fs.user_id, ttp.user_id, mp.user_id)
+                 ${whereClause}
+                 ORDER BY fs.id DESC`,
+                values
+            );
+            rows = fsRows;
+        }
+
+        // Query cst_player_program_fees if fee_type is empty or "Program Fee"
+        let ppfRows = [];
+        if (!feeType || feeType === "Program Fee") {
+            const ppfConditions = ["up.is_deleted = 0", "ap.is_deleted = 0", "p.is_deleted = 0"];
+            const ppfValues = [];
+
+            if (authUser) {
+                if (authUser.isCoach) {
+                    if (authUser.academy_id) {
+                        ppfConditions.push("f.academy_id = ?");
+                        ppfValues.push(authUser.academy_id);
+                    }
+                    // Coach only sees players in their assigned batches
+                    ppfConditions.push(`bp.batch_id IN (
+                        SELECT batch_id FROM cst_batch_coaches
+                        WHERE coach_user_id = ? AND status = 1 AND is_deleted = 0
+                    )`);
+                    ppfValues.push(authUser.id);
+                } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                    ppfConditions.push("f.branch_id = ? AND f.academy_id = ?");
+                    ppfValues.push(authUser.branch_id, authUser.academy_id);
+                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                    ppfConditions.push("f.academy_id = ?");
+                    ppfValues.push(authUser.academy_id);
+                } else if (authUser.isAccountant && authUser.academy_id) {
+                    ppfConditions.push("f.academy_id = ?");
+                    ppfValues.push(authUser.academy_id);
+                    if (authUser.branch_id) {
+                        ppfConditions.push("f.branch_id = ?");
+                        ppfValues.push(authUser.branch_id);
+                    }
+                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                    ppfConditions.push("f.academy_id = ?");
+                    ppfValues.push(authUser.academy_id);
+                }
+            }
+
+            const targetAcademyId = searchParams.get("academy_id");
+            if (targetAcademyId && isPositiveInt(targetAcademyId) && (!authUser || authUser.isSuperAdmin)) {
+                ppfConditions.push("f.academy_id = ?");
+                ppfValues.push(Number(targetAcademyId));
+            }
+
+            const targetBranchId = searchParams.get("branch_id");
+            if (targetBranchId && isPositiveInt(targetBranchId) && (!authUser || !authUser.isBranchAdmin)) {
+                ppfConditions.push("f.branch_id = ?");
+                ppfValues.push(Number(targetBranchId));
+            }
+
+            const targetUserId = searchParams.get("user_id");
+            if (targetUserId && isPositiveInt(targetUserId)) {
+                ppfConditions.push("(up.user_id = ? OR ap.user_id = ?)");
+                ppfValues.push(Number(targetUserId), Number(targetUserId));
+            }
+
+            if (batchId && isPositiveInt(batchId)) {
+                ppfConditions.push("bp.batch_id = ?");
+                ppfValues.push(Number(batchId));
+            }
+
+            if (status) {
+                ppfConditions.push("f.payment_status = ?");
+                ppfValues.push(status);
+            }
+
+            const ppfWhere = ppfConditions.length ? `WHERE ${ppfConditions.join(" AND ")}` : "";
+
+            const [pRows] = await connection.execute(
+                `SELECT
+                    CONCAT('ppf_', f.id) AS id,
+                    f.id AS program_fee_id,
+                    f.academy_id,
+                    f.branch_id,
+                    'Program Fee' AS fee_type,
+                    NULL AS tournament_id,
+                    NULL AS tournament_team_id,
+                    NULL AS tournament_team_player_id,
+                    NULL AS match_id,
+                    NULL AS match_team_id,
+                    NULL AS match_player_id,
+                    NULL AS ground_booking_id,
+                    COALESCE(up.user_id, ap.user_id) AS user_id,
+                    NULL AS outside_player_id,
+                    f.total_amount AS fee_amount,
+                    f.paid_amount AS paid_amount,
+                    f.due_amount AS balance_amount,
+                    f.payment_status AS status,
+                    f.remarks,
+                    NULL AS created_by,
+                    f.created_at,
+                    f.updated_at,
+                    a.academy_name,
+                    b.branch_name,
+                    NULL AS tournament_name,
+                    NULL AS tournament_start_date,
+                    NULL AS tournament_end_date,
+                    NULL AS match_no,
+                    NULL AS match_date,
+                    NULL AS match_time,
+                    NULL AS match_type,
+                    NULL AS booking_date,
+                    NULL AS ground_name,
+                    bp.batch_id,
+                    bat.batch_name,
+                    COALESCE(u.first_name, ap.first_name) AS first_name,
+                    COALESCE(u.last_name, ap.last_name) AS last_name,
+                    NULL AS outside_player_name,
+                    NULL AS tournament_team_name,
+                    NULL AS match_team_name,
+                    CONCAT(COALESCE(u.first_name, ap.first_name, ''), ' ', COALESCE(u.last_name, ap.last_name, '')) AS player_name,
+                    NULL AS outside_player_record_id,
+                    p.program_name,
+                    f.fee_month,
+                    f.due_date
+                FROM cst_player_program_fees f
+                JOIN cst_user_programs up ON up.id = f.user_program_id
+                JOIN cst_admission_players ap ON ap.id = f.admission_players_id
+                JOIN cst_programs p ON p.id = f.program_id
+                LEFT JOIN cst_academy a ON a.id = f.academy_id
+                LEFT JOIN cst_branch b ON b.id = f.branch_id
+                LEFT JOIN cst_users u ON u.id = COALESCE(up.user_id, ap.user_id)
+                JOIN cst_batch_players bp ON bp.user_program_id = up.id AND (bp.status = 'Active' OR bp.status = 1)
+                JOIN cst_batches bat ON bat.id = bp.batch_id AND bat.is_deleted = 0
+                ${ppfWhere}
+                ORDER BY f.id DESC`,
+                ppfValues
+            );
+            ppfRows = pRows;
+        }
+
+        const combinedRows = [...rows, ...ppfRows];
+        combinedRows.sort((a, b) => {
+            const dateA = new Date(a.created_at || a.due_date || a.match_date || 0).getTime();
+            const dateB = new Date(b.created_at || b.due_date || b.match_date || 0).getTime();
+            return dateB - dateA;
+        });
 
         return NextResponse.json({
             success: true,
-            count: rows.length,
-            data: rows,
+            count: combinedRows.length,
+            data: combinedRows,
         });
     } catch (error) {
         console.error("GET fee status error:", error);

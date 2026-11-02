@@ -25,6 +25,13 @@ export async function GET(request) {
             );
         }
 
+        if (authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Players cannot view users list." },
+                { status: 403 }
+            );
+        }
+
         await ensurePlayerAccess(connection);
 
         const { searchParams } = new URL(request.url);

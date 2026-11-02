@@ -12,6 +12,13 @@ export async function GET(request) {
         );
     }
 
+    if (authUser.isPlayer || authUser.isCoach) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Access restricted to administrators." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {

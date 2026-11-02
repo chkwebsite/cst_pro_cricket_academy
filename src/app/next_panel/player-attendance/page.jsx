@@ -31,6 +31,8 @@ export default function PlayerAttendancePage() {
     const userAcademyId = user?.academy_id;
     const hasAssignedAcademy =
         userAcademyId !== null && userAcademyId !== undefined && userAcademyId !== "" && Number(userAcademyId) !== 0;
+    const userRole = String(user?.user_type || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+    const isCoach = userRole.includes("coach") || String(user?.user_type) === "3" || Boolean(user?.isCoach);
 
     const [attendanceList, setAttendanceList] = useState([]);
     const [page, setPage] = useState(1);
@@ -45,9 +47,11 @@ export default function PlayerAttendancePage() {
     const [month, setMonth] = useState("");
     const [status, setStatus] = useState("");
     const [programId, setProgramId] = useState("");
+    const [batchId, setBatchId] = useState("");
     const [programs, setPrograms] = useState([]);
+    const [batches, setBatches] = useState([]);
 
-    // Load programs for filter dropdown
+    // Load programs and batches for filter dropdown
     useEffect(() => {
         if (!hasSessionUser) return;
         (async () => {
@@ -55,6 +59,15 @@ export default function PlayerAttendancePage() {
                 const res = await fetch("/api/programs");
                 const json = await res.json();
                 if (res.ok && json.success) setPrograms(json.data || []);
+            } catch {
+                /* ignore */
+            }
+        })();
+        (async () => {
+            try {
+                const res = await fetch("/api/batches");
+                const json = await res.json();
+                if (res.ok && json.success) setBatches(json.data || []);
             } catch {
                 /* ignore */
             }
@@ -72,6 +85,7 @@ export default function PlayerAttendancePage() {
             if (month) params.set("month", month);
             if (status) params.set("attendance_status", status);
             if (programId) params.set("program_id", programId);
+            if (batchId) params.set("batch_id", batchId);
             if (search.trim()) params.set("search", search.trim());
 
             const res = await fetch(`/api/player-attendance?${params.toString()}`);
@@ -88,11 +102,11 @@ export default function PlayerAttendancePage() {
     useEffect(() => {
         if (!hasSessionUser) return;
         loadAttendance();
-    }, [hasSessionUser, attendanceDate, month, status, programId]);
+    }, [hasSessionUser, attendanceDate, month, status, programId, batchId]);
 
     useEffect(() => {
         setPage(1);
-    }, [attendanceDate, month, status, programId, search]);
+    }, [attendanceDate, month, status, programId, batchId, search]);
 
     const totalPages = Math.ceil(attendanceList.length / PAGE_SIZE) || 1;
     const pagedAttendance = attendanceList.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -108,6 +122,7 @@ export default function PlayerAttendancePage() {
         setMonth("");
         setStatus("");
         setProgramId("");
+        setBatchId("");
         setTimeout(loadAttendance, 0);
     };
 
@@ -204,7 +219,7 @@ export default function PlayerAttendancePage() {
             <div className="card shadow-sm border-0 mb-4">
                 <div className="card-body">
                     <form onSubmit={handleSearch} className="row g-3 align-items-end">
-                        <div className="col-md-3">
+                        <div className="col-md-2">
                             <label className="form-label small fw-semibold">Search Player</label>
                             <div className="input-group">
                                 <span className="input-group-text bg-white">
@@ -213,7 +228,7 @@ export default function PlayerAttendancePage() {
                                 <input
                                     type="text"
                                     className="form-control"
-                                    placeholder="Name, admission no..."
+                                    placeholder="Name, admission..."
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
@@ -221,23 +236,35 @@ export default function PlayerAttendancePage() {
                         </div>
 
                         <div className="col-md-2">
-                            <label className="form-label small fw-semibold">Date</label>
-                            <input
-                                type="date"
-                                className="form-control"
-                                value={attendanceDate}
-                                onChange={(e) => setAttendanceDate(e.target.value)}
-                            />
+                            <label className="form-label small fw-semibold">Batch</label>
+                            <select
+                                className="form-select"
+                                value={batchId}
+                                onChange={(e) => setBatchId(e.target.value)}
+                            >
+                                <option value="">{isCoach ? "All My Batches" : "All Batches"}</option>
+                                {batches.map((b) => (
+                                    <option key={b.id} value={b.id}>
+                                        {b.batch_name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="col-md-2">
-                            <label className="form-label small fw-semibold">Month</label>
-                            <input
-                                type="month"
-                                className="form-control"
-                                value={month}
-                                onChange={(e) => setMonth(e.target.value)}
-                            />
+                            <label className="form-label small fw-semibold">Program</label>
+                            <select
+                                className="form-select"
+                                value={programId}
+                                onChange={(e) => setProgramId(e.target.value)}
+                            >
+                                <option value="">All Programs</option>
+                                {programs.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.program_name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="col-md-2">
@@ -256,19 +283,23 @@ export default function PlayerAttendancePage() {
                         </div>
 
                         <div className="col-md-2">
-                            <label className="form-label small fw-semibold">Program</label>
-                            <select
-                                className="form-select"
-                                value={programId}
-                                onChange={(e) => setProgramId(e.target.value)}
-                            >
-                                <option value="">All Programs</option>
-                                {programs.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.program_name}
-                                    </option>
-                                ))}
-                            </select>
+                            <label className="form-label small fw-semibold">Date</label>
+                            <input
+                                type="date"
+                                className="form-control"
+                                value={attendanceDate}
+                                onChange={(e) => setAttendanceDate(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="col-md-1">
+                            <label className="form-label small fw-semibold">Month</label>
+                            <input
+                                type="month"
+                                className="form-control"
+                                value={month}
+                                onChange={(e) => setMonth(e.target.value)}
+                            />
                         </div>
 
                         <div className="col-md-1 d-flex gap-1">
@@ -298,7 +329,7 @@ export default function PlayerAttendancePage() {
                                     <th className="ps-3">Date</th>
                                     <th>Player</th>
                                     <th>Admission No</th>
-                                    <th>Program</th>
+                                    <th>Program &amp; Batch</th>
                                     <th>Status</th>
                                     <th>Marked By</th>
                                     <th>Remarks</th>
@@ -332,7 +363,14 @@ export default function PlayerAttendancePage() {
                                                     {item.admission_no || `ID #${item.admission_players_id}`}
                                                 </span>
                                             </td>
-                                            <td>{item.program_name || "—"}</td>
+                                            <td>
+                                                <div className="fw-medium">{item.program_name || "—"}</div>
+                                                {item.batch_name && (
+                                                    <span className="badge bg-primary-subtle text-primary border border-primary-subtle mt-1" style={{ fontSize: "10.5px" }}>
+                                                        {item.batch_name}
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td>
                                                 <span className={`badge ${STATUS_BADGE[item.attendance_status] || "bg-secondary"}`}>
                                                     {item.attendance_status}

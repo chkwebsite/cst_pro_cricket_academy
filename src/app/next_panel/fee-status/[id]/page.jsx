@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Edit, Wallet } from "lucide-react";
 import pool from "@/app/components/lib/db";
 
@@ -31,6 +31,11 @@ const formatDate = (value) => {
 
 export default async function FeeStatusDetailPage({ params }) {
     const { id } = await params;
+
+    if (String(id).startsWith("ppf_") || String(id).startsWith("prog_")) {
+        const cleanId = String(id).replace(/^(ppf_|prog_)/, "");
+        redirect(`/next_panel/player-program-fees/${cleanId}`);
+    }
 
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) notFound();
 

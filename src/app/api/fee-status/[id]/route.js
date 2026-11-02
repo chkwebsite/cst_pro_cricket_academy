@@ -133,6 +133,51 @@ export async function GET(request, context) {
     try {
         const { id } = await context.params;
 
+        if (String(id).startsWith("ppf_") || String(id).startsWith("prog_")) {
+            const cleanId = Number(String(id).replace(/^(ppf_|prog_)/, ""));
+            if (!Number.isInteger(cleanId) || cleanId <= 0) {
+                return NextResponse.json({ success: false, message: "Invalid fee record ID." }, { status: 400 });
+            }
+            connection = await pool.getConnection();
+            const [pRows] = await connection.execute(
+                `SELECT
+                    CONCAT('ppf_', f.id) AS id,
+                    f.id AS program_fee_id,
+                    f.academy_id,
+                    f.branch_id,
+                    'Program Fee' AS fee_type,
+                    COALESCE(up.user_id, ap.user_id) AS user_id,
+                    f.total_amount AS fee_amount,
+                    f.paid_amount AS paid_amount,
+                    f.due_amount AS balance_amount,
+                    f.payment_status AS status,
+                    f.remarks,
+                    f.created_at,
+                    f.updated_at,
+                    a.academy_name,
+                    b.branch_name,
+                    COALESCE(u.first_name, ap.first_name) AS first_name,
+                    COALESCE(u.last_name, ap.last_name) AS last_name,
+                    CONCAT(COALESCE(u.first_name, ap.first_name, ''), ' ', COALESCE(u.last_name, ap.last_name, '')) AS player_name,
+                    p.program_name,
+                    f.fee_month,
+                    f.due_date
+                 FROM cst_player_program_fees f
+                 JOIN cst_user_programs up ON up.id = f.user_program_id
+                 JOIN cst_admission_players ap ON ap.id = f.admission_players_id
+                 JOIN cst_programs p ON p.id = f.program_id
+                 LEFT JOIN cst_academy a ON a.id = f.academy_id
+                 LEFT JOIN cst_branch b ON b.id = f.branch_id
+                 LEFT JOIN cst_users u ON u.id = COALESCE(up.user_id, ap.user_id)
+                 WHERE f.id = ? LIMIT 1`,
+                [cleanId]
+            );
+            if (!pRows.length) {
+                return NextResponse.json({ success: false, message: "Fee record not found." }, { status: 404 });
+            }
+            return NextResponse.json({ success: true, data: pRows[0] });
+        }
+
         if (!isPositiveInt(id)) {
             return NextResponse.json(
                 { success: false, message: "Invalid fee record ID." },
@@ -507,6 +552,27 @@ export async function DELETE(request, context) {
 
     try {
         const { id } = await context.params;
+
+        if (String(id).startsWith("ppf_") || String(id).startsWith("prog_")) {
+            const cleanId = Number(String(id).replace(/^(ppf_|prog_)/, ""));
+            if (!Number.isInteger(cleanId) || cleanId <= 0) {
+                return NextResponse.json(
+                    { success: false, message: "Invalid fee record ID." },
+                    { status: 400 }
+                );
+            }
+
+            connection = await pool.getConnection();
+            await connection.execute(
+                "DELETE FROM cst_player_program_fees WHERE id = ?",
+                [cleanId]
+            );
+
+            return NextResponse.json({
+                success: true,
+                message: "Fee record deleted successfully.",
+            });
+        }
 
         if (!isPositiveInt(id)) {
             return NextResponse.json(

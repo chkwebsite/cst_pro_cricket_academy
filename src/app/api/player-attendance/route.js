@@ -18,6 +18,7 @@ export async function GET(request) {
         const program_id = searchParams.get("program_id");
         const admission_players_id = searchParams.get("admission_players_id");
         const user_program_id = searchParams.get("user_program_id");
+        const batch_id = searchParams.get("batch_id");
         const attendance_date = searchParams.get("attendance_date");
         const month = searchParams.get("month");
         const attendance_status = searchParams.get("attendance_status");
@@ -49,6 +50,8 @@ export async function GET(request) {
 
                 p.program_name,
                 up.appointment_no,
+                b.id AS batch_id,
+                b.batch_name,
 
                 CONCAT(
                     COALESCE(marker.first_name, ''),
@@ -67,6 +70,12 @@ export async function GET(request) {
             INNER JOIN cst_programs p
                 ON p.id = a.program_id
 
+            LEFT JOIN cst_batch_players bp
+                ON bp.user_program_id = a.user_program_id AND (bp.status = 'Active' OR bp.status = 1)
+
+            LEFT JOIN cst_batches b
+                ON b.id = bp.batch_id AND b.is_deleted = 0
+
             LEFT JOIN cst_users marker
                 ON marker.id = a.marked_by
 
@@ -83,40 +92,39 @@ export async function GET(request) {
         }
 
         const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isCoach) {
-                // Coach only sees attendance for players in their assigned batches
-                sql += ` AND a.admission_players_id IN (
-                    SELECT up.admission_players_id
-                    FROM cst_user_programs up
-                    JOIN cst_batch_players bp ON bp.user_program_id = up.id
-                    JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
-                    WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
-                )`;
-                values.push(authUser.id);
-            } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                sql += " AND a.branch_id = ? AND a.academy_id = ?";
-                values.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                sql += " AND a.academy_id = ?";
-                values.push(authUser.academy_id);
-                if (branch_id) {
-                    sql += " AND a.branch_id = ?";
-                    values.push(branch_id);
-                }
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                sql += " AND a.academy_id = ?";
-                values.push(authUser.academy_id);
-            } else {
-                if (academy_id) {
-                    sql += ` AND a.academy_id = ?`;
-                    values.push(academy_id);
-                }
-                if (branch_id) {
-                    sql += ` AND a.branch_id = ?`;
-                    values.push(branch_id);
-                }
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (authUser.isPlayer) {
+            sql += " AND up.user_id = ?";
+            values.push(authUser.id);
+        } else if (authUser.isCoach) {
+            // Coach only sees attendance for players in their assigned batches
+            sql += ` AND a.admission_players_id IN (
+                SELECT up.admission_players_id
+                FROM cst_user_programs up
+                JOIN cst_batch_players bp ON bp.user_program_id = up.id
+                JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
+                WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
+            )`;
+            values.push(authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND a.branch_id = ? AND a.academy_id = ?";
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND a.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND a.branch_id = ?";
+                values.push(branch_id);
             }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND a.academy_id = ?";
+            values.push(authUser.academy_id);
         } else {
             if (academy_id) {
                 sql += ` AND a.academy_id = ?`;
@@ -141,6 +149,15 @@ export async function GET(request) {
         if (user_program_id) {
             sql += ` AND a.user_program_id = ?`;
             values.push(user_program_id);
+        }
+
+        if (batch_id && Number.isInteger(Number(batch_id)) && Number(batch_id) > 0) {
+            sql += ` AND a.user_program_id IN (
+                SELECT bp.user_program_id
+                FROM cst_batch_players bp
+                WHERE bp.batch_id = ? AND (bp.status = 'Active' OR bp.status = 1)
+            )`;
+            values.push(Number(batch_id));
         }
 
         if (attendance_date) {

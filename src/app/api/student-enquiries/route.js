@@ -51,29 +51,32 @@ e.*,
         }
 
         const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
-                sql += " AND e.branch_id = ? AND e.academy_id = ?";
-                values.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                sql += " AND e.academy_id = ?";
-                values.push(authUser.academy_id);
-                if (branch_id) {
-                    sql += " AND e.branch_id = ?";
-                    values.push(branch_id);
-                }
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                sql += " AND e.academy_id = ?";
-                values.push(authUser.academy_id);
-            } else {
-                if (academy_id) {
-                    sql += " AND e.academy_id = ?";
-                    values.push(academy_id);
-                }
-                if (branch_id) {
-                    sql += " AND e.branch_id = ?";
-                    values.push(branch_id);
-                }
+        if (!authUser) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Unauthorized. Authentication required to view student enquiries.",
+                },
+                { status: 401 }
+            );
+        }
+
+        if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND e.branch_id = ? AND e.academy_id = ?";
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND e.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND e.branch_id = ?";
+                values.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND e.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND e.branch_id = ?";
+                values.push(branch_id);
             }
         } else {
             if (academy_id) {
