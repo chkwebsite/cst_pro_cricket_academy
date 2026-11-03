@@ -509,7 +509,18 @@ export default function AttendanceMatrixPage() {
             const dateObj = new Date(selectedYear, selectedMonth - 1, d);
             const weekday = FULL_WEEKDAY_NAMES[dateObj.getDay()];
             const isWeeklyOff = userDays.includes(weekday);
-            const isPastOrToday = isPastMonth || (isCurrentMonth && d <= currentDay);
+
+            const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            const status = attendanceMap[`${userId}_${dateStr}`];
+            if (status === "Present") p++;
+            else if (status === "Absent") a++;
+            else if (status === "Late") l++;
+            else if (status === "Half Day") hd++;
+            else if (status === "Leave") lv++;
+
+            // If a day is in the past, or today, or has already been marked in the grid: count it in working days!
+            const isMarked = Boolean(status);
+            const isPastOrToday = isPastMonth || (isCurrentMonth && (d <= currentDay || isMarked));
 
             // "week off ko bhi working day me add hoga": Week offs are counted as working days!
             totalMonthDays++;
@@ -520,14 +531,6 @@ export default function AttendanceMatrixPage() {
                     weekOffPastCount++;
                 }
             }
-
-            const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-            const status = attendanceMap[`${userId}_${dateStr}`];
-            if (status === "Present") p++;
-            else if (status === "Absent") a++;
-            else if (status === "Late") l++;
-            else if (status === "Half Day") hd++;
-            else if (status === "Leave") lv++;
         }
 
         // Attendance Deduction Rules:

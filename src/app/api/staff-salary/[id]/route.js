@@ -72,6 +72,14 @@ export async function PUT(request, { params }) {
             return NextResponse.json({ success: false, message: "Forbidden." }, { status: 403 });
         }
 
+        // Branch Admin does NOT have permission to edit salary structures (Admin/Super Admin only)
+        if (authUser.isBranchAdmin) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Branch Admin does not have permission to edit salary structures. Only Academy Admin and Super Admin can edit."
+            }, { status: 403 });
+        }
+
         const { id } = await params;
         connection = await pool.getConnection();
 
@@ -160,6 +168,14 @@ export async function DELETE(request, { params }) {
         }
         if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
             return NextResponse.json({ success: false, message: "Forbidden." }, { status: 403 });
+        }
+
+        // Branch Admin does NOT have permission to edit salary structures (Admin/Super Admin only)
+        if (authUser.isBranchAdmin) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Branch Admin does not have permission to edit salary structures. Only Academy Admin and Super Admin can edit."
+            }, { status: 403 });
         }
 
         const { id } = await params;

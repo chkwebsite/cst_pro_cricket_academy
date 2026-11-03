@@ -31,6 +31,7 @@ export default function StaffSalaryStructurePage() {
     const isAcademyAdmin = role === ROLES.ACADEMY_ADMIN;
     const isBranchAdmin = role === ROLES.BRANCH_ADMIN;
     const isAuthorized = isSuperAdmin || isAcademyAdmin || isBranchAdmin;
+    const canEdit = isSuperAdmin || isAcademyAdmin; // Branch Admin cannot edit salary structures
 
     // Filters and Tenant State
     const [academies, setAcademies] = useState([]);
@@ -176,6 +177,26 @@ export default function StaffSalaryStructurePage() {
         }
         fetchStaff();
     }, [selectedBranch]);
+
+    // 5. Staff already having a salary structure in this academy/branch
+    const configuredStaffIds = useMemo(() => {
+        return new Set(salaries.map((s) => Number(s.staff_id)));
+    }, [salaries]);
+
+    // Unconfigured staff: strictly only staff who do NOT have a salary structure yet
+    const unconfiguredStaffOptions = useMemo(() => {
+        return staffOptions.filter((st) => !configuredStaffIds.has(Number(st.id)));
+    }, [staffOptions, configuredStaffIds]);
+
+    // Modal Staff Options:
+    // In "create" mode: strictly only unconfigured staff members
+    // In "edit" mode: all staff (edited staff will be selected and disabled)
+    const modalStaffOptions = useMemo(() => {
+        if (modalMode === "edit") {
+            return staffOptions;
+        }
+        return unconfiguredStaffOptions;
+    }, [modalMode, staffOptions, unconfiguredStaffOptions]);
 
     // Real-Time Component Auto-Calculation
     // Auto-calculates standard 60/20/8/12 split on monthly input
@@ -323,8 +344,13 @@ export default function StaffSalaryStructurePage() {
 
     // Open Modal for New Salary
     const handleOpenCreate = () => {
+        if (unconfiguredStaffOptions.length === 0) {
+            showToast("All staff members in this branch already have salary structures configured.", "info");
+            return;
+        }
+
         setModalMode("create");
-        const defaultStaff = staffOptions[0];
+        const defaultStaff = unconfiguredStaffOptions[0];
         const defaultStaffId = defaultStaff?.id ? String(defaultStaff.id) : "";
         const defaultSalary = defaultStaff?.current_salary && Number(defaultStaff.current_salary) > 0
             ? Number(defaultStaff.current_salary)
@@ -362,6 +388,10 @@ export default function StaffSalaryStructurePage() {
 
     // Open Modal to Edit
     const handleOpenEdit = (item) => {
+        if (!canEdit) {
+            showToast("Branch Admin cannot edit salary structures. Only Academy Admin and Super Admin have permission to edit.", "error");
+            return;
+        }
         setModalMode("edit");
         setFormData({
             id: item.id,
@@ -504,9 +534,15 @@ export default function StaffSalaryStructurePage() {
                             type="button"
                             className="btn btn-primary d-flex align-items-center gap-2 fw-semibold shadow-sm"
                             onClick={handleOpenCreate}
+                            title={unconfiguredStaffOptions.length === 0 ? "All staff members already have a salary structure" : "Configure Salary Package"}
                         >
                             <Plus size={18} />
                             Configure Salary
+                            {unconfiguredStaffOptions.length > 0 && (
+                                <span className="badge bg-white text-primary ms-1" style={{ fontSize: "0.72rem" }}>
+                                    {unconfiguredStaffOptions.length} new
+                                </span>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -719,14 +755,24 @@ export default function StaffSalaryStructurePage() {
                                                 </span>
                                             </td>
                                             <td className="text-end">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
-                                                    onClick={() => handleOpenEdit(item)}
-                                                >
-                                                    <Edit2 size={13} />
-                                                    Edit
-                                                </button>
+                                                {canEdit ? (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                                                        onClick={() => handleOpenEdit(item)}
+                                                        title="Edit Salary Structure"
+                                                    >
+                                                        <Edit2 size={13} />
+                                                        Edit
+                                                    </button>
+                                                ) : (
+                                                    <span
+                                                        className="badge bg-light text-muted border py-1 px-2"
+                                                        title="Branch Admin cannot edit salary structures. Only Academy Admin and Super Admin have edit permission."
+                                                    >
+                                                        View Only
+                                                    </span>
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -776,13 +822,25 @@ export default function StaffSalaryStructurePage() {
                                             disabled={modalMode === "edit"}
                                             required
                                         >
-                                            <option value="">-- Select Staff Member --</option>
-                                            {staffOptions.map((st) => (
-                                                <option key={st.id} value={st.id}>
-                                                    {st.first_name} {st.last_name} ({st.appointment_no}) - {st.role_name || "Staff"}
-                                                </option>
-                                            ))}
+                                            {modalMode === "create" && unconfiguredStaffOptions.length === 0 ? (
+                                                <option value="">-- All staff members already have salary structures configured --</option>
+                                            ) : (
+                                                <>
+                                                    <option value="">-- Select Staff Member --</option>
+                                                    {modalStaffOptions.map((st) => (
+                                                        <option key={st.id} value={st.id}>
+                                                            {st.first_name} {st.last_name} ({st.appointment_no}) - {st.role_name || "Staff"}
+                                                        </option>
+                                                    ))}
+                                                </>
+                                            )}
                                         </select>
+                                        {modalMode === "create" && unconfiguredStaffOptions.length === 0 && (
+                                            <div className="alert alert-info py-2 px-3 small mt-2 mb-0 d-flex align-items-center gap-2">
+                                                <CheckCircle2 size={16} className="text-success flex-shrink-0" />
+                                                <span>All staff members in this branch already have an active salary structure.</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Monthly Salary Input (Master Trigger) */}

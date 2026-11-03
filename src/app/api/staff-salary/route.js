@@ -281,6 +281,15 @@ export async function POST(request) {
 
         let salaryId;
         if (existing.length > 0) {
+            // Branch Admin cannot edit an existing salary structure
+            if (authUser.isBranchAdmin) {
+                await connection.rollback();
+                return NextResponse.json({
+                    success: false,
+                    message: "Forbidden. Branch Admin does not have permission to edit salary structures. Only Academy Admin and Super Admin can edit."
+                }, { status: 403 });
+            }
+
             salaryId = existing[0].id;
             await connection.query(
                 `UPDATE cst_staff_salary SET
