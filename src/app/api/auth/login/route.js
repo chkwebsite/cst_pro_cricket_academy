@@ -247,6 +247,16 @@ export async function POST(request) {
             updated_at: user.updated_at,
         };
 
+        const [staffMatch] = await connection.query(
+            "SELECT id, date_of_joining, current_salary FROM cst_staff WHERE user_id = ? AND is_deleted = 0 LIMIT 1",
+            [user.id]
+        );
+        if (staffMatch.length > 0) {
+            userData.staff_id = staffMatch[0].id;
+            userData.date_of_joining = staffMatch[0].date_of_joining;
+            userData.current_salary = staffMatch[0].current_salary;
+        }
+
         /*
          * Remove duplicate menu/permission combinations
          */

@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
     Activity,
+    Banknote,
     Calendar,
     CalendarCheck,
     ChevronDown,
     ChevronRight,
     Circle,
     CreditCard,
+    DollarSign,
     Film,
     FolderTree,
     Image,
@@ -19,6 +21,7 @@ import {
     LayoutDashboard,
     Menu,
     Package,
+    Receipt,
     Settings,
     ShieldCheck,
     Key,
@@ -62,6 +65,15 @@ const iconMap = {
     "password-resets": Key,
     calendar: Calendar,
     "calendar-check": CalendarCheck,
+    attendance: CalendarCheck,
+    "staff-user-management": Users,
+    "user-weekly-off": Calendar,
+    "staff-salary": CreditCard,
+    "staff-salary-payments": Banknote,
+    "staff-salary-transactions": Receipt,
+    banknote: Banknote,
+    receipt: Receipt,
+    "dollar-sign": DollarSign,
     "ground-booking-requests": CalendarCheck,
     "ground-bookings": CalendarCheck,
     "ground-availability": Calendar,
@@ -376,8 +388,9 @@ export default function Sidebar({ children }) {
                         return true;
                     });
                 } else if (role === ROLES.ACCOUNTANT) {
-                    // Accountant: ONLY accounts and finance related modules
+                    // Accountant: ONLY accounts and finance related modules + Attendance
                     const accountantUrls = new Set([
+                        "/next_panel/attendance",
                         "/next_panel/fee-status",
                         "/next_panel/fee-payments",
                         "/next_panel/player-attendance",
@@ -394,8 +407,9 @@ export default function Sidebar({ children }) {
                         return accountantUrls.has(m.menu_url);
                     });
                 } else if (role === ROLES.COACH) {
-                    // Coach: "sirf uska batch aur batch players aur kis player ka fee pending ya partial hai"
+                    // Coach: "sirf uska batch aur batch players aur kis player ka fee pending ya partial hai + My Attendance"
                     const coachUrls = new Set([
+                        "/next_panel/attendance",
                         "/next_panel/batches",
                         "/next_panel/batch-players",
                         "/next_panel/player-attendance",
@@ -405,17 +419,20 @@ export default function Sidebar({ children }) {
                     const coachItems = allMenus
                         .filter((m) => coachUrls.has(m.menu_url))
                         .map((m) => {
+                            if (m.menu_url === "/next_panel/attendance") {
+                                return { ...m, parent_id: null, menu_name: "My Attendance", menu_title: "My Attendance", menu_icon: "calendar-check", menu_order: 1 };
+                            }
                             if (m.menu_url === "/next_panel/batches") {
-                                return { ...m, parent_id: null, menu_name: "My Batches", menu_title: "My Batches", menu_order: 1 };
+                                return { ...m, parent_id: null, menu_name: "My Batches", menu_title: "My Batches", menu_order: 2 };
                             }
                             if (m.menu_url === "/next_panel/batch-players") {
-                                return { ...m, parent_id: null, menu_name: "My Batch Players", menu_title: "My Batch Players", menu_order: 2 };
+                                return { ...m, parent_id: null, menu_name: "My Batch Players", menu_title: "My Batch Players", menu_order: 3 };
                             }
                             if (m.menu_url === "/next_panel/player-attendance") {
-                                return { ...m, parent_id: null, menu_name: "Player Attendance", menu_title: "Player Attendance", menu_order: 3 };
+                                return { ...m, parent_id: null, menu_name: "Player Attendance", menu_title: "Player Attendance", menu_order: 4 };
                             }
                             if (m.menu_url === "/next_panel/player-program-fees" || m.menu_url === "/next_panel/fee-status") {
-                                return { ...m, parent_id: null, menu_name: "Player Fee Dues", menu_title: "Player Fee Dues", menu_order: 4 };
+                                return { ...m, parent_id: null, menu_name: "Player Fee Dues", menu_title: "Player Fee Dues", menu_order: 5 };
                             }
                             return { ...m, parent_id: null };
                         });
@@ -432,9 +449,10 @@ export default function Sidebar({ children }) {
                     // PLAYER SPECIFIC MENU RULES:
                     // 1. "Product master" (menu_key: 'Product_Master' or id: 54) and admin product management menus (55, 56, 57, 58, 60) MUST NOT be shown.
                     // 2. Player's orders must be shown directly as "My Orders" at top level.
-                    // 3. Player related menus (Player Dashboard, My Orders, Fee Status, Ground Availability/Bookings, etc.) are shown.
+                    // 3. Player related menus (Player Dashboard, My Orders, Fee Status, My Attendance, Ground Availability/Bookings, etc.) are shown.
                     const playerAllowedUrls = new Set([
                         "/next_panel/player-dashboard",
+                        "/next_panel/attendance",
                         "/next_panel/orders",
                         "/next_panel/fee-status",
                         "/next_panel/ground-availability",
@@ -456,6 +474,16 @@ export default function Sidebar({ children }) {
                         })
                         .map((m) => {
                             // Present player items cleanly at top level
+                            if (m.menu_url === "/next_panel/attendance" || m.menu_key === "attendance") {
+                                return {
+                                    ...m,
+                                    parent_id: null,
+                                    menu_name: "My Attendance",
+                                    menu_title: "My Attendance",
+                                    menu_icon: "calendar-check",
+                                    menu_order: 3,
+                                };
+                            }
                             if (m.menu_url === "/next_panel/orders" || m.menu_key === "orders") {
                                 return {
                                     ...m,
@@ -483,7 +511,7 @@ export default function Sidebar({ children }) {
                                     menu_name: "My Fee Status",
                                     menu_title: "My Fee Status",
                                     menu_icon: "credit-card",
-                                    menu_order: 3,
+                                    menu_order: 4,
                                 };
                             }
                             return {
@@ -501,6 +529,18 @@ export default function Sidebar({ children }) {
                             menu_url: "/next_panel/player-dashboard",
                             menu_icon: "player-dashboard",
                             menu_order: 1,
+                        });
+                    }
+
+                    if (!playerItems.some((m) => m.menu_url === "/next_panel/attendance")) {
+                        playerItems.push({
+                            id: 99997,
+                            parent_id: null,
+                            menu_name: "My Attendance",
+                            menu_title: "My Attendance",
+                            menu_url: "/next_panel/attendance",
+                            menu_icon: "calendar-check",
+                            menu_order: 3,
                         });
                     }
 

@@ -63,7 +63,9 @@ u.id,
     u.is_deleted,
     u.last_login_at,
     u.created_at,
-    u.updated_at
+    u.updated_at,
+    st.date_of_joining,
+    st.current_salary
 
             FROM cst_users u
 
@@ -72,6 +74,9 @@ u.id,
 
             LEFT JOIN cst_branch b
                 ON b.id = u.branch_id
+
+            LEFT JOIN cst_staff st
+                ON st.user_id = u.id AND st.is_deleted = 0
 
             WHERE u.is_deleted = 0
     `;

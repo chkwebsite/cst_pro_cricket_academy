@@ -50,7 +50,7 @@ export async function GET(request) {
             params.push(id);
         }
         if (search) {
-            sql += `AND (academy_name LIKE ? OR phone LIKE ? OR email LIKE ? OR city LIKE ? OR state LIKE ?)`;
+            sql += ` AND (academy_name LIKE ? OR phone LIKE ? OR email LIKE ? OR city LIKE ? OR state LIKE ?)`;
             const searchValue = `%${search}%`;
             params.push(searchValue, searchValue, searchValue, searchValue, searchValue);
         }
@@ -58,7 +58,7 @@ export async function GET(request) {
             sql += ` AND status = ?`;
             params.push(status);
         }
-        sql += `ORDER BY id DESC`;
+        sql += ` ORDER BY id DESC`;
 
         const [rows] = await connection.query(sql, params);
 

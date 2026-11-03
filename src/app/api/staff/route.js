@@ -96,7 +96,7 @@ export async function GET(request) {
                 s.id, s.appointment_no, s.user_id, s.role_id, r.role_name,
                 s.academy_id, ac.academy_name, s.branch_id, b.branch_name,
                 s.first_name, s.last_name, s.speciality, s.experience,
-                s.current_salary, s.status, s.created_at
+                s.current_salary, s.date_of_joining, s.status, s.created_at
              FROM cst_staff s
              LEFT JOIN cst_roles r ON s.role_id = r.id
              LEFT JOIN cst_academy ac ON s.academy_id = ac.id

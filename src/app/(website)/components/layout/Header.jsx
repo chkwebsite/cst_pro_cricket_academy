@@ -178,7 +178,7 @@ export default function Header({
               </div>
             ) : (
               <Link href="/login" className="fw-semibold text-lime">
-                <i className="bi bi-box-arrow-in-right me-1"></i>Login
+                <i className="bi bi-box-arrow-in-right me-1 text-white" style={{ fontSize: "1.1em" }}></i>Login
               </Link>
             )}
           </div>
@@ -459,7 +459,7 @@ export default function Header({
                   href="/shop"
                   onClick={() => setNavOpen(false)}
                 >
-                  <i className="bi bi-shop me-1 text-lime"></i>
+                  <i className="bi bi-shop me-1 text-white" style={{ fontSize: "1.1em" }}></i>
                   Store
                 </Link>
               </li>
@@ -732,7 +732,7 @@ export default function Header({
                     href="/login"
                     onClick={() => setNavOpen(false)}
                   >
-                    <i className="bi bi-person-circle me-1"></i>Login
+                    <i className="bi bi-person-circle me-1 text-white" style={{ fontSize: "1.1em" }}></i>Login
                   </Link>
                 </li>
               )}

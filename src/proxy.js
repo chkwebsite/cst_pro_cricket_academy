@@ -112,6 +112,11 @@ const ADMIN_ONLY_APIS = [
     "/api/batch-coaches",
     "/api/batch-players",
     "/api/player-attendance",
+    "/api/attendance",
+    "/api/user-weekly-off",
+    "/api/staff-salary",
+    "/api/staff-salary-payments",
+    "/api/staff-salary-transactions",
 ];
 
 // Resource APIs where GET is public/viewable, but modifications (POST, PUT, PATCH, DELETE) require admin auth
@@ -224,8 +229,18 @@ export function proxy(request) {
                 "/api/student-enquiries",
                 "/api/student-enquiries-flowup",
                 "/api/password-resets",
+                "/api/staff-salary",
+                "/api/staff-salary-payments",
+                "/api/staff-salary-transactions",
             ];
-            if (userType.includes("player") && PLAYER_RESTRICTED.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+            const isWeeklyOffMutation =
+                (pathname === "/api/user-weekly-off" || pathname.startsWith("/api/user-weekly-off/")) &&
+                ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+
+            if (
+                userType.includes("player") &&
+                (PLAYER_RESTRICTED.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) || isWeeklyOffMutation)
+            ) {
                 return applySecurityHeaders(
                     NextResponse.json(
                         {
@@ -334,6 +349,7 @@ export function proxy(request) {
         if (userType.includes("account")) {
             const allowedForAccountant = [
                 `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/attendance`,
                 `${PANEL_PREFIX}/fee-status`,
                 `${PANEL_PREFIX}/fee-payments`,
                 `${PANEL_PREFIX}/player-attendance`,
@@ -355,6 +371,7 @@ export function proxy(request) {
         if (userType.includes("coach")) {
             const allowedForCoach = [
                 `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/attendance`,
                 `${PANEL_PREFIX}/batches`,
                 `${PANEL_PREFIX}/batch-players`,
                 `${PANEL_PREFIX}/player-attendance`,
@@ -379,6 +396,9 @@ export function proxy(request) {
                 `${PANEL_PREFIX}/role-permissions`,
                 `${PANEL_PREFIX}/user-roles`,
                 `${PANEL_PREFIX}/academies`,
+                `${PANEL_PREFIX}/staff-salary`,
+                `${PANEL_PREFIX}/staff-salary-payments`,
+                `${PANEL_PREFIX}/staff-salary-transactions`,
             ];
             const isForbidden = forbiddenForManagement.some((f) => matchesMenuPath(pathname, f));
             if (isForbidden) {
@@ -391,6 +411,7 @@ export function proxy(request) {
         if (userType.includes("staff")) {
             const allowedForStaff = [
                 `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/attendance`,
                 `${PANEL_PREFIX}/batches`,
                 `${PANEL_PREFIX}/batch-players`,
                 `${PANEL_PREFIX}/player-attendance`,
@@ -412,6 +433,7 @@ export function proxy(request) {
         if (userType.includes("player")) {
             const allowedForPlayer = [
                 `${PANEL_PREFIX}/dashboard`,
+                `${PANEL_PREFIX}/attendance`,
                 `${PANEL_PREFIX}/player-dashboard`,
                 `${PANEL_PREFIX}/my-orders`,
                 `${PANEL_PREFIX}/orders`,

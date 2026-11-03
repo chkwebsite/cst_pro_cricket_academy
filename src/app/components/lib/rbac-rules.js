@@ -61,6 +61,11 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/Players",
         "/next_panel/student-enquiries",
         "/next_panel/student-enquiries-flowup",
+        "/next_panel/attendance",
+        "/next_panel/user-weekly-off",
+        "/next_panel/staff-salary",
+        "/next_panel/staff-salary-payments",
+        "/next_panel/staff-salary-transactions",
         "/next_panel/player-attendance",
         "/next_panel/player-program-fees",
         "/next_panel/player-fees-matrix",
@@ -119,6 +124,11 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/Players",
         "/next_panel/student-enquiries",
         "/next_panel/student-enquiries-flowup",
+        "/next_panel/attendance",
+        "/next_panel/user-weekly-off",
+        "/next_panel/staff-salary",
+        "/next_panel/staff-salary-payments",
+        "/next_panel/staff-salary-transactions",
         "/next_panel/player-attendance",
         "/next_panel/player-program-fees",
         "/next_panel/player-fees-matrix",
@@ -174,6 +184,11 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/staff",
         "/next_panel/student-enquiries",
         "/next_panel/student-enquiries-flowup",
+        "/next_panel/attendance",
+        "/next_panel/user-weekly-off",
+        "/next_panel/staff-salary",
+        "/next_panel/staff-salary-payments",
+        "/next_panel/staff-salary-transactions",
         "/next_panel/player-attendance",
         "/next_panel/matches",
         "/next_panel/match-management",
@@ -187,6 +202,7 @@ export const ROLE_ALLOWED_ROUTES = {
 
     [ROLES.ACCOUNTANT]: [
         "/next_panel/dashboard",
+        "/next_panel/attendance",
         "/next_panel/fee-status",
         "/next_panel/fee-payments",
         "/next_panel/player-attendance",
@@ -200,6 +216,7 @@ export const ROLE_ALLOWED_ROUTES = {
 
     [ROLES.COACH]: [
         "/next_panel/dashboard",
+        "/next_panel/attendance",
         "/next_panel/batches",
         "/next_panel/batch-players",
         "/next_panel/player-attendance",
@@ -210,12 +227,14 @@ export const ROLE_ALLOWED_ROUTES = {
     [ROLES.PLAYER]: [
         "/next_panel/player-dashboard",
         "/next_panel/dashboard",
+        "/next_panel/attendance",
         "/next_panel/my-orders",
         "/next_panel/orders",
     ],
 
     [ROLES.STAFF]: [
         "/next_panel/dashboard",
+        "/next_panel/attendance",
         "/next_panel/batches",
         "/next_panel/batch-players",
         "/next_panel/player-attendance",
@@ -229,6 +248,7 @@ export const ROLE_ALLOWED_ROUTES = {
 
     [ROLES.GROUND_STAFF]: [
         "/next_panel/dashboard",
+        "/next_panel/attendance",
         "/next_panel/grounds",
         "/next_panel/ground-slots",
         "/next_panel/ground-availability",
