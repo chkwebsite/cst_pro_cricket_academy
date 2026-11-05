@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-function StatCard({ target, suffix = "", label }) {
+function StatCard({ target, suffix = "", label, delay = 0 }) {
   const [count, setCount] = useState(0);
   const cardRef = useRef(null);
   const startedRef = useRef(false);
@@ -15,20 +15,21 @@ function StatCard({ target, suffix = "", label }) {
       if (startedRef.current) return;
       startedRef.current = true;
 
-      const duration = 1500;
-      const stepTime = 25;
-      const totalSteps = duration / stepTime;
-      const stepValue = Math.max(1, Math.ceil(target / totalSteps));
+      const duration = 1800;
+      const startTime = performance.now();
 
-      let current = 0;
-      const timer = setInterval(() => {
-        current += stepValue;
-        if (current >= target) {
-          current = target;
-          clearInterval(timer);
+      const step = (now) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 4);
+        setCount(Math.round(target * eased));
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
         }
-        setCount(current);
-      }, stepTime);
+      };
+
+      requestAnimationFrame(step);
     };
 
     if ("IntersectionObserver" in window) {
@@ -39,7 +40,7 @@ function StatCard({ target, suffix = "", label }) {
             observer.disconnect();
           }
         },
-        { threshold: 0.2 }
+        { threshold: 0.3 }
       );
       observer.observe(el);
       return () => observer.disconnect();
@@ -49,15 +50,29 @@ function StatCard({ target, suffix = "", label }) {
   }, [target]);
 
   return (
-    <div className="stat-card" ref={cardRef}>
-      <div className="num">
-        {count}
+    <div className="card stat" data-reveal style={{ "--d": delay }} ref={cardRef}>
+      <b>
+        {count.toLocaleString("en-IN")}
         {suffix}
-      </div>
-      <small>{label}</small>
+      </b>
+      <span>{label}</span>
     </div>
   );
 }
+
+const TICKER_ITEMS = [
+  { label: "JUNIOR CRICKET PROGRAM", href: "/programs" },
+  { label: "BEGINNER TRAINING", href: "/programs" },
+  { label: "PROFESSIONAL COACHING", href: "/programs" },
+  { label: "DAY & NIGHT CAMPS", href: "/matches" },
+  { label: "RESIDENTIAL ACADEMY", href: "/facilities" },
+  { label: "BOOK FREE TRIAL", href: "/book-free-trial" },
+  { label: "EXPERT COACHES", href: "/coaches" },
+  { label: "MATCH FIXTURES", href: "/matches" },
+  { label: "CAMPUS & BRANCHES", href: "/branches" },
+  { label: "PRO CRICKET STORE", href: "/shop" },
+  { label: "MOMENTS GALLERY", href: "/gallery" },
+];
 
 export default function StatsSection({
   stats = [
@@ -67,21 +82,42 @@ export default function StatsSection({
     { target: 3, suffix: "", label: "Training Centres" },
   ],
 }) {
+  // Duplicated list for seamless infinite marquee
+  const marqueeItems = [...TICKER_ITEMS, ...TICKER_ITEMS];
+
   return (
-    <section className="stats">
-      <div className="container">
-        <div className="row g-3 g-lg-4">
-          {stats.map((item, idx) => (
-            <div className="col-6 col-lg-3" key={idx}>
+    <>
+      <section className="stats">
+        <div className="container">
+          <div className="grid grid--4">
+            {stats.map((item, idx) => (
               <StatCard
+                key={idx}
                 target={item.target}
                 suffix={item.suffix}
                 label={item.label}
+                delay={idx}
               />
-            </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="ticker" style={{ marginTop: "64px" }} role="region" aria-label="Academy Highlights">
+        <div className="ticker__track">
+          {marqueeItems.map((item, idx) => (
+            <a
+              key={idx}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ticker__link"
+            >
+              {item.label}
+            </a>
           ))}
         </div>
       </div>
-    </section>
+    </>
   );
 }

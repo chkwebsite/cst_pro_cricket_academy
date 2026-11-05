@@ -2,101 +2,101 @@
 
 import { useState, useEffect } from "react";
 
+const TESTIMONIALS = [
+  {
+    quote: "The one-on-one sessions helped me fix my footwork against spin. I made my district team this season.",
+    author: "Aarav, U-16 batter",
+    stars: "★★★★★",
+  },
+  {
+    quote: "My son's technique and confidence improved within three months. The coaches are patient and the training is well structured.",
+    author: "Parent of U-14 player",
+    stars: "★★★★★",
+  },
+  {
+    quote: "Excellent turf facilities, match simulations, and a disciplined environment. The fitness drills made a huge difference to my bowling pace.",
+    author: "Rohit, fast bowler",
+    stars: "★★★★★",
+  },
+];
+
 export default function TestimonialsSection({
   tag = "Reviews",
-  title = "Student & Parent Stories",
-  testimonials = [
-    {
-      stars: 5,
-      hasHalfStar: false,
-      quote:
-        "My son's technique and confidence improved within three months. The coaches are patient and the training is well structured.",
-      author: "Parent of U-14 player",
-    },
-    {
-      stars: 5,
-      hasHalfStar: false,
-      quote:
-        "The one-on-one sessions helped me fix my footwork against spin. I made my district team this season.",
-      author: "Aarav, U-16 batter",
-    },
-    {
-      stars: 4,
-      hasHalfStar: true,
-      quote:
-        "Excellent facilities and a disciplined environment. The fitness programme made a big difference to my bowling.",
-      author: "Rohit, fast bowler",
-    },
-  ],
+  title = "STUDENT & PARENT STORIES",
 }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [cur, setCur] = useState(0);
 
   useEffect(() => {
-    if (testimonials.length <= 1) return;
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % testimonials.length);
+      setCur((prev) => (prev + 1) % TESTIMONIALS.length);
     }, 6000);
     return () => clearInterval(timer);
-  }, [testimonials.length]);
+  }, []);
 
-  const prevSlide = () => {
-    setCurrentIndex((prev) =>
-      prev === 0 ? testimonials.length - 1 : prev - 1
-    );
+  const go = (n) => {
+    setCur((n + TESTIMONIALS.length) % TESTIMONIALS.length);
   };
-
-  const nextSlide = () => {
-    setCurrentIndex((prev) => (prev + 1) % testimonials.length);
-  };
-
-  const current = testimonials[currentIndex] || testimonials[0];
 
   return (
-    <section className="bg-cream">
+    <section className="section section--cream">
       <div className="container">
-        <div className="text-center mb-5 reveal">
-          <span className="section-tag">{tag}</span>
-          <h2 className="section-title">{title}</h2>
-          <div className="divider"></div>
+        <div className="section-head" data-reveal>
+          <span className="eyebrow">{tag}</span>
+          <h2 className="title">
+            STUDENT &amp; PARENT <em>STORIES</em>
+          </h2>
         </div>
 
-        <div className="row justify-content-center">
-          <div className="col-lg-8">
-            <div className="testi-card">
-              <div className="stars mb-2">
-                {[...Array(current.stars)].map((_, i) => (
-                  <i key={i} className="bi bi-star-fill me-1"></i>
-                ))}
-                {current.hasHalfStar && (
-                  <i className="bi bi-star-half me-1"></i>
-                )}
-              </div>
-              <p>{current.quote}</p>
-              <p className="who">{current.author}</p>
+        <div className="slider" data-reveal="zoom" aria-roledescription="carousel" aria-label="Reviews">
+          <div className="slides">
+            {TESTIMONIALS.map((item, idx) => (
+              <figure
+                key={idx}
+                className={`slide ${idx === cur ? "is-active" : ""}`}
+                style={{ margin: 0, display: idx === cur ? "block" : "none" }}
+              >
+                <div className="quote-mark" aria-hidden="true">
+                  “
+                </div>
+                <div className="stars" aria-label="5 out of 5 stars">
+                  {item.stars}
+                </div>
+                <p>{item.quote}</p>
+                <b>{item.author}</b>
+              </figure>
+            ))}
+          </div>
+
+          <div className="slider__nav">
+            <button
+              type="button"
+              className="round s-prev"
+              onClick={() => go(cur - 1)}
+              aria-label="Previous review"
+            >
+              ←
+            </button>
+            <div className="dots">
+              {TESTIMONIALS.map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className={idx === cur ? "is-active" : ""}
+                  onClick={() => go(idx)}
+                  aria-label={`Review ${idx + 1}`}
+                />
+              ))}
             </div>
+            <button
+              type="button"
+              className="round s-next"
+              onClick={() => go(cur + 1)}
+              aria-label="Next review"
+            >
+              →
+            </button>
           </div>
         </div>
-
-        {testimonials.length > 1 && (
-          <div className="d-flex justify-content-center gap-2 mt-4">
-            <button
-              className="btn btn-sm btn-outline-dark rounded-circle"
-              type="button"
-              onClick={prevSlide}
-              aria-label="Previous testimonial"
-            >
-              <i className="bi bi-chevron-left"></i>
-            </button>
-            <button
-              className="btn btn-sm btn-outline-dark rounded-circle"
-              type="button"
-              onClick={nextSlide}
-              aria-label="Next testimonial"
-            >
-              <i className="bi bi-chevron-right"></i>
-            </button>
-          </div>
-        )}
       </div>
     </section>
   );

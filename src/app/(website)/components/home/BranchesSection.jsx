@@ -3,167 +3,181 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const BRANCH_IMAGES = [
-  "/images/website/scene-night.svg",
-  "/images/website/scene-batting.svg",
-  "/images/website/scene-bowling.svg",
-  "/images/website/scene-hostel.svg",
+const GROUND_PHOTOS = [
+  "/images/uploads/grounds/1790854770374-50134.png",
+  "/images/uploads/grounds/1790854818232-664323.png",
+  "/images/uploads/grounds/1790854920554-712937.png",
+  "/images/uploads/grounds/1790854770381-164112.png",
+  "/images/uploads/grounds/1790854818236-328687.png",
 ];
-
-function getBranchMetadata(b, idx) {
-  const name = (b.branch_name || b.name || "").toLowerCase();
-  const code = (b.branch_code || b.branchCode || "").toLowerCase();
-
-  // 1. CST Pro Cricket Academy (Main Campus)
-  if (
-    name.includes("cst") ||
-    (name.includes("main") && !name.includes("mantra")) ||
-    code.includes("ggn-br-000001")
-  ) {
-    return {
-      badge: "Main Campus",
-      image: "/images/website/scene-night.svg",
-      sortPriority: 1,
-    };
-  }
-
-  // 2. Dhananjay Cricket Academy (Training Campus)
-  if (name.includes("dhananjay") || code.includes("ggn-br-000002")) {
-    return {
-      badge: "Training Campus",
-      image: "/images/website/scene-batting.svg",
-      sortPriority: 2,
-    };
-  }
-
-  // 3. Sports Mantra (Match Ground / Cricket Complex)
-  if (
-    name.includes("sports mantra") ||
-    name.includes("mantra") ||
-    code.includes("sm-br")
-  ) {
-    return {
-      badge: "Match Ground",
-      image: "/images/website/scene-bowling.svg",
-      sortPriority: 3,
-    };
-  }
-
-  return {
-    badge: b.city ? b.city : b.state ? b.state : "Branch",
-    image: BRANCH_IMAGES[idx % BRANCH_IMAGES.length],
-    sortPriority: 10 + idx,
-  };
-}
 
 const FALLBACK_BRANCHES = [
   {
     id: "branch-1",
-    badge: "Head Office",
-    image: "/images/website/scene-night.svg",
-    name: "CST pro Cricket Academy(Main)",
-    address: "Maruti Kunj, Gurugram, Haryana - 122002",
-    phone: "+91 8285831503",
-    hours: "Mon–Sat · 6 AM – 7:30 PM",
-    directionsUrl:
-      "https://www.google.com/maps/search/?api=1&query=Maruti+Kunj+Gurugram",
+    name: "CST Pro Cricket Academy (Main)",
+    tag: "MAIN CAMPUS & HQ",
+    badgeClass: "badge--red",
+    tagline: "High-Performance Center & Headquarters",
+    address: "Maruti Kunj, Near DPS Maruti Kunj, Gurugram, Haryana, 122002",
+    phone: "8285831503",
+    hours: "Mon–Sat · 6:00 AM – 7:30 PM",
+    status: "OPEN TODAY",
+    image: "/images/uploads/grounds/1790854770374-50134.png",
+    facilities: [
+      "5 Turf Wickets",
+      "BOLA Bowling Machine",
+      "800-Lux Floodlights",
+      "Hostel & Cafeteria",
+      "Strength Gym",
+    ],
   },
   {
     id: "branch-2",
-    badge: "Gurugram",
-    image: "/images/website/scene-batting.svg",
     name: "Dhananjay Cricket Academy",
-    address: "Prem Kunj, Maruti Kunj, Gurugram, Haryana - 122002",
-    phone: "+91 9971109868",
-    hours: "Mon–Sat · 6:30 AM – 7 PM",
-    directionsUrl:
-      "https://www.google.com/maps/search/?api=1&query=Prem+Kunj+Maruti+Kunj+Gurugram",
+    tag: "TRAINING CAMPUS",
+    badgeClass: "badge--navy",
+    tagline: "Elite Practice Nets & Skill Hub",
+    address: "Prem Kunj, Maruti Kunj, Gurugram, Haryana, 122002",
+    phone: "9971109868",
+    hours: "Mon–Sat · 6:00 AM – 7:30 PM",
+    status: "OPEN TODAY",
+    image: "/images/uploads/grounds/1790854818232-664323.png",
+    facilities: [
+      "Curated Turf Wicket",
+      "Speed Bowling Machine",
+      "Cement Nets",
+      "Dedicated Dugouts",
+      "Safe Parking",
+    ],
+  },
+  {
+    id: "branch-3",
+    name: "Sports Mantra Match Ground",
+    tag: "MATCH GROUND & COMPLEX",
+    badgeClass: "",
+    tagline: "Tournament Ground & Floodlit Arena",
+    address: "Maruti Kunj, Sohna Road, Gurugram, Haryana, 122002",
+    phone: "8285831503",
+    hours: "All Days · 5:30 AM – 10:00 PM",
+    status: "OPEN TODAY",
+    image: "/images/uploads/grounds/1790854920554-712937.png",
+    facilities: [
+      "70m Boundary Ground",
+      "Curated Match Turf",
+      "Player Pavilion",
+      "Digital Scoreboard",
+      "Night Floodlights",
+    ],
   },
 ];
 
+function resolveBranchImage(branch, idx) {
+  const name = (branch.branch_name || branch.name || "").toLowerCase();
+  if (name.includes("cst") || name.includes("main")) return GROUND_PHOTOS[0];
+  if (name.includes("dhananjay")) return GROUND_PHOTOS[1];
+  if (name.includes("mantra") || name.includes("match")) return GROUND_PHOTOS[2];
+  return GROUND_PHOTOS[idx % GROUND_PHOTOS.length];
+}
+
+function resolveBranchFacilities(branch, idx) {
+  const name = (branch.branch_name || branch.name || "").toLowerCase();
+  if (name.includes("cst") || name.includes("main")) {
+    return [
+      "5 Turf Wickets",
+      "BOLA Bowling Machine",
+      "800-Lux Floodlights",
+      "Hostel & Cafeteria",
+    ];
+  }
+  if (name.includes("dhananjay")) {
+    return [
+      "Curated Turf Wicket",
+      "Speed Bowling Machine",
+      "Cement Nets",
+      "Dedicated Dugouts",
+    ];
+  }
+  if (name.includes("mantra") || name.includes("match")) {
+    return [
+      "70m Match Ground",
+      "Match Turf Pitch",
+      "Player Pavilion",
+      "Digital Scoreboard",
+    ];
+  }
+  return ["Turf Practice Pitch", "Automated Bowling Machine", "Floodlights", "Safety Nets"];
+}
+
 export default function BranchesSection({
   tag = "Find Us",
-  title = "Our Branches",
+  title = "OUR BRANCHES",
   subtitle = "Train close to home. Visit any branch for a free trial session.",
-  branches: propBranches = null,
-  footerText = "Not sure which branch suits you?",
-  footerLink = { text: "Talk to our team", href: "/contact" },
 }) {
-  const [branches, setBranches] = useState(propBranches || []);
-  const [loading, setLoading] = useState(!propBranches);
+  const [branches, setBranches] = useState(FALLBACK_BRANCHES);
 
   useEffect(() => {
-    if (propBranches && propBranches.length > 0) {
-      setBranches(propBranches);
-      setLoading(false);
-      return;
-    }
-
     let isMounted = true;
-
     async function loadBranches() {
       try {
-        const res = await fetch("/api/branch?academy_id=1&status=1");
-        if (!isMounted) return;
-
+        const res = await fetch("/api/branch?status=1");
+        if (!res.ok) return;
         const json = await res.json();
+        const rawBranches = Array.isArray(json.data)
+          ? json.data
+          : Array.isArray(json.branches)
+          ? json.branches
+          : Array.isArray(json)
+          ? json
+          : [];
 
-        if (
-          isMounted &&
-          res.ok &&
-          json.success &&
-          Array.isArray(json.data) &&
-          json.data.length > 0
-        ) {
-          const list = json.data.map((b, idx) => {
-            const fullAddress = [b.address, b.city, b.state, b.pin_code]
+        if (isMounted && rawBranches.length > 0) {
+          const mapped = rawBranches.slice(0, 3).map((b, idx) => {
+            const bName = b.branch_name || b.name || `Branch ${idx + 1}`;
+            const addressParts = [
+              b.address_line || b.address,
+              b.city,
+              b.state,
+              b.pincode,
+            ]
               .filter(Boolean)
               .join(", ");
 
-            let directionsUrl = "";
-            if (b.directions && typeof b.directions === "string" && b.directions.trim()) {
-              const d = b.directions.trim();
-              if (d.startsWith("http://") || d.startsWith("https://")) {
-                directionsUrl = d;
-              } else {
-                directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  d
-                )}`;
-              }
-            } else {
-              directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                fullAddress || b.branch_name
-              )}`;
-            }
-
-            const meta = getBranchMetadata(b, idx);
-
             return {
-              id: `branch-${b.id}`,
-              badge: meta.badge,
-              image: meta.image,
-              name: b.branch_name,
-              address: fullAddress || "Maruti Kunj, Gurugram",
-              phone: b.phone || "+91 8285831503",
-              hours: "Mon–Sat · 6 AM – 7:30 PM",
-              directionsUrl,
-              sortPriority: meta.sortPriority,
+              id: b.id || `branch-${idx}`,
+              name: bName,
+              tag:
+                idx === 0
+                  ? "MAIN CAMPUS & HQ"
+                  : idx === 1
+                  ? "TRAINING CAMPUS"
+                  : "MATCH GROUND & COMPLEX",
+              badgeClass:
+                idx === 0 ? "badge--red" : idx === 1 ? "badge--navy" : "",
+              tagline:
+                idx === 0
+                  ? "High-Performance Center & Headquarters"
+                  : idx === 1
+                  ? "Elite Practice Nets & Skill Hub"
+                  : "Tournament Ground & Floodlit Arena",
+              address: addressParts || "Gurugram, Haryana",
+              phone: b.phone || b.contact_number || "8285831503",
+              hours: b.operating_hours || "Mon–Sat · 6:00 AM – 7:30 PM",
+              status: "OPEN TODAY",
+              image: resolveBranchImage(b, idx),
+              facilities: resolveBranchFacilities(b, idx),
             };
           });
 
-          list.sort((a, b) => a.sortPriority - b.sortPriority);
-
-          setBranches(list);
-        } else if (isMounted && (!branches || branches.length === 0)) {
-          setBranches(FALLBACK_BRANCHES);
+          // If less than 3 returned from API, supplement with fallbacks
+          if (mapped.length < 3) {
+            const remaining = FALLBACK_BRANCHES.slice(mapped.length);
+            setBranches([...mapped, ...remaining]);
+          } else {
+            setBranches(mapped);
+          }
         }
-      } catch (err) {
-        if (!isMounted) return;
-        if (!branches || branches.length === 0) {
-          setBranches(FALLBACK_BRANCHES);
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+      } catch (e) {
+        // Fallback in place
       }
     }
 
@@ -171,139 +185,254 @@ export default function BranchesSection({
     return () => {
       isMounted = false;
     };
-  }, [propBranches]);
+  }, []);
 
   return (
-    <section className="bg-cream" id="branches">
-      <div className="container">
-        <div className="text-center mb-5 reveal visible">
-          <span className="section-tag">{tag}</span>
-          <h2 className="section-title">{title}</h2>
-          <div className="divider"></div>
-          {subtitle && <p className="text-secondary">{subtitle}</p>}
+    <section
+      className="section"
+      id="branches"
+      style={{ position: "relative", overflow: "hidden", background: "var(--cream)" }}
+    >
+      {/* Floating Bubble Wave Animation (10-15% Opacity) */}
+      <div className="bubble-wave-container" aria-hidden="true">
+        <span className="bubble-wave-item b1"></span>
+        <span className="bubble-wave-item b2"></span>
+        <span className="bubble-wave-item b3"></span>
+        <span className="bubble-wave-item b4"></span>
+        <span className="bubble-wave-item b5"></span>
+        <span className="bubble-wave-item b6"></span>
+        <span className="bubble-wave-item b7"></span>
+        <span className="bubble-wave-item b8"></span>
+        <span className="bubble-wave-item b9"></span>
+        <span className="bubble-wave-item b10"></span>
+      </div>
+
+      <div className="container" style={{ position: "relative", zIndex: 2 }}>
+        <div className="section-head" data-reveal>
+          <span className="eyebrow">{tag}</span>
+          <h2 className="title">{title}</h2>
+          <p className="lead">{subtitle}</p>
         </div>
 
-        {loading ? (
-          <div className="row g-4 justify-content-center">
-            {[1, 2].map((n) => (
-              <div className="col-md-6 col-lg-4" key={`branch-skel-${n}`}>
-                <div className="card-x branch-card d-flex flex-column h-100 placeholder-glow overflow-hidden shadow-sm border-0">
-                  <div
-                    className="placeholder w-100 bg-secondary opacity-25"
-                    style={{ height: "190px", display: "block" }}
-                  ></div>
-                  <div className="p-4 d-flex flex-column flex-grow-1 justify-content-between">
-                    <div>
-                      <span
-                        className="placeholder col-8 bg-secondary opacity-25 rounded mb-3 d-block"
-                        style={{ height: "22px" }}
-                      ></span>
-                      <span className="placeholder col-11 bg-secondary opacity-25 rounded mb-2 d-block"></span>
-                      <span className="placeholder col-9 bg-secondary opacity-25 rounded mb-2 d-block"></span>
-                      <span className="placeholder col-6 bg-secondary opacity-25 rounded mb-4 d-block"></span>
-                    </div>
-                    <div className="d-flex gap-2 pt-3 border-top">
-                      <span
-                        className="placeholder col-6 bg-secondary opacity-25 rounded-pill d-block"
-                        style={{ height: "36px" }}
-                      ></span>
-                      <span
-                        className="placeholder col-6 bg-secondary opacity-25 rounded-pill d-block"
-                        style={{ height: "36px" }}
-                      ></span>
-                    </div>
-                  </div>
+        <div
+          className="grid grid--3"
+          style={{
+            maxWidth: "1280px",
+            margin: "0 auto",
+            alignItems: "stretch",
+          }}
+        >
+          {branches.map((b, i) => (
+            <article
+              className="card branch"
+              data-reveal
+              style={{
+                "--d": i,
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                background: "#ffffff",
+                boxShadow: "0 10px 30px -10px rgba(7, 30, 38, 0.08)",
+                transition: "transform 0.3s ease, box-shadow 0.3s ease",
+              }}
+              key={b.id || i}
+            >
+              {/* Media banner */}
+              <div
+                className="media"
+                style={{
+                  aspectRatio: "16/10",
+                  overflow: "hidden",
+                  position: "relative",
+                  background: "var(--navy)",
+                }}
+              >
+                <span
+                  className={`badge ${b.badgeClass}`}
+                  style={{
+                    position: "absolute",
+                    top: "14px",
+                    left: "14px",
+                    zIndex: 2,
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {b.tag}
+                </span>
+                <img
+                  src={b.image}
+                  alt={b.name}
+                  loading="lazy"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    transition: "transform 0.5s ease",
+                  }}
+                />
+              </div>
+
+              {/* Branch body */}
+              <div
+                className="branch__body"
+                style={{
+                  padding: "24px 22px",
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: 1,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <span className="branch__status-pill">
+                    <span className="branch__status-dot"></span>
+                    {b.status}
+                  </span>
+                </div>
+
+                <h3
+                  style={{
+                    fontFamily: "var(--font)",
+                    fontWeight: 700,
+                    fontSize: "19px",
+                    color: "var(--navy)",
+                    marginBottom: "4px",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {b.name}
+                </h3>
+                <p
+                  style={{
+                    fontSize: "12.5px",
+                    color: "var(--green-d)",
+                    fontWeight: 600,
+                    marginBottom: "12px",
+                  }}
+                >
+                  {b.tagline}
+                </p>
+
+                {/* Location */}
+                <div className="branch__meta-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16">
+                    <path
+                      d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="12" cy="10" r="3" strokeWidth="2" />
+                  </svg>
+                  <span>{b.address}</span>
+                </div>
+
+                {/* Contact and hours */}
+                <div className="branch__meta-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16">
+                    <circle cx="12" cy="12" r="10" strokeWidth="2" />
+                    <path d="M12 6v6l4 2" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <span>
+                    {b.phone} · {b.hours}
+                  </span>
+                </div>
+
+                {/* Facilities tags */}
+                <div className="branch__facilities">
+                  {b.facilities.map((fac, idx) => (
+                    <span key={idx} className="branch__tag">
+                      {fac}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Actions */}
+                <div
+                  className="branch__actions"
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    marginTop: "auto",
+                    paddingTop: "16px",
+                  }}
+                >
+                  <a
+                    className="btn btn--navy btn--sm"
+                    href={`tel:${b.phone}`}
+                    style={{ flex: 1, textAlign: "center", justifyContent: "center" }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ marginRight: "4px" }}
+                    >
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                    Call Now
+                  </a>
+                  <a
+                    className="btn btn--outline btn--sm"
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      `${b.name}, ${b.address}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ flex: 1, textAlign: "center", justifyContent: "center" }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ marginRight: "4px" }}
+                    >
+                      <path d="m3 11 19-9-9 19-2-8-8-2z" />
+                    </svg>
+                    Directions
+                  </a>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="row g-4 justify-content-center">
-            {branches.map((b, idx) => (
-              <div className="col-md-6 col-lg-4 reveal visible" key={b.id || idx}>
-                <article
-                  id={b.id}
-                  className="card-x branch-card d-flex flex-column h-100"
-                >
-                  <div className="branch-img position-relative overflow-hidden">
-                    <img
-                      src={b.image}
-                      alt={`${b.name} ground`}
-                      loading="lazy"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = BRANCH_IMAGES[0];
-                      }}
-                    />
-                    <span className="branch-badge">
-                      <i className="bi bi-geo-alt-fill"></i>
-                      {b.badge}
-                    </span>
-                  </div>
+            </article>
+          ))}
+        </div>
 
-                  <div className="p-4 d-flex flex-column flex-grow-1 justify-content-between">
-                    <div>
-                      <h4 className="h5 fw-bold mb-3">{b.name}</h4>
-                      <ul className="branch-meta list-unstyled mb-0">
-                        <li>
-                          <i className="bi bi-geo-alt"></i>
-                          <span>{b.address}</span>
-                        </li>
-                        <li>
-                          <i className="bi bi-telephone"></i>
-                          <a href={`tel:${b.phone}`}>{b.phone}</a>
-                        </li>
-                        <li>
-                          <i className="bi bi-clock"></i>
-                          <span>{b.hours}</span>
-                        </li>
-                      </ul>
-                    </div>
-
-                    <div className="branch-actions d-flex gap-2 pt-3 border-top mt-3">
-                      <a
-                        href={`tel:${b.phone}`}
-                        className="btn btn-navy btn-sm flex-fill rounded-pill"
-                      >
-                        <i className="bi bi-telephone-fill me-1"></i> Call
-                      </a>
-                      <a
-                        href={b.directionsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-outline-navy btn-sm flex-fill rounded-pill"
-                      >
-                        <i className="bi bi-compass-fill me-1"></i> Directions
-                      </a>
-                    </div>
-                  </div>
-                </article>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="text-center mt-5 reveal visible">
-          <Link href="/branches" className="btn btn-navy btn-lg">
-            View All Branches <i className="bi bi-arrow-right ms-1"></i>
+        {/* Bottom CTA */}
+        <div className="center" style={{ marginTop: "44px" }} data-reveal>
+          <Link className="btn btn--navy" href="/branches">
+            View All Branches &rarr;
           </Link>
         </div>
 
-        {footerText && (
-          <div className="text-center mt-3 reveal visible">
-            <p className="text-secondary small mb-0">
-              {footerText}{" "}
-              {footerLink && (
-                <Link
-                  href={footerLink.href}
-                  className="fw-bold text-navy text-decoration-underline"
-                >
-                  {footerLink.text} &rarr;
-                </Link>
-              )}
-            </p>
-          </div>
-        )}
+        <p
+          className="center"
+          style={{
+            fontSize: "13px",
+            color: "var(--muted)",
+            marginTop: "14px",
+          }}
+        >
+          Not sure which branch suits you?{" "}
+          <Link
+            href="/contact"
+            style={{
+              color: "var(--navy)",
+              fontWeight: 600,
+              textDecoration: "underline",
+            }}
+          >
+            Talk to our team &rarr;
+          </Link>
+        </p>
       </div>
     </section>
   );

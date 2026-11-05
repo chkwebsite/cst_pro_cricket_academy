@@ -53,7 +53,7 @@ export default function Header({ onToggleSidebar, isMobileOpen = false }) {
                 {/* Logo visible on Mobile / Tablet or header branding */}
                 <Link href="/next_panel/dashboard" className={styles.headerBrand} title="CST Pro Cricket Academy">
                     <img
-                        src="/images/website/logo.png"
+                        src="/images/website/CSTCricketAcademyLogo.png"
                         alt="CST Pro Cricket Academy"
                         className={styles.headerLogo}
                     />

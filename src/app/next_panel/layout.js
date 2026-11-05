@@ -11,6 +11,11 @@ import { getServerSession } from "../components/lib/auth-session";
 export const metadata = {
   title: "CST Pro Cricket Academy",
   description: "CST Pro Cricket Academy Portal",
+  icons: {
+    icon: "/images/website/icon-512.png",
+    shortcut: "/images/website/icon-512.png",
+    apple: "/images/website/icon-512.png",
+  },
 };
 
 export default async function RootLayout({ children }) {
@@ -31,6 +36,8 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
+        <link rel="icon" type="image/png" href="/images/website/icon-512.png" />
+        <link rel="apple-touch-icon" href="/images/website/icon-512.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

@@ -7,7 +7,7 @@ export default function BackToTop() {
 
   useEffect(() => {
     const handleScroll = () => {
-      setShow(window.scrollY > 300);
+      setShow(window.scrollY > 450);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -23,14 +23,13 @@ export default function BackToTop() {
 
   return (
     <button
-      id="backTop"
-      className={`back-top ${show ? "show" : ""}`}
+      className={`to-top ${show ? "is-show" : ""}`}
       onClick={scrollToTop}
       aria-label="Back to top"
       type="button"
       title="Scroll to top"
     >
-      <i className="bi bi-arrow-up"></i>
+      ↑
     </button>
   );
 }

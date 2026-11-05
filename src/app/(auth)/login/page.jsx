@@ -201,7 +201,7 @@ function LoginContent() {
                 <div className="d-flex align-items-center justify-content-between mb-4">
                   <Link href="/" className="logo-badge">
                     <img
-                      src="/images/website/logo.png"
+                      src="/images/website/CSTCricketAcademyLogo.png"
                       alt="CST Cricket Academy"
                     />
                   </Link>
@@ -320,7 +320,7 @@ function LoginContent() {
                   <div className="d-lg-none">
                     <Link href="/" className="logo-badge">
                       <img
-                        src="/images/website/logo.png"
+                        src="/images/website/CSTCricketAcademyLogo.png"
                         alt="CST Cricket Academy"
                         style={{ height: "36px" }}
                       />

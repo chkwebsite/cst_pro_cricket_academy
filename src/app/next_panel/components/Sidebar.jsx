@@ -643,7 +643,7 @@ export default function Sidebar({ children }) {
                         }}
                     >
                         <img
-                            src="/images/website/logo.png"
+                            src="/images/website/CSTCricketAcademyLogo.png"
                             alt="CST Pro Cricket Academy"
                             className={styles.brandLogo}
                         />

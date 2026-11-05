@@ -2,315 +2,239 @@
 
 import { useEffect, useState, useMemo } from "react";
 import PageHeader from "../components/layout/PageHeader";
-import Link from "next/link";
-import {
-    Activity,
-    Calendar,
-    Clock,
-    MapPin,
-    Radio,
-    Shield,
-    Trophy,
-} from "lucide-react";
+import CtaSection from "../components/home/CtaSection";
 
-const isTodayMatch = (dateStr) => {
-    if (!dateStr) return false;
-    const d = String(dateStr).slice(0, 10);
-    let todayIST = "";
-    try {
-        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-    } catch {
-        todayIST = "";
-    }
-    const todayLocal = new Date().toLocaleDateString("en-CA");
-    return d === todayIST || d === todayLocal;
-};
+const TOURNAMENTS = [
+  { name: "CST Champions Trophy", format: "T20 · League + Knockout", dates: "Apr 10 – Apr 25", status: "Entries Open", statusStyle: "tag" },
+  { name: "Junior Cricket League (U-14)", format: "40 Overs", dates: "May 5 – May 20", status: "Upcoming", statusStyle: "tag" },
+  { name: "Gurugram Corporate Cup", format: "T20 Floodlight", dates: "Ongoing (Weekends)", status: "Active", statusStyle: "tag", customTagStyle: { background: "#FDE6EA", color: "var(--red)" } },
+  { name: "Inter-Academy Summer Cup", format: "50 Overs State Level", dates: "June 2 – June 18", status: "Registration Soon", statusStyle: "tag" },
+];
 
-const getEffectiveStatus = (m) => {
-    const raw = String(m?.status || "").trim();
-    const lower = raw.toLowerCase();
-    if (lower === "completed" || lower === "cancelled") {
-        return raw;
-    }
-    if (isTodayMatch(m?.match_date)) {
-        return "Live";
-    }
-    return raw || "Scheduled";
-};
+const FALLBACK_MATCHES = [
+  {
+    id: 1,
+    status: "LIVE",
+    team_a: "CST Warriors",
+    team_a_score: "186/4 (17.2)",
+    team_b: "Apex Titans",
+    team_b_score: "142/8",
+    venue: "Main Ground · Live Now",
+    type: "live",
+  },
+  {
+    id: 2,
+    status: "UPCOMING",
+    team_a: "CST XI",
+    team_b: "Gurugram Lions",
+    venue: "Turf Oval 1 · This Saturday, 8:30 AM",
+    type: "up",
+  },
+  {
+    id: 3,
+    status: "RECENT RESULT",
+    team_a: "CST Academy",
+    team_b: "Delhi Stars",
+    result: "Won by 4 wkts",
+    venue: "Campus Arena · Yesterday",
+    type: "recent",
+  },
+];
 
 export default function MatchesPage() {
-    const [matches, setMatches] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [filterTab, setFilterTab] = useState("ALL");
+  const [matches, setMatches] = useState(FALLBACK_MATCHES);
+  const [filterTab, setFilterTab] = useState("ALL");
 
-    useEffect(() => {
-        async function fetchMatches() {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetch("/api/matches");
-                const json = await res.json();
-                if (res.ok && json.success) {
-                    setMatches(json.data || []);
-                } else {
-                    setError("Unable to load matches. Please refresh the page.");
-                }
-            } catch (err) {
-                setError("Network error while loading matches.");
-            } finally {
-                setLoading(false);
-            }
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMatches() {
+      try {
+        const res = await fetch("/api/matches");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (isMounted && json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const mapped = json.data.map((m) => {
+            const rawStatus = (m.status || "").toLowerCase();
+            const isLive = rawStatus === "live" || rawStatus === "in progress";
+            const isCompleted = rawStatus === "completed";
+            return {
+              id: m.id,
+              status: isLive ? "LIVE" : isCompleted ? "RECENT RESULT" : "UPCOMING",
+              type: isLive ? "live" : isCompleted ? "recent" : "up",
+              team_a: m.team_a_name || "Team A",
+              team_a_score: m.team_a_score || "-",
+              team_b: m.team_b_name || "Team B",
+              team_b_score: m.team_b_score || "-",
+              result: m.result_note,
+              venue: `${m.ground_name || "Academy Ground"} · ${m.match_date || "Upcoming"}`,
+            };
+          });
+          setMatches(mapped);
         }
-        fetchMatches();
-    }, []);
+      } catch (e) {
+        // Fallback in place
+      }
+    }
+    fetchMatches();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-    const filteredMatches = useMemo(() => {
-        if (filterTab === "ALL") return matches;
-        return matches.filter((m) => {
-            const s = getEffectiveStatus(m).toLowerCase();
-            if (filterTab === "LIVE") return s === "live";
-            if (filterTab === "UPCOMING") return s === "scheduled" || s === "upcoming";
-            if (filterTab === "COMPLETED") return s === "completed";
-            return true;
-        });
-    }, [matches, filterTab]);
+  const filteredMatches = useMemo(() => {
+    if (filterTab === "ALL") return matches;
+    if (filterTab === "LIVE") return matches.filter((m) => m.type === "live");
+    if (filterTab === "UPCOMING") return matches.filter((m) => m.type === "up");
+    if (filterTab === "RESULTS") return matches.filter((m) => m.type === "recent");
+    return matches;
+  }, [matches, filterTab]);
 
-    const liveCount = useMemo(
-        () => matches.filter((m) => getEffectiveStatus(m).toLowerCase() === "live").length,
-        [matches]
-    );
+  return (
+    <>
+      <PageHeader
+        title="Live Matches &amp; Fixtures"
+        eyebrow="Matches &amp; Events"
+        breadcrumbs={[{ label: "Home", href: "/" }]}
+        current="Matches &amp; Events"
+      />
 
-    return (
-        <>
-            <PageHeader
-                title="Matches & Live Scores"
-                breadcrumbs={[{ label: "Home", href: "/" }]}
-                current="Matches"
-            />
+      {/* Match Cards Grid */}
+      <section className="section">
+        <div className="container">
+          <div className="section-head" data-reveal>
+            <span className="eyebrow">On the pitch</span>
+            <h2 className="title">
+              LIVE &amp; <em>UPCOMING</em>
+            </h2>
+          </div>
 
-            <section className="py-5" style={{ background: "#f8fbfb", minHeight: "80vh" }}>
-                <div className="container">
-                    {/* Header Banner */}
-                    <div
-                        className="p-4 p-md-5 rounded-4 text-white mb-4 shadow-sm position-relative overflow-hidden"
-                        style={{
-                            background: "linear-gradient(135deg, #062f38 0%, #0d4b57 100%)",
-                            border: "1px solid rgba(164, 255, 0, 0.2)",
-                        }}
-                    >
-                        <div className="row align-items-center">
-                            <div className="col-lg-8">
-                                <div className="d-flex align-items-center gap-2 mb-2">
-                                    <span
-                                        className="badge px-3 py-1 fw-bold text-uppercase"
-                                        style={{ background: "var(--lime)", color: "var(--navy)" }}
-                                    >
-                                        Live Match Centre
-                                    </span>
-                                    {liveCount > 0 && (
-                                        <span className="badge bg-danger rounded-pill px-3 py-1 fw-bold d-inline-flex align-items-center gap-1.5 animate-pulse">
-                                            <Radio size={12} /> {liveCount} Live Now
-                                        </span>
-                                    )}
-                                </div>
-                                <h1 className="fw-bold mb-2 text-white font-oswald text-uppercase display-5">
-                                    Academy Fixtures &amp; Scorecards
-                                </h1>
-                                <p className="lead mb-0 text-white-50" style={{ maxWidth: "600px", fontSize: "1.05rem" }}>
-                                    Follow practice matches, intra-academy league clashes, and inter-club tournaments with official scorecards.
-                                </p>
-                            </div>
-                            <div className="col-lg-4 text-lg-end mt-3 mt-lg-0">
-                                <Link
-                                    href="/tournaments"
-                                    className="btn btn-outline-light rounded-pill px-4 py-2.5 fw-semibold"
-                                >
-                                    Browse Tournaments
-                                </Link>
-                            </div>
-                        </div>
+          {/* Filter Pills */}
+          <div className="filters" role="group" aria-label="Match filters">
+            {["ALL", "LIVE", "UPCOMING", "RESULTS"].map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={`filter ${filterTab === f ? "is-active" : ""}`}
+                onClick={() => setFilterTab(f)}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid--3">
+            {filteredMatches.map((m, idx) => {
+              const isLive = m.type === "live";
+              const isUp = m.type === "up";
+
+              return (
+                <article
+                  key={m.id || idx}
+                  className={`card match ${isLive ? "match--live" : isUp ? "match--up" : ""}`}
+                  data-reveal
+                  style={{ "--d": idx }}
+                >
+                  <span
+                    className="match__status"
+                    style={{ color: isUp ? "var(--green-d)" : undefined }}
+                  >
+                    {m.status}
+                  </span>
+
+                  {isLive ? (
+                    <>
+                      <div className="match__row">
+                        <span>
+                          <i></i>
+                          {m.team_a}
+                        </span>
+                        <span style={{ fontSize: "22px" }}>{m.team_a_score}</span>
+                      </div>
+                      <div className="match__row">
+                        <span>
+                          <i></i>
+                          {m.team_b}
+                        </span>
+                        <span style={{ fontSize: "22px" }}>{m.team_b_score}</span>
+                      </div>
+                    </>
+                  ) : isUp ? (
+                    <div className="match__row">
+                      <span>
+                        <i></i>
+                        {m.team_a}
+                      </span>
+                      <span style={{ color: "var(--muted)", fontSize: "14px" }}>vs</span>
+                      <span>
+                        {m.team_b}
+                        <i style={{ margin: "0 0 0 10px" }}></i>
+                      </span>
                     </div>
-
-                    {/* Filter Tabs */}
-                    <div className="bg-white p-3 rounded-4 shadow-sm border mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
-                        <div className="d-flex align-items-center gap-2 overflow-x-auto pb-1 pb-md-0">
-                            <button
-                                type="button"
-                                className={`btn btn-sm rounded-pill px-3 fw-semibold ${
-                                    filterTab === "ALL" ? "btn-dark" : "btn-light border"
-                                }`}
-                                onClick={() => setFilterTab("ALL")}
-                            >
-                                All Matches ({matches.length})
-                            </button>
-                            <button
-                                type="button"
-                                className={`btn btn-sm rounded-pill px-3 fw-semibold d-flex align-items-center gap-1.5 ${
-                                    filterTab === "LIVE" ? "btn-danger text-white" : "btn-light border"
-                                }`}
-                                onClick={() => setFilterTab("LIVE")}
-                            >
-                                <span className="p-1 rounded-circle bg-danger-subtle d-inline-block"></span>
-                                Live Matches ({liveCount})
-                            </button>
-                            <button
-                                type="button"
-                                className={`btn btn-sm rounded-pill px-3 fw-semibold ${
-                                    filterTab === "UPCOMING" ? "btn-dark" : "btn-light border"
-                                }`}
-                                onClick={() => setFilterTab("UPCOMING")}
-                            >
-                                Scheduled / Fixtures
-                            </button>
-                            <button
-                                type="button"
-                                className={`btn btn-sm rounded-pill px-3 fw-semibold ${
-                                    filterTab === "COMPLETED" ? "btn-dark" : "btn-light border"
-                                }`}
-                                onClick={() => setFilterTab("COMPLETED")}
-                            >
-                                Completed Results
-                            </button>
-                        </div>
-
-                        <div className="d-none d-md-block text-muted small">
-                            Showing <strong>{filteredMatches.length}</strong> match(es)
-                        </div>
+                  ) : (
+                    <div className="match__row">
+                      <span>
+                        <i></i>
+                        {m.team_a}
+                      </span>
+                      <span style={{ color: "var(--muted)", fontSize: "14px" }}>
+                        {m.result || "Completed"}
+                      </span>
+                      <span>
+                        {m.team_b}
+                        <i style={{ margin: "0 0 0 10px" }}></i>
+                      </span>
                     </div>
+                  )}
 
-                    {/* Match Cards */}
-                    {loading ? (
-                        <div className="text-center py-5 bg-white rounded-4 border shadow-sm p-5">
-                            <div className="spinner-border text-success" role="status" />
-                            <p className="text-muted mt-2 small mb-0">Loading match scorecards and fixtures...</p>
-                        </div>
-                    ) : error ? (
-                        <div className="alert alert-danger text-center py-4 rounded-4 shadow-sm">{error}</div>
-                    ) : filteredMatches.length === 0 ? (
-                        <div className="text-center py-5 bg-white rounded-4 border p-5 shadow-sm">
-                            <Activity size={56} className="text-muted opacity-40 mb-3" />
-                            <h4 className="fw-bold text-dark font-oswald text-uppercase">No Matches Found</h4>
-                            <p className="text-muted small mb-3">
-                                No matches found under the selected category. Check back soon for upcoming academy match fixtures.
-                            </p>
-                            <button
-                                type="button"
-                                className="btn btn-outline-success btn-sm px-4 rounded-pill"
-                                onClick={() => setFilterTab("ALL")}
-                            >
-                                View All Matches
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="row g-4">
-                            {filteredMatches.map((m) => {
-                                const effectiveStatus = getEffectiveStatus(m);
-                                const isLive = effectiveStatus.toLowerCase() === "live";
-                                const isCompleted = effectiveStatus.toLowerCase() === "completed";
+                  <div className="match__foot">{m.venue}</div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-                                return (
-                                    <div key={m.id} className="col-12 col-md-6 col-xl-4">
-                                        <div className="card h-100 border-0 rounded-4 shadow-sm overflow-hidden bg-white p-3.5 d-flex flex-column justify-content-between position-relative">
-                                            <div>
-                                                {/* Match Header Badge */}
-                                                <div className="d-flex align-items-center justify-content-between mb-3">
-                                                    <span className="badge bg-light text-dark border rounded-pill px-2.5 py-1 small">
-                                                        {m.match_type_name || m.match_type || "T20 Match"}
-                                                    </span>
+      {/* Tournaments & Leagues Section */}
+      <section className="section section--cream" id="tournaments">
+        <div className="container">
+          <div className="section-head" data-reveal>
+            <span className="eyebrow">Tournaments</span>
+            <h2 className="title">
+              ACADEMY <em>CUPS &amp; LEAGUES</em>
+            </h2>
+          </div>
+          <div className="table-wrap" data-reveal>
+            <table>
+              <thead>
+                <tr>
+                  <th>Tournament</th>
+                  <th>Format</th>
+                  <th>Dates</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TOURNAMENTS.map((t, idx) => (
+                  <tr key={idx}>
+                    <td>
+                      <b>{t.name}</b>
+                    </td>
+                    <td>{t.format}</td>
+                    <td>{t.dates}</td>
+                    <td>
+                      <span className="tag" style={t.customTagStyle}>
+                        {t.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
-                                                    {isLive ? (
-                                                        <span className="badge bg-danger rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1 small fw-bold">
-                                                            <Radio size={11} /> LIVE
-                                                        </span>
-                                                    ) : isCompleted ? (
-                                                        <span className="badge bg-secondary rounded-pill px-2.5 py-1 small">
-                                                            Completed
-                                                        </span>
-                                                    ) : (
-                                                        <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 small">
-                                                            {effectiveStatus}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                {/* Teams Versus Section */}
-                                                <div className="p-3 rounded-3 bg-light mb-3">
-                                                    <div className="d-flex align-items-center justify-content-between mb-2">
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <Shield size={16} className="text-primary flex-shrink-0" />
-                                                            <span className="fw-bold text-dark fs-6 text-truncate">
-                                                                {m.team_a_name || "Team Alpha"}
-                                                            </span>
-                                                        </div>
-                                                        <div className="fw-bold text-dark font-oswald fs-5">
-                                                            {m.team_a_score ? m.team_a_score : "-"}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="d-flex align-items-center justify-content-center my-1">
-                                                        <span className="text-muted extra-small text-uppercase fw-semibold" style={{ fontSize: "0.7rem" }}>
-                                                            VS
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="d-flex align-items-center justify-content-between">
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <Shield size={16} className="text-danger flex-shrink-0" />
-                                                            <span className="fw-bold text-dark fs-6 text-truncate">
-                                                                {m.team_b_name || "Team Bravo"}
-                                                            </span>
-                                                        </div>
-                                                        <div className="fw-bold text-dark font-oswald fs-5">
-                                                            {m.team_b_score ? m.team_b_score : "-"}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Toss / Result Note */}
-                                                {m.result_note ? (
-                                                    <div className="small fw-semibold text-success mb-2 text-truncate" title={m.result_note}>
-                                                        🏆 {m.result_note}
-                                                    </div>
-                                                ) : m.toss_decision ? (
-                                                    <div className="extra-small text-muted mb-2 text-truncate" style={{ fontSize: "0.75rem" }}>
-                                                        🪙 Toss won by {m.toss_winner_name || "Team"} (Elected to {m.toss_decision})
-                                                    </div>
-                                                ) : null}
-
-                                                {/* Date & Ground */}
-                                                <div className="small text-muted d-flex flex-column gap-1 mb-3">
-                                                    <div className="d-flex align-items-center gap-1.5">
-                                                        <Calendar size={13} className="text-success" />
-                                                        <span>{m.match_date || "Date TBA"}</span>
-                                                    </div>
-                                                    <div className="d-flex align-items-center gap-1.5">
-                                                        <MapPin size={13} className="text-danger" />
-                                                        <span className="text-truncate">{m.ground_name || m.branch_name || "Main Campus Turf"}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Footer Actions */}
-                                            <div className="pt-2 border-top d-flex align-items-center justify-content-between">
-                                                <span className="extra-small text-muted" style={{ fontSize: "0.72rem" }}>
-                                                    Match #{m.id}
-                                                </span>
-                                                <a
-                                                    href="tel:+918285831503"
-                                                    className="btn btn-sm btn-outline-dark rounded-pill px-3"
-                                                >
-                                                    Match Inquiries
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </section>
-        </>
-    );
+      <CtaSection />
+    </>
+  );
 }

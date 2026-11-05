@@ -3,240 +3,224 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+const REAL_PROGRAM_FALLBACKS = [
+  "/images/uploads/programs/program_1792399774106_508752.jpg",
+  "/images/uploads/programs/program_1792403752607_500119.png",
+  "/images/uploads/programs/program_1792403863372_287868.png",
+  "/images/uploads/programs/program_1792403990418_65968.png",
+  "/images/website/program-high-performance.jpg",
+  "/images/website/program-one-to-one.jpg",
+  "/images/website/program-small-group.jpg",
+];
+
+function resolveProgramImage(p, idx) {
+  const img = p.program_image || p.image;
+  if (img && typeof img === "string" && img.trim() && !img.endsWith(".svg")) {
+    const clean = img.trim();
+    if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("/")) {
+      return clean;
+    }
+    return `/images/uploads/programs/${clean}`;
+  }
+  return REAL_PROGRAM_FALLBACKS[idx % REAL_PROGRAM_FALLBACKS.length];
+}
+
 const FALLBACK_PROGRAMS = [
   {
     id: 1,
-    title: "One-on-One (1:1)",
-    code: "CST-001",
-    desc: "Personal sessions tailored to your game.",
-    image: "/images/website/program-one-to-one.jpg",
-    features: [
-      "Dedicated personal coach",
-      "Video analysis & drills",
-      "Flexible training timings",
-    ],
-    price: "₹6,000",
-    period: "/ month",
-    enquireLink: "/contact",
+    title: "Junior Cricket Program",
+    code: "CST-JNR",
+    desc: "Cricket training designed for young players with foundational batting and bowling skills.",
+    image: "/images/uploads/programs/program_1792399774106_508752.jpg",
+    price: "₹1,500",
+    unit: "/ mo",
+    badge: "",
   },
   {
     id: 2,
-    title: "Small Group",
-    code: "CST-002",
-    desc: "Up to 10 players per batch.",
-    image: "/images/website/program-small-group.jpg",
-    features: [
-      "Skill drills & practice",
-      "Match awareness training",
-      "Monthly performance assessment",
-    ],
-    price: "₹3,000",
-    period: "/ month",
-    enquireLink: "/contact",
+    title: "Beginner Cricket Training",
+    code: "CST-BEG",
+    desc: "Learn basic cricket skills, grip, stance, footwork and rules under coach supervision.",
+    image: "/images/uploads/programs/program_1792403752607_500119.png",
+    price: "₹1,500",
+    unit: "/ mo",
+    badge: "badge--navy",
   },
   {
     id: 3,
-    title: "5-Day Mini Camp",
-    code: "CST-003",
-    desc: "Intensive high-performance camp.",
-    image: "/images/website/program-high-performance.jpg",
-    features: [
-      "Intensive daily sessions",
-      "Fitness testing drills",
-      "Certificate of participation",
-    ],
-    price: "₹5,500",
-    period: "/ camp",
-    enquireLink: "/contact",
+    title: "Residential Academy",
+    code: "CST-RES",
+    desc: "Full-immersion live-in training experience with hostel accommodation and nutrition.",
+    image: "/images/uploads/programs/program_1792403863372_287868.png",
+    price: "₹20,000",
+    unit: "/ mo",
+    badge: "",
   },
   {
     id: 4,
-    title: "Residential",
-    code: "CST-004",
-    desc: "Live-in training experience.",
-    image: "/images/website/scene-hostel.svg",
-    features: [
-      "Hostel & nutritious meals",
-      "Daily double practice sessions",
-      "Academic study support",
-    ],
-    price: "₹20,000",
-    period: "/ month",
-    enquireLink: "/contact",
+    title: "Day Mini Camp",
+    code: "CST-CMP",
+    desc: "Intensive high-performance camp with match practice, fitness drills, and game tactics.",
+    image: "/images/uploads/programs/program_1792403990418_65968.png",
+    price: "₹5,500",
+    unit: "/ camp",
+    badge: "badge--navy",
   },
 ];
 
-export default function ProgramsListSection({
-  tag = "Coaching Programs",
-  title = "Choose Your Training Path",
-  subtitle = "Professional coaching programs designed for beginners, intermediate, and advanced cricket athletes.",
-  programs: propPrograms = null,
-}) {
-  const [programs, setPrograms] = useState(propPrograms || []);
-  const [loading, setLoading] = useState(!propPrograms);
+export default function ProgramsListSection() {
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
 
   useEffect(() => {
-    if (propPrograms && propPrograms.length > 0) {
-      setPrograms(propPrograms);
-      setLoading(false);
-      return;
-    }
-
     let isMounted = true;
-    async function loadPrograms() {
+    async function fetchDynamic() {
       try {
         const res = await fetch("/api/programs?academy_id=1&status=1");
+        if (!res.ok) return;
         const json = await res.json();
-
-        if (
-          isMounted &&
-          res.ok &&
-          json.success &&
-          Array.isArray(json.data) &&
-          json.data.length > 0
-        ) {
-          const list = json.data.map((p) => {
-            const rawFeatures = p.program_features
-              ? p.program_features
-                  .split(",")
-                  .map((f) => f.trim())
-                  .filter(Boolean)
-              : [];
-
-            const formattedPrice =
-              p.program_fee && Number(p.program_fee) > 0
-                ? `₹${Number(p.program_fee).toLocaleString("en-IN")}`
-                : "Contact for Fees";
-
-            return {
-              id: p.id,
-              title: p.program_name,
-              code: p.program_code,
-              desc:
-                p.description && p.description !== "Common all branch"
-                  ? p.description
-                  : rawFeatures.length > 0
-                  ? rawFeatures.slice(0, 2).join(" • ")
-                  : "Structured cricket training programme.",
-              image: p.program_image || "/images/website/program-one-to-one.jpg",
-              features:
-                rawFeatures.length > 0
-                  ? rawFeatures.slice(0, 4)
-                  : [
-                      "Certified professional coaching",
-                      "Turf & net practice sessions",
-                      "Regular progress assessment",
-                    ],
-              price: formattedPrice,
-              period: "/ month",
-              registration_fee: p.registration_fee,
-              enquireLink: "/contact",
-            };
-          });
-
+        if (isMounted && json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const list = json.data.map((p, idx) => ({
+            id: p.id,
+            title: p.program_name,
+            code: p.program_code || `CST-00${idx + 1}`,
+            desc: p.description || p.short_description || "High-performance cricket coaching.",
+            image: resolveProgramImage(p, idx),
+            price: p.program_fee ? `₹${Number(p.program_fee).toLocaleString("en-IN")}` : "₹1,500",
+            unit: "/ mo",
+            badge: idx % 2 === 1 ? "badge--navy" : "",
+          }));
           setPrograms(list);
-        } else if (isMounted && (!programs || programs.length === 0)) {
-          setPrograms(FALLBACK_PROGRAMS);
         }
       } catch (err) {
-        console.error("Failed to load programs:", err);
-        if (isMounted && (!programs || programs.length === 0)) {
-          setPrograms(FALLBACK_PROGRAMS);
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+        // Fallback in place
       }
     }
-
-    loadPrograms();
+    fetchDynamic();
     return () => {
       isMounted = false;
     };
-  }, [propPrograms]);
+  }, []);
 
   return (
-    <section>
-      <div className="container">
-        <div className="text-center mb-5 reveal">
-          <span className="section-tag">{tag}</span>
-          <h2 className="section-title">{title}</h2>
-          <div className="divider"></div>
-          {subtitle && <p className="text-secondary">{subtitle}</p>}
-        </div>
-
-        {loading ? (
-          <div className="text-center py-5">
-            <div className="spinner-border text-primary" role="status">
-              <span className="visually-hidden">Loading Programs...</span>
-            </div>
-            <p className="text-muted mt-2 small">Loading coaching programs...</p>
-          </div>
-        ) : (
-          <div className="row g-4">
-            {programs.map((prog, idx) => (
-              <div className="col-md-6 col-lg-4 reveal" key={prog.id || idx}>
-                <div className="card-x d-flex flex-column h-100 shadow-sm border border-light">
-                  <div className="program-thumb position-relative overflow-hidden">
-                    <img
-                      src={prog.image}
-                      alt={prog.title}
-                      loading="lazy"
-                      width="1000"
-                      height="746"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "/images/website/program-one-to-one.jpg";
-                      }}
-                    />
-                    {prog.code && (
-                      <span className="badge bg-navy text-lime position-absolute top-0 start-0 m-3 px-2.5 py-1.5 rounded-pill small fw-semibold shadow-sm">
-                        {prog.code}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-4 d-flex flex-column flex-grow-1">
-                    <h5 className="mb-2 fw-bold text-navy">{prog.title}</h5>
-                    <p className="text-secondary small mb-3">{prog.desc}</p>
-                    <ul className="list-unstyled small text-secondary mb-4 flex-grow-1">
-                      {prog.features.map((feat, fIdx) => (
-                        <li className="mb-2 d-flex align-items-start" key={fIdx}>
-                          <i className="bi bi-check2 text-red me-2 flex-shrink-0 mt-0.5"></i>
-                          <span>{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-auto pt-3 border-top border-light">
-                      <div className="d-flex justify-content-between align-items-baseline mb-2">
-                        <div className="price-tag">
-                          {prog.price}
-                          {prog.price !== "Contact for Fees" && (
-                            <small className="text-secondary fs-6">
-                              {" "}
-                              {prog.period}
-                            </small>
-                          )}
-                        </div>
-                        {prog.registration_fee &&
-                          Number(prog.registration_fee) > 0 && (
-                            <div className="text-muted small">
-                              +₹{Number(prog.registration_fee).toLocaleString("en-IN")} reg.
-                            </div>
-                          )}
-                      </div>
-                      <Link
-                        href={prog.enquireLink}
-                        className="btn btn-red btn-sm mt-2 w-100 py-2.5"
-                      >
-                        Enquire Now
-                      </Link>
-                    </div>
-                  </div>
+    <>
+      {/* Program Cards Grid */}
+      <section className="section">
+        <div className="container">
+          <div className="grid grid--4">
+            {programs.map((p, i) => (
+              <article className="card program" data-reveal style={{ "--d": i }} key={p.id || i}>
+                <div className="media ratio-43" style={{ background: "var(--navy)", overflow: "hidden" }}>
+                  <span className={`badge ${p.badge || ""}`}>{p.code}</span>
+                  <img
+                    src={p.image}
+                    alt={p.title}
+                    loading="lazy"
+                    width="600"
+                    height="450"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => {
+                      e.currentTarget.src = "/images/website/program-high-performance.jpg";
+                    }}
+                  />
                 </div>
-              </div>
+                <div className="program__body">
+                  <h3>{p.title}</h3>
+                  <p>{p.desc}</p>
+                  <div className="program__meta">
+                    <span className="price">
+                      {p.price} <small>{p.unit || "/ mo"}</small>
+                    </span>
+                  </div>
+                  <Link className="link-arrow" href="/book-free-trial">
+                    Enroll or Book Trial →
+                  </Link>
+                </div>
+              </article>
             ))}
           </div>
-        )}
-      </div>
-    </section>
+        </div>
+      </section>
+
+      {/* Program Comparison Table */}
+      <section className="section section--cream">
+        <div className="container">
+          <div className="section-head" data-reveal>
+            <span className="eyebrow">Program Comparison</span>
+            <h2 className="title">
+              CHOOSE THE RIGHT <em>TRAINING PATHWAY</em>
+            </h2>
+          </div>
+          <div className="table-wrap" data-reveal>
+            <table>
+              <thead>
+                <tr>
+                  <th>Features</th>
+                  <th>Junior (U-12)</th>
+                  <th>Beginner</th>
+                  <th>Residential</th>
+                  <th>Mini Camp</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Age Group</td>
+                  <td>6 – 12 yrs</td>
+                  <td>10+ yrs</td>
+                  <td>12 – 19 yrs</td>
+                  <td>All Ages</td>
+                </tr>
+                <tr>
+                  <td>Weekly Sessions</td>
+                  <td>3 Sessions</td>
+                  <td>4 Sessions</td>
+                  <td>Daily (6 days)</td>
+                  <td>Intensive (7 days)</td>
+                </tr>
+                <tr>
+                  <td>Turf Pitch Practice</td>
+                  <td>✓</td>
+                  <td>✓</td>
+                  <td>✓ (Unlimited)</td>
+                  <td>✓</td>
+                </tr>
+                <tr>
+                  <td>Bowling Machine Access</td>
+                  <td>Limited</td>
+                  <td>✓</td>
+                  <td>✓</td>
+                  <td>✓</td>
+                </tr>
+                <tr>
+                  <td>Video Biomechanics</td>
+                  <td>Quarterly</td>
+                  <td>Quarterly</td>
+                  <td>Weekly</td>
+                  <td>Camp End</td>
+                </tr>
+                <tr>
+                  <td>Hostel Accommodation</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>Included</td>
+                  <td>Optional</td>
+                </tr>
+                <tr>
+                  <td>Parent Feedback Reports</td>
+                  <td>Monthly</td>
+                  <td>Monthly</td>
+                  <td>Bi-weekly</td>
+                  <td>Comprehensive</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="center" style={{ marginTop: "36px" }} data-reveal>
+            <Link className="btn btn--red" href="/contact">
+              Talk to Our Head Coach →
+            </Link>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }

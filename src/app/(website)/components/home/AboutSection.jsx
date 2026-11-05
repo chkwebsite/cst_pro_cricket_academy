@@ -2,7 +2,6 @@ import Link from "next/link";
 
 export default function AboutSection({
   tag = "About the Academy",
-  title = "Building Cricketers, Shaping Character",
   description = "CST Cricket Academy blends traditional technique with modern sports science. From first grip to first-class ambition, every player follows a clear development pathway with regular assessments and personal feedback.",
   bulletPoints = [
     "Certified and experienced coaching panel",
@@ -11,57 +10,64 @@ export default function AboutSection({
   ],
   buttonText = "Read More",
   buttonLink = "/about",
-  mainImage = "/images/website/program-one-to-two.jpg",
-  insetImage = "/images/website/program-high-performance.jpg",
-  badgeYears = "25+",
-  badgeText = "years of excellence",
 }) {
   return (
-    <section id="about">
-      <div className="container">
-        <div className="row align-items-center g-4 g-lg-5">
-          <div className="col-lg-6 reveal">
-            <div className="about-collage">
-              <img
-                className="main"
-                src={mainImage}
-                alt="Coach correcting a young batter's stance in the nets"
-                width="1000"
-                height="746"
-                loading="lazy"
-              />
-              <img
-                className="inset"
-                src={insetImage}
-                alt="Players training on the academy turf ground"
-                width="1000"
-                height="670"
-                loading="lazy"
-              />
-              <span className="collage-badge">
-                <b>{badgeYears}</b> {badgeText}
-              </span>
-            </div>
+    <section className="section" id="about">
+      <div className="container split">
+        <div className="collage" data-reveal="left">
+          <div className="media c1">
+            <img
+              src="/assets/img/about-1.jpg"
+              alt="Academy players warming up on the main ground"
+              loading="lazy"
+              width="1000"
+              height="670"
+            />
           </div>
-          <div className="col-lg-6 reveal">
-            <span className="section-tag">{tag}</span>
-            <h2 className="section-title">{title}</h2>
-            <div className="divider"></div>
-            <p className="text-secondary">{description}</p>
-            {bulletPoints && bulletPoints.length > 0 && (
-              <ul className="list-unstyled text-secondary">
-                {bulletPoints.map((point, idx) => (
-                  <li className="mb-2" key={idx}>
-                    <i className="bi bi-check-circle-fill text-red me-2"></i>
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link href={buttonLink} className="btn btn-red mt-2">
-              {buttonText}
-            </Link>
+          <div className="media c3">
+            <img
+              src="/assets/img/about-3.jpg"
+              alt="Coach guiding a young batter in the nets"
+              loading="lazy"
+              width="1000"
+              height="746"
+            />
           </div>
+          <div className="media c2">
+            <img
+              src="/assets/img/about-2.jpg"
+              alt="Coach correcting a batter's stance at the stumps"
+              loading="lazy"
+              width="1000"
+              height="746"
+            />
+          </div>
+          <div className="exp">
+            <b>25+</b>
+            <span>YEARS OF EXCELLENCE</span>
+          </div>
+        </div>
+        <div data-reveal="right">
+          <span className="eyebrow">{tag}</span>
+          <h2 className="title">
+            BUILDING CRICKETERS.
+            <br />
+            <em>SHAPING CHAMPIONS.</em>
+          </h2>
+          <p className="lead">{description}</p>
+          {bulletPoints && bulletPoints.length > 0 && (
+            <ul className="ticks">
+              {bulletPoints.map((point, idx) => (
+                <li key={idx}>{point}</li>
+              ))}
+            </ul>
+          )}
+          <Link className="btn btn--navy" style={{ marginTop: "36px" }} href={buttonLink}>
+            {buttonText}{" "}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14m-6-6 6 6-6 6" />
+            </svg>
+          </Link>
         </div>
       </div>
     </section>

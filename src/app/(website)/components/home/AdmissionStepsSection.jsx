@@ -1,44 +1,40 @@
 export default function AdmissionStepsSection({
   tag = "Admission",
-  title = "Start in 3 Simple Steps",
-  steps = [
+  title = "START IN 3 SIMPLE STEPS",
+}) {
+  const steps = [
     {
-      step: 1,
-      icon: "bi-chat-dots-fill",
+      no: 1,
       title: "Enquire",
       desc: "Call, WhatsApp or fill the enquiry form. We reply with batch timings and fees.",
     },
     {
-      step: 2,
-      icon: "bi-calendar-check-fill",
+      no: 2,
       title: "Attend a Free Trial",
       desc: "Meet our coaches, try a session and get a quick skill assessment.",
     },
     {
-      step: 3,
-      icon: "bi-trophy-fill",
+      no: 3,
       title: "Join & Grow",
       desc: "Pick the program that fits and start training with regular progress reports.",
     },
-  ],
-}) {
+  ];
+
   return (
-    <section id="how">
+    <section className="section" id="steps">
       <div className="container">
-        <div className="text-center mb-5 reveal">
-          <span className="section-tag">{tag}</span>
-          <h2 className="section-title">{title}</h2>
-          <div className="divider"></div>
+        <div className="section-head" data-reveal>
+          <span className="eyebrow">{tag}</span>
+          <h2 className="title">
+            START IN <em>3 SIMPLE STEPS</em>
+          </h2>
         </div>
-        <div className="row g-4">
-          {steps.map((st, idx) => (
-            <div className="col-md-4 reveal" key={idx}>
-              <div className="step-card">
-                <span className="step-num">{st.step}</span>
-                <i className={`bi ${st.icon}`}></i>
-                <h5>{st.title}</h5>
-                <p>{st.desc}</p>
-              </div>
+        <div className="grid grid--3 steps" style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          {steps.map((step, idx) => (
+            <div className="card step" data-reveal style={{ "--d": idx }} key={idx}>
+              <div className="step__no">{step.no}</div>
+              <h3>{step.title}</h3>
+              <p>{step.desc}</p>
             </div>
           ))}
         </div>

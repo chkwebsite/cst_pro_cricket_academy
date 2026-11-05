@@ -1,6 +1,7 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "./website.css";
+import "./cst-theme.css";
 import { BootstrapJs } from "../components/utils/BootstrapClient";
 import { UserProvider } from "../next_panel/components/UserContext";
 import { getServerSession } from "../components/lib/auth-session";
@@ -12,6 +13,7 @@ import BackToTop from "./components/layout/BackToTop";
 import WhatsAppButton from "./components/layout/WhatsAppButton";
 import MobileBar from "./components/layout/MobileBar";
 import ScrollRevealInit from "./components/layout/ScrollRevealInit";
+import ScrollProgressBar from "./components/layout/ScrollProgressBar";
 
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://stcricketacademy.com"),
@@ -46,9 +48,9 @@ export const metadata = {
       "CST Cricket Academy offers professional cricket coaching for all ages with BCCI-certified coaches, natural turf pitches, modern indoor nets, and structured player development programs.",
     images: [
       {
-        url: "/images/website/favicon.png",
-        width: 800,
-        height: 600,
+        url: "/images/website/CSTCricketAcademyLogo.png",
+        width: 1200,
+        height: 630,
         alt: "CST Cricket Academy",
       },
     ],
@@ -58,7 +60,7 @@ export const metadata = {
     title: "CST Cricket Academy | Professional Cricket Coaching & Training",
     description:
       "CST Cricket Academy offers professional cricket coaching for all ages with BCCI-certified coaches, natural turf pitches, modern indoor nets, and structured player development programs.",
-    images: ["/images/website/favicon.png"],
+    images: ["/images/website/CSTCricketAcademyLogo.png"],
   },
   robots: {
     index: true,
@@ -72,7 +74,9 @@ export const metadata = {
     },
   },
   icons: {
-    icon: "/images/website/favicon.png",
+    icon: "/images/website/icon-512.png",
+    shortcut: "/images/website/icon-512.png",
+    apple: "/images/website/icon-512.png",
   },
 };
 
@@ -84,14 +88,17 @@ export default async function WebsiteLayout({ children }) {
   return (
     <html lang="en">
       <head>
+        <link rel="icon" type="image/png" href="/images/website/icon-512.png" />
+        <link rel="apple-touch-icon" href="/images/website/icon-512.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Poppins:wght@500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
       </head>
       <body>
+        <ScrollProgressBar />
         <UserProvider initialSession={session}>
           <CartProvider>
             <BootstrapJs />

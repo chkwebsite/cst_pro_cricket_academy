@@ -1,28 +1,34 @@
 import Link from "next/link";
 
 export default function CtaSection({
-  title = "Ready to Start Your Cricket Journey?",
-  subtitle = "Book a free trial session and meet our coaches.",
+  title = "YOUR CRICKET JOURNEY STARTS HERE.",
+  subtitle = "Take the first step towards becoming a better cricketer. Join CST Cricket Academy today.",
   buttonText = "Book Free Trial",
-  buttonLink = "/contact",
-  phone = "+91 8285831503",
+  buttonLink = "/book-free-trial",
+  contactText = "Contact Us",
+  contactLink = "/contact",
 }) {
   return (
-    <section>
+    <section className="section" id="cta">
       <div className="container">
-        <div className="cta text-center reveal">
-          <h2>{title}</h2>
-          <p className="mb-4">{subtitle}</p>
-          <div className="d-flex flex-wrap justify-content-center gap-3">
-            <Link href={buttonLink} className="btn btn-outline-light-pill btn-lg">
+        <div className="cta" data-reveal="zoom">
+          <h2 className="title">
+            {title.includes("JOURNEY") ? (
+              <>
+                YOUR CRICKET JOURNEY<br />STARTS HERE.
+              </>
+            ) : (
+              title
+            )}
+          </h2>
+          <p className="lead">{subtitle}</p>
+          <div className="hero__cta">
+            <Link className="btn btn--red" href={buttonLink}>
               {buttonText}
             </Link>
-            <a
-              href={`tel:${phone.replace(/[^0-9+]/g, "")}`}
-              className="btn btn-link text-white fw-semibold fs-5"
-            >
-              <i className="bi bi-telephone-fill me-2"></i>Call Us
-            </a>
+            <Link className="btn btn--ghost" href={contactLink}>
+              {contactText}
+            </Link>
           </div>
         </div>
       </div>

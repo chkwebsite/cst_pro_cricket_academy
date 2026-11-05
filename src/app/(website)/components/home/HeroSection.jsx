@@ -1,76 +1,84 @@
 import Link from "next/link";
 
 export default function HeroSection({
-  badge = "Admissions Open 2026-27",
-  title = {
-    line1: "Train Like a",
-    highlight1: "Champion.",
-    line2: "Play Like a",
-    highlight2: "Pro.",
-  },
-  description = "Structured, professional cricket coaching for beginners to state-level players, delivered by experienced coaches on quality turf and practice nets.",
+  badge = "ADMISSIONS OPEN 2026-27",
+  description = "Professional cricket coaching, world-class facilities, and expert guidance to transform your cricketing potential into performance.",
   primaryBtn = {
     text: "Book Free Trial",
-    href: "/contact",
-    icon: "bi-calendar-check",
+    href: "/book-free-trial",
   },
   secondaryBtn = {
-    text: "View Programs",
+    text: "Explore Programs",
     href: "/programs",
-    icon: "bi-play-circle",
   },
-  points = [
-    "Certified coaches",
-    "Turf & astro pitches",
-    "All ages, all levels",
+  checks = [
+    "Certified Coaches",
+    "Professional Turf & Nets",
+    "All Ages & Skill Levels",
   ],
-  heroImage = "/images/website/hero-batter.png",
-  heroImageAlt = "CST Cricket Academy batter playing a cover drive",
+  heroImage = "/assets/img/hero-player.png",
+  heroImageAlt = "CST Cricket Academy player playing a cover drive",
 }) {
   return (
-    <header className="hero">
-      <div className="container">
-        <div className="row align-items-center g-4 g-lg-5">
-          <div className="col-lg-6">
-            {badge && <span className="hero-badge">{badge}</span>}
-            <h1 className="mt-3">
-              {title.line1} <span className="text-lime">{title.highlight1}</span>
-              <br />
-              {title.line2} <span className="text-red">{title.highlight2}</span>
-            </h1>
-            <p className="lead my-4">{description}</p>
-            <div className="hero-actions">
-              <Link href={primaryBtn.href} className="btn btn-red">
-                <i className={`bi ${primaryBtn.icon}`}></i>
-                {primaryBtn.text}
-              </Link>
-              <Link href={secondaryBtn.href} className="btn btn-outline-light-pill">
-                <i className={`bi ${secondaryBtn.icon}`}></i>
-                {secondaryBtn.text}
-              </Link>
-            </div>
-            {points && points.length > 0 && (
-              <ul className="hero-points">
-                {points.map((point, idx) => (
-                  <li key={idx}>
-                    <i className="bi bi-check-circle-fill"></i>
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            )}
+    <section className="hero" id="top">
+      <div className="hero__bg" aria-hidden="true"></div>
+      <div className="hero__grid" aria-hidden="true"></div>
+      <div className="container hero__inner">
+        <div>
+          <span className="pill">
+            <i aria-hidden="true"></i>
+            {badge}
+          </span>
+          <h1>
+            <span className="line">
+              <span>TRAIN LIKE A</span>
+            </span>
+            <span className="line">
+              <span>CHAMPION.</span>
+            </span>
+            <span className="line">
+              <span className="red">PLAY LIKE A PRO.</span>
+            </span>
+          </h1>
+          <p className="lead">{description}</p>
+          <div className="hero__cta">
+            <Link className="btn btn--red" href={primaryBtn.href}>
+              {primaryBtn.text}
+            </Link>
+            <Link className="btn btn--ghost" href={secondaryBtn.href}>
+              {secondaryBtn.text}{" "}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14m-6-6 6 6-6 6" />
+              </svg>
+            </Link>
           </div>
-          <div className="col-lg-6">
+          {checks && checks.length > 0 && (
+            <ul className="checks">
+              {checks.map((item, idx) => (
+                <li key={idx}>{item}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="hero__visual">
+          <div className="hero__ring" aria-hidden="true"></div>
+          <div className="hero__orb">
             <img
               src={heroImage}
-              className="hero-art"
               alt={heroImageAlt}
-              width="546"
-              height="518"
+              width="442"
+              height="419"
+              fetchPriority="high"
             />
+          </div>
+          <div className="chip chip--a">
+            <b>25+</b>Years of Experience
+          </div>
+          <div className="chip chip--b">
+            <b>Turf &amp; Astro</b>Pitches
           </div>
         </div>
       </div>
-    </header>
+    </section>
   );
 }

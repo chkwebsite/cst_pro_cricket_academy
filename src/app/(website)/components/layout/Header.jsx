@@ -19,29 +19,24 @@ function getDisplayName(user) {
 export default function Header({
   phone = "+91 8285831503",
   email = "chandankeshri100@gmail.com",
-  logoSrc = "/images/website/logo.png",
-  logoAlt = "CST Cricket Academy logo",
 }) {
   const pathname = usePathname();
   const { user, isLoggedIn, logout } = useUser();
   const { itemCount, setDrawerOpen } = useCart();
   const [isSticky, setIsSticky] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(72);
   const [navOpen, setNavOpen] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [matchesDropdownOpen, setMatchesDropdownOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const userDropdownRef = useRef(null);
+  const headerRef = useRef(null);
 
   const displayName = getDisplayName(user);
 
   // Close user dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event) {
-      if (
-        userDropdownRef.current &&
-        !userDropdownRef.current.contains(event.target)
-      ) {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
         setUserDropdownOpen(false);
       }
     }
@@ -53,7 +48,36 @@ export default function Header({
     };
   }, [userDropdownOpen]);
 
-  // Robust single-click logout handler
+  // Monitor scroll for fixed sticky header and measure height
+  useEffect(() => {
+    const updateHeight = () => {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.offsetHeight || 72);
+      }
+    };
+    updateHeight();
+
+    const handleScroll = () => {
+      setIsSticky(window.scrollY > 30);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", updateHeight, { passive: true });
+    handleScroll();
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, []);
+
+  const [prevPath, setPrevPath] = useState(pathname);
+  if (prevPath !== pathname) {
+    setPrevPath(pathname);
+    setNavOpen(false);
+    setUserDropdownOpen(false);
+  }
+
   const handleLogout = async (e) => {
     if (e) {
       e.preventDefault();
@@ -72,675 +96,311 @@ export default function Header({
     }
   };
 
-  // Monitor scroll for fixed header on scroll
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 40) {
-        setIsSticky(true);
-      } else {
-        setIsSticky(false);
-      }
-    };
+  const isAcademyActive =
+    pathname.startsWith("/about") ||
+    pathname.startsWith("/facilities") ||
+    pathname.startsWith("/achievements") ||
+    pathname.startsWith("/coaches");
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const [prevPathname, setPrevPathname] = useState(pathname);
-
-  // Close menus on page navigation
-  if (prevPathname !== pathname) {
-    setPrevPathname(pathname);
-    setNavOpen(false);
-    setDropdownOpen(false);
-    setMatchesDropdownOpen(false);
-    setUserDropdownOpen(false);
-  }
-
-  const isActive = (path) => {
-    if (path === "/" && pathname === "/") return true;
-    if (path !== "/" && pathname.startsWith(path)) return true;
-    return false;
-  };
-
-  const isAcademyActive = () => {
-    return (
-      pathname.startsWith("/about") ||
-      pathname.startsWith("/facilities") ||
-      pathname.startsWith("/achievements") ||
-      pathname.startsWith("/coaches") ||
-      pathname.startsWith("/programs") ||
-      pathname.startsWith("/branches") ||
-      pathname.startsWith("/rules")
-    );
-  };
-
-  const isMatchesActive = () => {
-    return (
-      pathname.startsWith("/ground-booking") ||
-      pathname.startsWith("/tournaments") ||
-      pathname.startsWith("/matches") ||
-      pathname.startsWith("/my-bookings") ||
-      pathname.startsWith("/gallery")
-    );
-  };
+  const isMatchesActive =
+    pathname.startsWith("/matches") ||
+    pathname.startsWith("/tournaments") ||
+    pathname.startsWith("/ground-booking") ||
+    pathname.startsWith("/my-bookings");
 
   return (
     <>
-      {/* Accessibility skip link */}
-      <a className="skip-link" href="#main-content">
+      <a className="sr-only" href="#main-content">
         Skip to content
       </a>
 
       {/* Top Bar */}
       <div className="topbar">
-        <div className="container d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div>
-            <i className="bi bi-telephone-fill me-1"></i>
+        <div className="container">
+          <div className="topbar__group">
             <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`}>{phone}</a>
-            <span className="mx-2 d-none d-sm-inline">|</span>
-            <i className="bi bi-envelope-fill me-1"></i>
             <a href={`mailto:${email}`}>{email}</a>
           </div>
-          <div className="d-none d-md-flex align-items-center gap-2">
+          <div className="topbar__group">
             <Link href="/contact">Admissions</Link>
-            <span>•</span>
             <Link href="/book-free-trial">Book a Free Trial</Link>
-            <span>•</span>
             <Link href="/contact">Contact Us</Link>
-            <span>•</span>
-            {isLoggedIn && user ? (
-              <div className="d-inline-flex align-items-center gap-2">
-                <span className="text-white small fw-semibold">
-                  <i className="bi bi-person-fill text-lime me-1"></i>
-                  {displayName}
-                </span>
-                <span className="badge bg-lime text-navy" style={{ fontSize: "0.68rem" }}>
-                  {user.user_type || "Public User"}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={loggingOut}
-                  className="btn btn-link text-white-50 p-0 text-decoration-none small hover-white"
-                  title="Logout"
-                >
-                  {loggingOut ? (
-                    <span
-                      className="spinner-border spinner-border-sm text-white"
-                      role="status"
-                      style={{ width: "12px", height: "12px" }}
-                    ></span>
-                  ) : (
-                    <i className="bi bi-box-arrow-right text-white"></i>
-                  )}
-                </button>
-              </div>
-            ) : (
-              <Link href="/login" className="fw-semibold text-lime">
-                <i className="bi bi-box-arrow-in-right me-1 text-white" style={{ fontSize: "1.1em" }}></i>Login
-              </Link>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Main Navigation (Fixed on page scroll) */}
-      <div className={`header-nav-placeholder ${isSticky ? "is-sticky" : ""}`}>
-        <nav
-          className={`navbar navbar-expand-lg ${
-            isSticky ? "is-sticky fixed-top" : "sticky-top"
-          }`}
+      {/* Main Sticky/Fixed Header Wrapper */}
+      <div
+        className="header-wrapper"
+        style={{
+          minHeight: isSticky ? `${headerHeight}px` : "auto",
+        }}
+      >
+        <header
+          ref={headerRef}
+          className={`header ${isSticky ? "is-stuck" : ""}`}
         >
-        <div className="container">
-          <Link
-            className="navbar-brand d-flex align-items-center gap-2"
-            href="/"
-            onClick={() => setNavOpen(false)}
-          >
-            <img src={logoSrc} alt={logoAlt} />
+        <div className="container header__inner">
+          <Link className="logo" href="/" aria-label="CST Cricket Academy home">
+            <img
+              src="/images/website/CSTCricketAcademyLogo.png"
+              alt="CST Cricket Academy"
+              className="logo__img"
+              width={180}
+              height={46}
+              priority="true"
+            />
           </Link>
 
-          <button
-            className="navbar-toggler"
-            type="button"
-            aria-controls="mainNav"
-            aria-expanded={navOpen}
-            aria-label="Toggle navigation"
-            onClick={() => setNavOpen((prev) => !prev)}
-          >
-            <span className="navbar-toggler-icon"></span>
-          </button>
+          {/* Desktop Navigation */}
+          <ul className="nav" aria-label="Main navigation">
+            <li>
+              <Link href="/" className={pathname === "/" ? "is-active" : ""}>
+                Home
+              </Link>
+            </li>
+            <li className={isAcademyActive ? "is-active" : ""}>
+              <button aria-haspopup="true">
+                Academy{" "}
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="m2 4 4 4 4-4" />
+                </svg>
+              </button>
+              <div className="dropdown">
+                <Link href="/about">About Us</Link>
+                <Link href="/facilities">Facilities &amp; Campus</Link>
+                <Link href="/coaches">Coach Profiles</Link>
+                <Link href="/achievements">Hall of Fame</Link>
+              </div>
+            </li>
+            <li>
+              <Link href="/programs" className={pathname.startsWith("/programs") ? "is-active" : ""}>
+                Coaching
+              </Link>
+            </li>
+            <li className={isMatchesActive ? "is-active" : ""}>
+              <button aria-haspopup="true">
+                Matches &amp; Events{" "}
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="m2 4 4 4 4-4" />
+                </svg>
+              </button>
+              <div className="dropdown">
+                <Link href="/matches">Live Matches &amp; Fixtures</Link>
+                <Link href="/tournaments">Tournaments &amp; Cups</Link>
+                <Link href="/ground-booking">Ground Booking</Link>
+                <Link href="/my-bookings">My Slot Bookings</Link>
+              </div>
+            </li>
+            <li>
+              <Link href="/branches" className={pathname.startsWith("/branches") ? "is-active" : ""}>
+                Branches
+              </Link>
+            </li>
+            <li>
+              <Link href="/gallery" className={pathname.startsWith("/gallery") ? "is-active" : ""}>
+                Gallery
+              </Link>
+            </li>
+            <li>
+              <Link href="/shop" className={pathname.startsWith("/shop") ? "is-active" : ""}>
+                Pro Store
+              </Link>
+            </li>
+          </ul>
 
-          <div
-            className={`collapse navbar-collapse ${navOpen ? "show" : ""}`}
-            id="mainNav"
-          >
-            <ul className="navbar-nav ms-auto align-items-lg-center">
-              <li className="nav-item">
-                <Link
-                  className={`nav-link ${isActive("/") ? "active" : ""}`}
-                  href="/"
-                  onClick={() => setNavOpen(false)}
-                >
-                  Home
-                </Link>
-              </li>
-
-              {/* Dropdown 1: Academy Corners */}
-              <li
-                className={`nav-item dropdown ${
-                  dropdownOpen ? "show" : ""
-                }`}
-                onMouseEnter={() => {
-                  if (typeof window !== "undefined" && window.innerWidth >= 992) {
-                    setDropdownOpen(true);
-                  }
-                }}
-                onMouseLeave={() => {
-                  if (typeof window !== "undefined" && window.innerWidth >= 992) {
-                    setDropdownOpen(false);
-                  }
-                }}
+          {/* Header Actions / CTA */}
+          <div className="header__cta">
+            {/* Pro Store Cart Button (Only shown when user is logged in) */}
+            {isLoggedIn && (
+              <button
+                type="button"
+                className="btn btn--sm btn--outline position-relative"
+                style={{ padding: "8px 14px", minWidth: "44px" }}
+                onClick={() => setDrawerOpen(true)}
+                aria-label="View Cart"
+                title="View Shopping Cart"
               >
-                <a
-                  className={`nav-link dropdown-toggle ${
-                    isAcademyActive() ? "active" : ""
-                  }`}
-                  href="#"
-                  id="academyMenu"
-                  role="button"
-                  aria-expanded={dropdownOpen}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDropdownOpen((prev) => !prev);
-                    setMatchesDropdownOpen(false);
-                  }}
-                >
-                  Academy Corners
-                </a>
-                <ul
-                  className={`dropdown-menu ${dropdownOpen ? "show" : ""}`}
-                  aria-labelledby="academyMenu"
-                >
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/about") ? "active" : ""
-                      }`}
-                      href="/about"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      About Us
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/facilities") ? "active" : ""
-                      }`}
-                      href="/facilities"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Facilities &amp; Campus
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/achievements") ? "active" : ""
-                      }`}
-                      href="/achievements"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Hall of Fame &amp; Stars
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/coaches") ? "active" : ""
-                      }`}
-                      href="/coaches"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Coach Corners
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/programs") ? "active" : ""
-                      }`}
-                      href="/programs"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Our Programs
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/branches") ? "active" : ""
-                      }`}
-                      href="/branches"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Our Branches
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/rules") ? "active" : ""
-                      }`}
-                      href="/rules"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Rules &amp; Regulations
-                    </Link>
-                  </li>
-                </ul>
-              </li>
-
-              {/* Dropdown 2: Matches & Events */}
-              <li
-                className={`nav-item dropdown ${
-                  matchesDropdownOpen ? "show" : ""
-                }`}
-                onMouseEnter={() => {
-                  if (typeof window !== "undefined" && window.innerWidth >= 992) {
-                    setMatchesDropdownOpen(true);
-                  }
-                }}
-                onMouseLeave={() => {
-                  if (typeof window !== "undefined" && window.innerWidth >= 992) {
-                    setMatchesDropdownOpen(false);
-                  }
-                }}
-              >
-                <a
-                  className={`nav-link dropdown-toggle ${
-                    isMatchesActive() ? "active" : ""
-                  }`}
-                  href="#"
-                  id="matchesMenu"
-                  role="button"
-                  aria-expanded={matchesDropdownOpen}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setMatchesDropdownOpen((prev) => !prev);
-                    setDropdownOpen(false);
-                  }}
-                >
-                  Matches &amp; Events
-                </a>
-                <ul
-                  className={`dropdown-menu ${matchesDropdownOpen ? "show" : ""}`}
-                  aria-labelledby="matchesMenu"
-                >
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/ground-booking") ? "active" : ""
-                      }`}
-                      href="/ground-booking"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Ground Booking
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/tournaments") ? "active" : ""
-                      }`}
-                      href="/tournaments"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Tournaments &amp; Cups
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/matches") ? "active" : ""
-                      }`}
-                      href="/matches"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Live Matches &amp; Fixtures
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/my-bookings") ? "active" : ""
-                      }`}
-                      href="/my-bookings"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      My Slot Bookings
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      className={`dropdown-item ${
-                        isActive("/gallery") ? "active" : ""
-                      }`}
-                      href="/gallery"
-                      onClick={() => setNavOpen(false)}
-                    >
-                      Photo Gallery
-                    </Link>
-                  </li>
-                </ul>
-              </li>
-
-              {/* Mobile only Contact Us */}
-              <li className="nav-item d-lg-none">
-                <Link
-                  className={`nav-link ${
-                    isActive("/contact") ? "active" : ""
-                  }`}
-                  href="/contact"
-                  onClick={() => setNavOpen(false)}
-                >
-                  Contact Us
-                </Link>
-              </li>
-
-              {/* Store / Pro Shop */}
-              <li className="nav-item">
-                <Link
-                  className={`nav-link ${
-                    isActive("/shop") ? "active" : ""
-                  }`}
-                  href="/shop"
-                  onClick={() => setNavOpen(false)}
-                >
-                  <i className="bi bi-shop me-1 text-white" style={{ fontSize: "1.1em" }}></i>
-                  Store
-                </Link>
-              </li>
-
-              {/* Shopping Cart Button (Visible only when logged in) */}
-              {isLoggedIn && user && (
-                <li className="nav-item d-flex align-items-center">
-                  <button
-                    type="button"
-                    className="btn btn-link text-white p-2 position-relative text-decoration-none d-flex align-items-center"
-                    onClick={() => {
-                      setNavOpen(false);
-                      setDrawerOpen(true);
-                    }}
-                    title="Shopping Cart"
-                    aria-label="View Shopping Cart"
-                  >
-                    <i className="bi bi-cart3 fs-5" style={{ color: "var(--lime)" }}></i>
-                    {itemCount > 0 && (
-                      <span
-                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                        style={{ fontSize: "0.68rem" }}
-                      >
-                        {itemCount}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              )}
-
-              {isLoggedIn && user ? (
-                <li
-                  className="nav-item dropdown user-nav-dropdown ms-lg-2"
-                  ref={userDropdownRef}
-                >
-                  <button
-                    className={`btn btn-sm rounded-pill px-3 py-1.5 d-flex align-items-center gap-2 user-menu-btn text-white ${
-                      userDropdownOpen ? "active-dropdown" : ""
-                    }`}
-                    type="button"
-                    id="userAccountMenu"
-                    aria-expanded={userDropdownOpen}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setUserDropdownOpen((prev) => !prev);
+                <i className="bi bi-bag" style={{ fontSize: "1.1rem" }}></i>
+                {itemCount > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "-4px",
+                      right: "-4px",
+                      background: "var(--red)",
+                      color: "#fff",
+                      borderRadius: "50%",
+                      fontSize: "0.7rem",
+                      fontWeight: 700,
+                      width: "18px",
+                      height: "18px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
-                    <span
-                      className="user-avatar-circle"
-                      style={{ width: "28px", height: "28px", fontSize: "0.8rem" }}
-                    >
-                      {user.profile_image ? (
-                        <img
-                          src={user.profile_image}
-                          alt={displayName}
-                          className="w-100 h-100 rounded-circle object-fit-cover"
-                        />
-                      ) : (
-                        (displayName?.[0] || "U").toUpperCase()
-                      )}
-                    </span>
-                    <span
-                      className="fw-bold text-white text-truncate"
-                      style={{ maxWidth: "120px" }}
-                    >
-                      {displayName}
-                    </span>
-                    <i
-                      className="bi bi-chevron-down text-white-50"
-                      style={{
-                        fontSize: "0.75rem",
-                        transform: userDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
-                        transition: "transform 0.2s ease",
-                      }}
-                    ></i>
-                  </button>
+                    {itemCount}
+                  </span>
+                )}
+              </button>
+            )}
 
+            {/* User Dropdown / Login */}
+            {isLoggedIn ? (
+              <div className="position-relative" ref={userDropdownRef}>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--navy d-flex align-items-center gap-2"
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  aria-expanded={userDropdownOpen}
+                >
+                  <i className="bi bi-person-circle"></i>
+                  <span className="d-none d-md-inline text-truncate" style={{ maxWidth: "110px" }}>
+                    {displayName}
+                  </span>
+                  <i className="bi bi-chevron-down" style={{ fontSize: "0.7rem" }}></i>
+                </button>
+
+                {userDropdownOpen && (
                   <div
-                    className={`dropdown-menu dropdown-menu-end user-account-dropdown-menu ${
-                      userDropdownOpen ? "show" : ""
-                    }`}
-                    style={{ right: 0, left: "auto" }}
-                    aria-labelledby="userAccountMenu"
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 8px)",
+                      right: 0,
+                      minWidth: "200px",
+                      background: "#fff",
+                      borderRadius: "18px",
+                      padding: "10px",
+                      boxShadow: "0 24px 48px -10px rgba(7,30,38,.35)",
+                      border: "1px solid var(--line)",
+                      zIndex: 1000,
+                    }}
                   >
-                    {/* Header info */}
-                    <div className="user-card-header">
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="user-avatar-circle">
-                          {user.profile_image ? (
-                            <img
-                              src={user.profile_image}
-                              alt={displayName}
-                              className="w-100 h-100 rounded-circle object-fit-cover"
-                            />
-                          ) : (
-                            (displayName?.[0] || "U").toUpperCase()
-                          )}
-                        </div>
-                        <div className="overflow-hidden flex-grow-1">
-                          <div
-                            className="fw-bold text-dark text-truncate"
-                            style={{ fontSize: "0.95rem" }}
-                            title={displayName}
-                          >
-                            {displayName}
-                          </div>
-                          <span
-                            className="badge mt-0.5"
-                            style={{
-                              background: user.is_public ? "#0284c7" : "var(--navy)",
-                              color: user.is_public ? "#ffffff" : "var(--lime)",
-                              fontSize: "0.68rem",
-                              fontWeight: 600,
-                              padding: "0.2rem 0.55rem",
-                              borderRadius: "50px",
-                            }}
-                          >
-                            {user.user_type || (user.is_public ? "Public User" : "Academy User")}
-                          </span>
-                        </div>
-                      </div>
-
-                      {(user.email || user.phone) && (
-                        <div className="mt-2 pt-2 border-top" style={{ borderColor: "#e2e8f0" }}>
-                          {user.email && (
-                            <div
-                              className="text-muted small text-truncate d-flex align-items-center gap-1"
-                              style={{ fontSize: "0.76rem" }}
-                              title={user.email}
-                            >
-                              <i className="bi bi-envelope text-secondary"></i>
-                              <span className="text-truncate">{user.email}</span>
-                            </div>
-                          )}
-                          {user.phone && (
-                            <div
-                              className="text-muted small text-truncate d-flex align-items-center gap-1 mt-1"
-                              style={{ fontSize: "0.76rem" }}
-                            >
-                              <i className="bi bi-telephone text-secondary"></i>
-                              <span>{user.phone}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                    <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)" }}>
+                      <p style={{ fontWeight: 700, fontSize: "14px", margin: 0 }}>{displayName}</p>
+                      <small style={{ color: "var(--muted)", fontSize: "12px" }}>{user?.email || "Signed In"}</small>
                     </div>
-
-                    {/* Menu links */}
-                    <div className="d-flex flex-column gap-1">
-                      {/* 1. User Profile */}
+                    {user?.role && (
                       <Link
+                        href="/next_panel"
                         className="dropdown-item"
-                        href="/profile"
-                        onClick={() => {
-                          setNavOpen(false);
-                          setUserDropdownOpen(false);
-                        }}
+                        style={{ display: "block", padding: "10px 14px", fontSize: "14px", color: "var(--navy)", fontWeight: 600 }}
+                        onClick={() => setUserDropdownOpen(false)}
                       >
-                        <span className="item-icon-box" style={{ background: "#eff6ff", color: "#2563eb" }}>
-                          <i className="bi bi-person-circle"></i>
-                        </span>
-                        <div className="flex-grow-1">
-                          <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>User Profile</div>
-                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Profile settings & info</div>
-                        </div>
-                        <i className="bi bi-chevron-right text-muted small opacity-50"></i>
+                        <i className="bi bi-speedometer2 me-2"></i>Admin Dashboard
                       </Link>
-
-                      {/* 2. User Orders */}
-                      <Link
-                        className="dropdown-item"
-                        href="/orders"
-                        onClick={() => {
-                          setNavOpen(false);
-                          setUserDropdownOpen(false);
-                        }}
-                      >
-                        <span className="item-icon-box" style={{ background: "#ecfdf5", color: "#059669" }}>
-                          <i className="bi bi-bag-check-fill"></i>
-                        </span>
-                        <div className="flex-grow-1">
-                          <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>User Orders</div>
-                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Track store purchases</div>
-                        </div>
-                        <i className="bi bi-chevron-right text-muted small opacity-50"></i>
-                      </Link>
-
-                      {/* 3. My Ground Bookings */}
-                      <Link
-                        className="dropdown-item"
-                        href="/my-bookings"
-                        onClick={() => {
-                          setNavOpen(false);
-                          setUserDropdownOpen(false);
-                        }}
-                      >
-                        <span className="item-icon-box" style={{ background: "#fef3c7", color: "#d97706" }}>
-                          <i className="bi bi-calendar-check-fill"></i>
-                        </span>
-                        <div className="flex-grow-1">
-                          <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>Ground Bookings</div>
-                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Reserved turf match slots</div>
-                        </div>
-                        <i className="bi bi-chevron-right text-muted small opacity-50"></i>
-                      </Link>
-
-                      {/* Admin Portal link if academy user */}
-                      {!user.is_public && user.user_type !== "Public User" && (
-                        <Link
-                          className="dropdown-item"
-                          href="/next_panel/dashboard"
-                          onClick={() => {
-                            setNavOpen(false);
-                            setUserDropdownOpen(false);
-                          }}
-                        >
-                          <span className="item-icon-box" style={{ background: "#fff1f2", color: "#e11d48" }}>
-                            <i className="bi bi-speedometer2"></i>
-                          </span>
-                          <div className="flex-grow-1">
-                            <div className="fw-semibold text-dark" style={{ lineHeight: 1.2 }}>Academy Portal</div>
-                            <div className="text-muted" style={{ fontSize: "0.72rem" }}>Manage academy dashboard</div>
-                          </div>
-                          <span
-                            className="badge bg-danger-subtle text-danger border border-danger-subtle"
-                            style={{ fontSize: "0.65rem", padding: "0.2rem 0.45rem" }}
-                          >
-                            Portal
-                          </span>
-                        </Link>
-                      )}
-
-                      <hr className="dropdown-divider" />
-
-                      {/* 3. Logout */}
-                      <button
-                        type="button"
-                        className="dropdown-item dropdown-item-danger border-0 w-100 text-start"
-                        onClick={handleLogout}
-                        disabled={loggingOut}
-                      >
-                        <span className="item-icon-box" style={{ background: "#fef2f2", color: "#dc2626" }}>
-                          {loggingOut ? (
-                            <span
-                              className="spinner-border spinner-border-sm"
-                              role="status"
-                              style={{ width: "13px", height: "13px" }}
-                            ></span>
-                          ) : (
-                            <i className="bi bi-box-arrow-right"></i>
-                          )}
-                        </span>
-                        <div className="flex-grow-1">
-                          <div className="fw-semibold text-danger" style={{ lineHeight: 1.2 }}>
-                            {loggingOut ? "Signing out..." : "Sign Out"}
-                          </div>
-                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Log out from this account</div>
-                        </div>
-                      </button>
-                    </div>
+                    )}
+                    <Link
+                      href="/my-bookings"
+                      className="dropdown-item"
+                      style={{ display: "block", padding: "10px 14px", fontSize: "14px", color: "var(--navy)" }}
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      <i className="bi bi-calendar-check me-2"></i>My Bookings
+                    </Link>
+                    <Link
+                      href="/orders"
+                      className="dropdown-item"
+                      style={{ display: "block", padding: "10px 14px", fontSize: "14px", color: "var(--navy)" }}
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      <i className="bi bi-receipt me-2"></i>My Orders
+                    </Link>
+                    <button
+                      type="button"
+                      className="dropdown-item text-danger border-0 bg-transparent w-100 text-start"
+                      style={{ display: "block", padding: "10px 14px", fontSize: "14px", fontWeight: 600 }}
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                    >
+                      <i className="bi bi-box-arrow-right me-2"></i>
+                      {loggingOut ? "Signing Out..." : "Sign Out"}
+                    </button>
                   </div>
-                </li>
-              ) : (
-                <li className="nav-item">
-                  <Link
-                    className={`nav-link ${
-                      isActive("/login") ? "active" : ""
-                    }`}
-                    href="/login"
-                    onClick={() => setNavOpen(false)}
-                  >
-                    <i className="bi bi-person-circle me-1 text-white" style={{ fontSize: "1.1em" }}></i>Login
-                  </Link>
-                </li>
-              )}
-            </ul>
+                )}
+              </div>
+            ) : (
+              <Link className="login btn btn--sm btn--outline" href="/login">
+                Login
+              </Link>
+            )}
+
+            {/* Mobile Hamburger Button */}
+            <button
+              className={`menu-btn ${navOpen ? "is-open" : ""}`}
+              aria-label="Open menu"
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen(!navOpen)}
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
           </div>
         </div>
+        </header>
+      </div>
+
+      {/* Mobile Drawer & Scrim */}
+      <div
+        className={`scrim ${navOpen ? "is-open" : ""}`}
+        onClick={() => setNavOpen(false)}
+        aria-hidden="true"
+      ></div>
+
+      <nav className={`mobile-nav ${navOpen ? "is-open" : ""}`} aria-label="Mobile navigation">
+        <Link href="/" onClick={() => setNavOpen(false)}>
+          Home
+        </Link>
+        <Link href="/about" onClick={() => setNavOpen(false)}>
+          Academy
+        </Link>
+        <Link className="sub" href="/facilities" onClick={() => setNavOpen(false)}>
+          Facilities &amp; Campus
+        </Link>
+        <Link className="sub" href="/coaches" onClick={() => setNavOpen(false)}>
+          Coach Profiles
+        </Link>
+        <Link className="sub" href="/achievements" onClick={() => setNavOpen(false)}>
+          Hall of Fame
+        </Link>
+        <Link href="/programs" onClick={() => setNavOpen(false)}>
+          Coaching Programs
+        </Link>
+        <Link href="/matches" onClick={() => setNavOpen(false)}>
+          Matches &amp; Events
+        </Link>
+        <Link className="sub" href="/tournaments" onClick={() => setNavOpen(false)}>
+          Tournaments &amp; Cups
+        </Link>
+        <Link className="sub" href="/ground-booking" onClick={() => setNavOpen(false)}>
+          Ground Booking
+        </Link>
+        <Link href="/branches" onClick={() => setNavOpen(false)}>
+          Branches
+        </Link>
+        <Link href="/gallery" onClick={() => setNavOpen(false)}>
+          Gallery
+        </Link>
+        <Link href="/shop" onClick={() => setNavOpen(false)}>
+          Pro Store
+        </Link>
+        {isLoggedIn ? (
+          <button
+            type="button"
+            className="text-start text-danger border-0 bg-transparent py-3 font-weight-bold"
+            style={{ fontSize: "17px" }}
+            onClick={handleLogout}
+          >
+            Logout ({displayName})
+          </button>
+        ) : (
+          <Link href="/login" onClick={() => setNavOpen(false)}>
+            Login
+          </Link>
+        )}
       </nav>
-    </div>
-  </>
+    </>
   );
 }

@@ -33,7 +33,7 @@ function RegisterContent() {
 
           <Link href="/" className="logo-badge">
             <img
-              src="/images/website/logo.png"
+              src="/images/website/CSTCricketAcademyLogo.png"
               alt="CST Cricket Academy"
               style={{ height: "44px" }}
             />

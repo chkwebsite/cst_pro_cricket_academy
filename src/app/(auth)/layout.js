@@ -6,7 +6,9 @@ export const metadata = {
   title: "Sign In | CST Cricket Academy",
   description: "Sign in to CST Cricket Academy portal for player, coach, and tournament management.",
   icons: {
-    icon: "/images/website/favicon.png",
+    icon: "/images/website/icon-512.png",
+    shortcut: "/images/website/icon-512.png",
+    apple: "/images/website/icon-512.png",
   },
 };
 
@@ -14,6 +16,8 @@ export default function AuthLayout({ children }) {
   return (
     <html lang="en">
       <head>
+        <link rel="icon" type="image/png" href="/images/website/icon-512.png" />
+        <link rel="apple-touch-icon" href="/images/website/icon-512.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

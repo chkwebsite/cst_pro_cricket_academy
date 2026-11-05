@@ -206,7 +206,7 @@ export default function Dashboard() {
                         <div className="col-lg-4 text-center d-none d-lg-block">
                             <div className="p-3 bg-white rounded-3 d-inline-block shadow" style={{ maxWidth: "200px" }}>
                                 <img
-                                    src="/images/website/logo.png"
+                                    src="/images/website/CSTCricketAcademyLogo.png"
                                     alt="CST Pro"
                                     className="img-fluid"
                                     style={{ maxHeight: "75px" }}

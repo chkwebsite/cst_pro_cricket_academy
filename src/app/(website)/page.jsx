@@ -3,6 +3,7 @@ import StatsSection from "./components/home/StatsSection";
 import AboutSection from "./components/home/AboutSection";
 import ProgramsSection from "./components/home/ProgramsSection";
 import WhyChooseUsSection from "./components/home/WhyChooseUsSection";
+import HomeMatchesSection from "./components/home/HomeMatchesSection";
 import BranchesSection from "./components/home/BranchesSection";
 import CoachesSection from "./components/home/CoachesSection";
 import GallerySection from "./components/home/GallerySection";
@@ -41,7 +42,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <HeroSection />
 
-      {/* Stats Counter Section */}
+      {/* Stats Counter Section & Ticker */}
       <StatsSection />
 
       {/* About Section */}
@@ -50,13 +51,16 @@ export default function HomePage() {
       {/* Coaching Programs Section */}
       <ProgramsSection />
 
-      {/* Why Choose Us Section */}
+      {/* Why Choose Us / Features Section */}
       <WhyChooseUsSection />
+
+      {/* Matches & Events Preview Section */}
+      <HomeMatchesSection />
 
       {/* Our Branches Section */}
       <BranchesSection />
 
-      {/* Coaches Preview Section */}
+      {/* Coaches Section */}
       <CoachesSection />
 
       {/* Gallery Section */}
