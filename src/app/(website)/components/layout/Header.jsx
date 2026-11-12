@@ -27,6 +27,7 @@ export default function Header({
   const [headerHeight, setHeaderHeight] = useState(72);
   const [navOpen, setNavOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [openMobileSubmenu, setOpenMobileSubmenu] = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const userDropdownRef = useRef(null);
   const headerRef = useRef(null);
@@ -76,7 +77,17 @@ export default function Header({
     setPrevPath(pathname);
     setNavOpen(false);
     setUserDropdownOpen(false);
+    setOpenMobileSubmenu(null);
   }
+
+  const closeNav = () => {
+    setNavOpen(false);
+    setOpenMobileSubmenu(null);
+  };
+
+  const toggleMobileSubmenu = (menu) => {
+    setOpenMobileSubmenu((prev) => (prev === menu ? null : menu));
+  };
 
   const handleLogout = async (e) => {
     if (e) {
@@ -86,7 +97,7 @@ export default function Header({
     if (loggingOut) return;
     setLoggingOut(true);
     setUserDropdownOpen(false);
-    setNavOpen(false);
+    closeNav();
     try {
       await logout();
     } catch (err) {
@@ -331,7 +342,13 @@ export default function Header({
               className={`menu-btn ${navOpen ? "is-open" : ""}`}
               aria-label="Open menu"
               aria-expanded={navOpen}
-              onClick={() => setNavOpen(!navOpen)}
+              onClick={() => {
+                if (navOpen) {
+                  closeNav();
+                } else {
+                  setNavOpen(true);
+                }
+              }}
             >
               <span></span>
               <span></span>
@@ -345,45 +362,156 @@ export default function Header({
       {/* Mobile Drawer & Scrim */}
       <div
         className={`scrim ${navOpen ? "is-open" : ""}`}
-        onClick={() => setNavOpen(false)}
+        onClick={closeNav}
         aria-hidden="true"
       ></div>
 
       <nav className={`mobile-nav ${navOpen ? "is-open" : ""}`} aria-label="Mobile navigation">
-        <Link href="/" onClick={() => setNavOpen(false)}>
+        <Link
+          href="/"
+          className={pathname === "/" ? "is-active" : ""}
+          onClick={closeNav}
+        >
           Home
         </Link>
-        <Link href="/about" onClick={() => setNavOpen(false)}>
-          Academy
-        </Link>
-        <Link className="sub" href="/facilities" onClick={() => setNavOpen(false)}>
-          Facilities &amp; Campus
-        </Link>
-        <Link className="sub" href="/coaches" onClick={() => setNavOpen(false)}>
-          Coach Profiles
-        </Link>
-        <Link className="sub" href="/achievements" onClick={() => setNavOpen(false)}>
-          Hall of Fame
-        </Link>
-        <Link href="/programs" onClick={() => setNavOpen(false)}>
+
+        {/* Academy Submenu */}
+        <div className="mobile-nav__group">
+          <button
+            type="button"
+            className={`mobile-nav__toggle ${openMobileSubmenu === "academy" ? "is-open" : ""} ${isAcademyActive ? "is-active" : ""}`}
+            onClick={() => toggleMobileSubmenu("academy")}
+            aria-expanded={openMobileSubmenu === "academy"}
+            aria-controls="mobile-sub-academy"
+          >
+            <span>Academy</span>
+            <svg
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              className="mobile-nav__arrow"
+            >
+              <path d="m2 4 4 4 4-4" />
+            </svg>
+          </button>
+          {openMobileSubmenu === "academy" && (
+            <div id="mobile-sub-academy" className="mobile-nav__sub">
+              <Link
+                className={`sub ${pathname === "/about" ? "is-active" : ""}`}
+                href="/about"
+                onClick={closeNav}
+              >
+                About Us
+              </Link>
+              <Link
+                className={`sub ${pathname === "/facilities" ? "is-active" : ""}`}
+                href="/facilities"
+                onClick={closeNav}
+              >
+                Facilities &amp; Campus
+              </Link>
+              <Link
+                className={`sub ${pathname === "/coaches" ? "is-active" : ""}`}
+                href="/coaches"
+                onClick={closeNav}
+              >
+                Coach Profiles
+              </Link>
+              <Link
+                className={`sub ${pathname === "/achievements" ? "is-active" : ""}`}
+                href="/achievements"
+                onClick={closeNav}
+              >
+                Hall of Fame
+              </Link>
+            </div>
+          )}
+        </div>
+
+        <Link
+          href="/programs"
+          className={pathname.startsWith("/programs") ? "is-active" : ""}
+          onClick={closeNav}
+        >
           Coaching Programs
         </Link>
-        <Link href="/matches" onClick={() => setNavOpen(false)}>
-          Matches &amp; Events
-        </Link>
-        <Link className="sub" href="/tournaments" onClick={() => setNavOpen(false)}>
-          Tournaments &amp; Cups
-        </Link>
-        <Link className="sub" href="/ground-booking" onClick={() => setNavOpen(false)}>
-          Ground Booking
-        </Link>
-        <Link href="/branches" onClick={() => setNavOpen(false)}>
+
+        {/* Matches & Events Submenu */}
+        <div className="mobile-nav__group">
+          <button
+            type="button"
+            className={`mobile-nav__toggle ${openMobileSubmenu === "matches" ? "is-open" : ""} ${isMatchesActive ? "is-active" : ""}`}
+            onClick={() => toggleMobileSubmenu("matches")}
+            aria-expanded={openMobileSubmenu === "matches"}
+            aria-controls="mobile-sub-matches"
+          >
+            <span>Matches &amp; Events</span>
+            <svg
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              className="mobile-nav__arrow"
+            >
+              <path d="m2 4 4 4 4-4" />
+            </svg>
+          </button>
+          {openMobileSubmenu === "matches" && (
+            <div id="mobile-sub-matches" className="mobile-nav__sub">
+              <Link
+                className={`sub ${pathname === "/matches" ? "is-active" : ""}`}
+                href="/matches"
+                onClick={closeNav}
+              >
+                Live Matches &amp; Fixtures
+              </Link>
+              <Link
+                className={`sub ${pathname === "/tournaments" ? "is-active" : ""}`}
+                href="/tournaments"
+                onClick={closeNav}
+              >
+                Tournaments &amp; Cups
+              </Link>
+              <Link
+                className={`sub ${pathname === "/ground-booking" ? "is-active" : ""}`}
+                href="/ground-booking"
+                onClick={closeNav}
+              >
+                Ground Booking
+              </Link>
+              <Link
+                className={`sub ${pathname === "/my-bookings" ? "is-active" : ""}`}
+                href="/my-bookings"
+                onClick={closeNav}
+              >
+                My Slot Bookings
+              </Link>
+            </div>
+          )}
+        </div>
+
+        <Link
+          href="/branches"
+          className={pathname.startsWith("/branches") ? "is-active" : ""}
+          onClick={closeNav}
+        >
           Branches
         </Link>
-        <Link href="/gallery" onClick={() => setNavOpen(false)}>
+        <Link
+          href="/gallery"
+          className={pathname.startsWith("/gallery") ? "is-active" : ""}
+          onClick={closeNav}
+        >
           Gallery
         </Link>
-        <Link href="/shop" onClick={() => setNavOpen(false)}>
+        <Link
+          href="/shop"
+          className={pathname.startsWith("/shop") ? "is-active" : ""}
+          onClick={closeNav}
+        >
           Pro Store
         </Link>
         {isLoggedIn ? (
@@ -396,7 +524,7 @@ export default function Header({
             Logout ({displayName})
           </button>
         ) : (
-          <Link href="/login" onClick={() => setNavOpen(false)}>
+          <Link href="/login" onClick={closeNav}>
             Login
           </Link>
         )}
