@@ -85,48 +85,70 @@ export default function PlayerPaymentForm({
                     }
                 }
 
-                const params = new URLSearchParams();
-                if (hasAssignedAcademy) params.set("academy_id", String(userAcademyId));
-
-                // Fetch invoices
-                const res = await fetch(`/api/player-program-fees?${params.toString()}`);
-                const json = await res.json();
-                if (!cancelled && res.ok && json.success) {
-                    let allFees = json.data || [];
-                    let filtered = allFees.filter(
-                        (f) =>
-                            f.payment_status === "Pending" ||
-                            f.payment_status === "Partial" ||
-                            (targetFeeId && String(f.id) === String(targetFeeId))
-                    );
-
-                    // If targetFeeId is set and missing from list, fetch it directly
-                    if (targetFeeId && !filtered.some((f) => String(f.id) === String(targetFeeId))) {
-                        try {
-                            const singleRes = await fetch(`/api/player-program-fees/${targetFeeId}`);
-                            const singleJson = await singleRes.json();
-                            if (singleRes.ok && singleJson.success && singleJson.data) {
-                                filtered = [singleJson.data, ...filtered];
-                            }
-                        } catch {
-                            // ignore
-                        }
-                    }
-
-                    setInvoices(filtered);
-
-                    // If targetFeeId is set and matching, prefill
-                    if (targetFeeId) {
-                        const target = filtered.find((f) => String(f.id) === String(targetFeeId));
-                        if (target) {
-                            setFeeId(String(target.id));
-                            const due = Number(target.due_amount);
+                // If we have a targetFeeId, fetch it directly and immediately
+                if (targetFeeId) {
+                    try {
+                        const singleRes = await fetch(`/api/player-program-fees/${targetFeeId}`);
+                        const singleJson = await singleRes.json();
+                        if (!cancelled && singleRes.ok && singleJson.success && singleJson.data) {
+                            const feeData = singleJson.data;
+                            setInvoices((prev) => {
+                                const exists = prev.some((f) => String(f.id) === String(targetFeeId));
+                                return exists ? prev : [feeData, ...prev];
+                            });
+                            setFeeId(String(feeData.id));
+                            const due = Number(feeData.due_amount);
                             const amountToPay = initialAmount && Number(initialAmount) > 0
                                 ? String(initialAmount)
                                 : (due > 0 ? String(due) : "");
                             setPaidAmount(amountToPay);
                         }
+                    } catch (singleErr) {
+                        console.error("Fetch target fee error:", singleErr);
                     }
+                }
+
+                const params = new URLSearchParams();
+                if (hasAssignedAcademy) params.set("academy_id", String(userAcademyId));
+
+                // Fetch invoices list for dropdown
+                try {
+                    const res = await fetch(`/api/player-program-fees?${params.toString()}`);
+                    const json = await res.json();
+                    if (!cancelled && res.ok && json.success) {
+                        let allFees = json.data || [];
+                        let filtered = allFees.filter(
+                            (f) =>
+                                f.payment_status === "Pending" ||
+                                f.payment_status === "Partial" ||
+                                (targetFeeId && String(f.id) === String(targetFeeId))
+                        );
+
+                        setInvoices((prev) => {
+                            const combined = [...prev];
+                            for (const item of filtered) {
+                                if (!combined.some((c) => String(c.id) === String(item.id))) {
+                                    combined.push(item);
+                                }
+                            }
+                            return combined;
+                        });
+
+                        // If targetFeeId is set and matching, prefill
+                        if (targetFeeId) {
+                            const target = filtered.find((f) => String(f.id) === String(targetFeeId));
+                            if (target) {
+                                setFeeId(String(target.id));
+                                const due = Number(target.due_amount);
+                                const amountToPay = initialAmount && Number(initialAmount) > 0
+                                    ? String(initialAmount)
+                                    : (due > 0 ? String(due) : "");
+                                setPaidAmount(amountToPay);
+                            }
+                        }
+                    }
+                } catch (fetchErr) {
+                    console.error("Fetch all invoices error:", fetchErr);
                 }
             } catch {
                 if (!cancelled) setInvoices([]);
@@ -341,6 +363,11 @@ export default function PlayerPaymentForm({
                                             <option value="">
                                                 {loadingInvoices ? "Loading fee invoices..." : "Choose Fee Invoice to Pay"}
                                             </option>
+                                            {feeId && !invoices.some((inv) => String(inv.id) === String(feeId)) && (
+                                                <option value={feeId}>
+                                                    {loadingInvoices ? `Loading Invoice #${feeId}...` : `Invoice #${feeId}`}
+                                                </option>
+                                            )}
                                             {invoices.map((inv) => (
                                                 <option key={inv.id} value={inv.id}>
                                                     #{inv.id} · {inv.player_name} [{inv.admission_no}] — {inv.program_name} (

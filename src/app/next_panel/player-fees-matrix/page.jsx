@@ -93,16 +93,22 @@ export default function PlayerFeesMatrixPage() {
                 }),
             });
             const json = await res.json();
+            const dueAmt = cell.due_amount !== undefined && cell.due_amount !== null && Number(cell.due_amount) > 0 
+                ? cell.due_amount 
+                : cell.total_amount;
             if (json.success && json.fee_id) {
-                router.push(`/next_panel/player-payments/new?player_program_fee_id=${json.fee_id}&from=matrix`);
+                router.push(`/next_panel/player-payments/new?player_program_fee_id=${json.fee_id}&amount=${dueAmt}&from=matrix`);
             } else {
                 router.push(
-                    `/next_panel/player-payments/new?user_program_id=${row.user_program_id}&fee_month=${cell.fee_month}&amount=${cell.due_amount || cell.total_amount}&from=matrix`
+                    `/next_panel/player-payments/new?user_program_id=${row.user_program_id}&fee_month=${cell.fee_month}&amount=${dueAmt}&from=matrix`
                 );
             }
         } catch {
+            const dueAmt = cell.due_amount !== undefined && cell.due_amount !== null && Number(cell.due_amount) > 0 
+                ? cell.due_amount 
+                : cell.total_amount;
             router.push(
-                `/next_panel/player-payments/new?user_program_id=${row.user_program_id}&fee_month=${cell.fee_month}&amount=${cell.due_amount || cell.total_amount}&from=matrix`
+                `/next_panel/player-payments/new?user_program_id=${row.user_program_id}&fee_month=${cell.fee_month}&amount=${dueAmt}&from=matrix`
             );
         } finally {
             setEnsuringCell(null);
@@ -598,7 +604,7 @@ export default function PlayerFeesMatrixPage() {
                                                             ? `/next_panel/player-payments?player_program_fee_id=${cell.fee_id}`
                                                             : `/next_panel/player-payments?admission_players_id=${row.admission_players_id}`)
                                                         : (cell.fee_id
-                                                            ? `/next_panel/player-payments/new?player_program_fee_id=${cell.fee_id}&from=matrix`
+                                                            ? `/next_panel/player-payments/new?player_program_fee_id=${cell.fee_id}&amount=${cell.due_amount || cell.total_amount}&from=matrix`
                                                             : `/next_panel/player-payments/new?user_program_id=${row.user_program_id}&fee_month=${cell.fee_month}&amount=${cell.due_amount || cell.total_amount}&from=matrix`);
 
                                                     const cellTooltip = isSettled

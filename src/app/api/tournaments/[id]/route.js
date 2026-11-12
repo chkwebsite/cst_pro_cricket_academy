@@ -594,10 +594,6 @@ export async function DELETE(request, { params }) {
                 { status: 403 }
             );
         }
-                },
-                { status: 404 }
-            );
-        }
 
         // ==========================================
         // SOFT DELETE
