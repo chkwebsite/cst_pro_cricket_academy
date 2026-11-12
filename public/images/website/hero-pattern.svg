@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <pattern id="stripes" width="120" height="120" patternUnits="userSpaceOnUse">
+      <rect width="120" height="60" fill="#0e2a4d"/>
+      <rect y="60" width="120" height="60" fill="#0a4a55"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="700" fill="url(#stripes)"/>
+  <ellipse cx="600" cy="350" rx="520" ry="260" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="3"/>
+  <rect x="560" y="120" width="80" height="460" fill="#c9a66b" fill-opacity=".18"/>
+  <line x1="545" y1="190" x2="655" y2="190" stroke="#fff" stroke-opacity=".25" stroke-width="3"/>
+  <line x1="545" y1="510" x2="655" y2="510" stroke="#fff" stroke-opacity=".25" stroke-width="3"/>
+</svg>

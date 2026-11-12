@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#031920"/><stop offset="1" stop-color="#0a4a55"/></linearGradient>
+<linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14593a"/><stop offset="1" stop-color="#0d3b26"/></linearGradient></defs>
+<rect width="800" height="600" fill="url(#sky)"/>
+<circle cx="640" cy="130" r="150" fill="#fff" opacity=".07"/><circle cx="640" cy="130" r="90" fill="#fff" opacity=".08"/>
+<rect y="430" width="800" height="170" fill="url(#gr)"/>
+<path d="M0,430 H800" stroke="#fff" stroke-opacity=".25" stroke-width="3"/>
+<path d="M300,430 L500,430 L560,600 L240,600Z" fill="#c9a66b" opacity=".35"/>
+<path d="M0,440 q100,-14 200,0 t200,0 t200,0 t200,0" stroke="#fff" stroke-opacity=".08" stroke-width="30" fill="none"/>
+<rect x="190" y="110" width="420" height="230" rx="18" fill="#062f38" stroke="#00bcd4" stroke-width="6"/><text x="400" y="190" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="30" fill="#00bcd4" letter-spacing="4">APEX XI</text><text x="400" y="285" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="92" fill="#ffffff">186/4</text><text x="400" y="322" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" fill="#cfd8e8">18.2 OVERS</text><rect x="380" y="340" width="40" height="80" fill="#9aa7bd"/><g><circle cx="640" cy="470" r="30" fill="#d7263d"/>
+<path d="M620.5,452.0 Q644.5,470 620.5,488.0" stroke="#fff" stroke-width="2.1" fill="none" stroke-dasharray="4.2 3.0" stroke-linecap="round"/>
+<path d="M659.5,452.0 Q635.5,470 659.5,488.0" stroke="#fff" stroke-width="2.1" fill="none" stroke-dasharray="4.2 3.0" stroke-linecap="round"/>
+<circle cx="629.5" cy="458.0" r="6.6" fill="#fff" opacity=".28"/></g><g transform="translate(160,500) scale(1.0)"><ellipse cx="0" cy="2" rx="46" ry="7" fill="#000" opacity=".18"/>
+<rect x="-26" y="-124" width="9" height="124" rx="3" fill="#f1d49b"/><rect x="-4.5" y="-124" width="9" height="124" rx="3" fill="#f1d49b"/><rect x="17" y="-124" width="9" height="124" rx="3" fill="#f1d49b"/><rect x="-15" y="-128" width="14" height="5" rx="2" fill="#f1d49b"/><rect x="1" y="-128" width="14" height="5" rx="2" fill="#f1d49b"/></g></svg>

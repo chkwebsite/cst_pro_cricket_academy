@@ -1,0 +1,29 @@
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import UserForm from "../../UserForm";
+
+export default async function UserEdit({ params }) {
+    const { id } = await params;
+    return (
+        <div className="container-fluid">
+            <div className="row g-4">
+                <div className="col-12">
+                    <div className="bg-white rounded-4 shadow-sm p-4 mb-4">
+                        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                            <div>
+                                <Link href="/next_panel/users" className="btn btn-sm btn-outline-secondary mb-3">
+                                    <ArrowLeft size={16} className="me-2" /> Back to Users
+                                </Link>
+                                <h1 className="h4 mb-0">Edit User</h1>
+                                <p className="text-muted mb-0">Update user details.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-sm-12">
+                    <UserForm id={id} />
+                </div>
+            </div>
+        </div>
+    );
+}
