@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET - Single user role
 export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     let connection;
 
     try {
@@ -23,6 +27,8 @@ export async function GET(request, { params }) {
                 u.last_name,
                 u.email,
                 u.phone,
+                u.academy_id,
+                u.branch_id,
 
                 r.role_name
 
@@ -51,9 +57,32 @@ export async function GET(request, { params }) {
             );
         }
 
+        const record = rows[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (authUser.isPlayer && Number(record.user_id) !== Number(authUser.id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: You can only access your own roles" },
+                    { status: 403 }
+                );
+            }
+            if (record.academy_id && Number(record.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && record.branch_id && Number(record.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
 
     } catch (error) {
@@ -78,6 +107,16 @@ export async function GET(request, { params }) {
 
 // PUT - Update user role
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to update user roles" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -115,9 +154,10 @@ export async function PUT(request, { params }) {
         // Check existing record
         const [existingRows] = await connection.query(
             `
-            SELECT id
-            FROM cst_user_roles
-            WHERE id = ?
+            SELECT ur.id, ur.user_id, u.academy_id, u.branch_id
+            FROM cst_user_roles ur
+            LEFT JOIN cst_users u ON u.id = ur.user_id
+            WHERE ur.id = ?
             LIMIT 1
             `,
             [id]
@@ -131,6 +171,22 @@ export async function PUT(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        const existingRecord = existingRows[0];
+        if (!authUser.isSuperAdmin) {
+            if (existingRecord.academy_id && Number(existingRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existingRecord.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
         }
 
         // Check user
@@ -254,12 +310,59 @@ export async function PUT(request, { params }) {
 
 // DELETE - Delete user role
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to delete user roles" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
         connection = await pool.getConnection();
 
         const { id } = await params;
+
+        const [existingRows] = await connection.query(
+            `
+            SELECT ur.id, ur.user_id, u.academy_id, u.branch_id
+            FROM cst_user_roles ur
+            LEFT JOIN cst_users u ON u.id = ur.user_id
+            WHERE ur.id = ?
+            LIMIT 1
+            `,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "User role not found",
+                },
+                { status: 404 }
+            );
+        }
+
+        const existingRecord = existingRows[0];
+        if (!authUser.isSuperAdmin) {
+            if (existingRecord.academy_id && Number(existingRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existingRecord.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
 
         const [result] = await connection.query(
             `

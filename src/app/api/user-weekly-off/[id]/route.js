@@ -53,6 +53,9 @@ export async function GET(request, { params }) {
         } else if (authUser.isAcademyAdmin && authUser.academy_id) {
             sql += ` AND w.academy_id = ?`;
             values.push(authUser.academy_id);
+        } else if (!authUser.isSuperAdmin) {
+            sql += ` AND w.user_id = ?`;
+            values.push(authUser.id);
         }
 
         const [rows] = await connection.execute(sql, values);

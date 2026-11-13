@@ -2,25 +2,182 @@
 
 import {
     ArrowLeft,
-    CheckCircle2,
+    Check,
     Clock,
-    Edit,
-    Layers,
-    PlusCircle,
+    FileText,
+    Pencil,
+    Plus,
     RotateCcw,
     Search,
-    SearchSlash,
     Trash2,
-    Trophy,
+    X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-    INNINGS_STATUS_BADGE,
-    INNINGS_STATUSES,
-    formatDate,
-} from "../components/cricketHelpers";
 import Pagination from "../components/Pagination";
+
+// Date formatter: "01 Nov 2026"
+function formatMatchHeaderDate(value) {
+    if (!value) return "—";
+    try {
+        const str = String(value).slice(0, 10);
+        const [y, m, d] = str.split("-");
+        if (y && m && d) {
+            const dateObj = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+            const day = String(d).padStart(2, "0");
+            const monthStr = dateObj.toLocaleDateString("en-US", {
+                month: "short",
+                timeZone: "UTC",
+            });
+            return `${day} ${monthStr} ${y}`;
+        }
+        return str;
+    } catch {
+        return String(value).slice(0, 10);
+    }
+}
+
+// Compute match result text dynamically or from remarks
+function getMatchResultText(match, innings) {
+    if (match.match_remarks) {
+        return match.match_remarks;
+    }
+    if (match.remarks) {
+        return match.remarks;
+    }
+
+    const inn1 = innings.find((i) => Number(i.innings_no) === 1);
+    const inn2 = innings.find((i) => Number(i.innings_no) === 2);
+
+    if (inn1 && inn2) {
+        const r1 = Number(inn1.total_runs) || 0;
+        const r2 = Number(inn2.total_runs) || 0;
+        const w2 = Number(inn2.total_wickets) || 0;
+        const target = inn2.target_runs ? Number(inn2.target_runs) : r1 + 1;
+
+        if (r2 >= target) {
+            const wicketsRemaining = Math.max(0, 10 - w2);
+            return `${inn2.batting_team_name} won by ${wicketsRemaining} wicket${wicketsRemaining === 1 ? "" : "s"}`;
+        }
+
+        const isCompleted =
+            inn2.innings_status === "Completed" ||
+            match.match_status === "Completed" ||
+            match.status === "Completed";
+
+        if (isCompleted) {
+            if (r1 > r2) {
+                const margin = r1 - r2;
+                return `${inn1.batting_team_name} won by ${margin} run${margin === 1 ? "" : "s"}`;
+            }
+            if (r1 === r2) {
+                return "Match tied";
+            }
+        }
+
+        if (inn2.innings_status === "In Progress") {
+            const needed = target - r2;
+            return `${inn2.batting_team_name} need ${needed} runs`;
+        }
+    } else if (inn1) {
+        if (inn1.innings_status === "In Progress") {
+            return `${inn1.batting_team_name} batting`;
+        }
+        return `${inn1.batting_team_name}: ${inn1.total_runs}/${inn1.total_wickets}`;
+    }
+
+    return "";
+}
+
+// Determine correct match status badge
+function getMatchStatusBadge(match, innings) {
+    const rawStatus = String(match.match_status || "").trim().toLowerCase();
+
+    // If both innings are completed or scores/result exist, match is Completed
+    const allInningsCompleted =
+        innings.length > 0 &&
+        innings.every((i) => i.innings_status === "Completed");
+
+    if (rawStatus === "completed" || allInningsCompleted) {
+        return {
+            label: "Completed",
+            icon: <Check size={13} strokeWidth={2.5} />,
+            bg: "#dcfce7",
+            color: "#15803d",
+        };
+    }
+
+    if (rawStatus === "live" || rawStatus === "in progress") {
+        return {
+            label: "Live",
+            icon: (
+                <span
+                    style={{
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        backgroundColor: "#d97706",
+                        display: "inline-block",
+                    }}
+                />
+            ),
+            bg: "#fef3c7",
+            color: "#b45309",
+        };
+    }
+
+    if (rawStatus === "cancelled") {
+        return {
+            label: "Cancelled",
+            icon: <X size={13} strokeWidth={2.5} />,
+            bg: "#fee2e2",
+            color: "#b91c1c",
+        };
+    }
+
+    if (rawStatus === "postponed") {
+        return {
+            label: "Postponed",
+            icon: null,
+            bg: "#ffedd5",
+            color: "#c2410c",
+        };
+    }
+
+    return {
+        label: match.match_status || "Scheduled",
+        icon: null,
+        bg: "#f1f5f9",
+        color: "#475569",
+    };
+}
+
+// Badge style for match type pill (Friendly, Practice, etc.)
+function getMatchTypeBadgeStyle(type) {
+    const t = String(type || "").toLowerCase();
+    if (t === "friendly") {
+        return {
+            backgroundColor: "#d1eadc",
+            color: "#166534",
+        };
+    }
+    if (t === "practice") {
+        return {
+            backgroundColor: "#fef3c7",
+            color: "#92400e",
+        };
+    }
+    if (t === "tournament" || t === "league") {
+        return {
+            backgroundColor: "#e0e7ff",
+            color: "#3730a3",
+        };
+    }
+    return {
+        backgroundColor: "#f1f5f9",
+        color: "#475569",
+    };
+}
 
 export default function MatchInningsPage() {
     const [loading, setLoading] = useState(true);
@@ -29,26 +186,11 @@ export default function MatchInningsPage() {
     const [inningsList, setInningsList] = useState([]);
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
-    const [matches, setMatches] = useState([]);
 
     // Filters
+    const [selectedType, setSelectedType] = useState("ALL");
     const [search, setSearch] = useState("");
-    const [matchId, setMatchId] = useState("");
-    const [status, setStatus] = useState("");
     const [reload, setReload] = useState(0);
-
-    // Fetch matches for the dropdown filter
-    useEffect(() => {
-        (async () => {
-            try {
-                const res = await fetch("/api/matches");
-                const json = await res.json();
-                if (res.ok && json.success) setMatches(json.data || []);
-            } catch {
-                /* optional dropdown */
-            }
-        })();
-    }, []);
 
     // Fetch innings
     useEffect(() => {
@@ -57,12 +199,7 @@ export default function MatchInningsPage() {
             setLoading(true);
             setError(null);
             try {
-                const params = new URLSearchParams();
-                if (matchId) params.set("match_id", matchId);
-                if (status) params.set("innings_status", status);
-
-                const query = params.toString();
-                const res = await fetch(`/api/match-innings${query ? `?${query}` : ""}`, {
+                const res = await fetch("/api/match-innings", {
                     signal: controller.signal,
                 });
                 const json = await res.json();
@@ -75,54 +212,118 @@ export default function MatchInningsPage() {
             } finally {
                 if (!controller.signal.aborted) setLoading(false);
             }
-        }, 300);
+        }, 200);
 
         return () => {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [matchId, status, reload]);
+    }, [reload]);
 
-    // Client-side text filter
-    const needle = search.trim().toLowerCase();
-    const visibleInnings = useMemo(() => {
-        if (!needle) return inningsList;
-        return inningsList.filter((item) =>
-            [
-                item.batting_team_name,
-                item.bowling_team_name,
-                item.match_type,
-                `match #${item.match_id}`,
-                `innings ${item.innings_no}`,
-            ]
-                .filter(Boolean)
-                .some((val) => String(val).toLowerCase().includes(needle))
-        );
-    }, [inningsList, needle]);
+    // Group innings by match
+    const groupedMatches = useMemo(() => {
+        const map = new Map();
+        for (const item of inningsList) {
+            const mId = item.match_id;
+            if (!map.has(mId)) {
+                map.set(mId, {
+                    match_id: mId,
+                    match_no: item.match_no,
+                    match_date: item.match_date,
+                    match_type: item.match_type,
+                    match_status: item.match_status,
+                    match_remarks: item.match_remarks,
+                    innings: [],
+                });
+            }
+            map.get(mId).innings.push(item);
+        }
 
-    useEffect(() => {
+        // Sort innings inside each match by innings_no
+        for (const m of map.values()) {
+            m.innings.sort((a, b) => Number(a.innings_no) - Number(b.innings_no));
+        }
+
+        return Array.from(map.values());
+    }, [inningsList]);
+
+    // Available match types for filter pills
+    const availableTypes = useMemo(() => {
+        const types = new Set(["Friendly", "Practice"]);
+        for (const m of groupedMatches) {
+            if (m.match_type) types.add(m.match_type);
+        }
+        return Array.from(types);
+    }, [groupedMatches]);
+
+    // Filtered matches by type and search query
+    const filteredMatches = useMemo(() => {
+        const needle = search.trim().toLowerCase();
+        return groupedMatches.filter((m) => {
+            if (selectedType !== "ALL") {
+                if (String(m.match_type || "").toLowerCase() !== selectedType.toLowerCase()) {
+                    return false;
+                }
+            }
+
+            if (!needle) return true;
+
+            const matchStr = `match #${m.match_no || m.match_id}`.toLowerCase();
+            const typeStr = String(m.match_type || "").toLowerCase();
+            const dateStr = formatMatchHeaderDate(m.match_date).toLowerCase();
+            const remarksStr = String(m.match_remarks || "").toLowerCase();
+            const teamFound = m.innings.some((inn) =>
+                [inn.batting_team_name, inn.bowling_team_name]
+                    .filter(Boolean)
+                    .some((t) => String(t).toLowerCase().includes(needle))
+            );
+
+            return (
+                matchStr.includes(needle) ||
+                typeStr.includes(needle) ||
+                dateStr.includes(needle) ||
+                remarksStr.includes(needle) ||
+                teamFound
+            );
+        });
+    }, [groupedMatches, selectedType, search]);
+
+    const handleTypeSelect = (type) => {
+        setSelectedType(type);
         setPage(1);
-    }, [search, matchId, status]);
-
-    const totalPages = Math.ceil(visibleInnings.length / PAGE_SIZE) || 1;
-    const pagedInnings = visibleInnings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-    const handleClear = (e) => {
-        e.preventDefault();
-        setSearch("");
-        setMatchId("");
-        setStatus("");
     };
+
+    const handleSearchChange = (val) => {
+        setSearch(val);
+        setPage(1);
+    };
+
+    // Total counts based on filtered matches
+    const totalFilteredInningsCount = useMemo(() => {
+        return filteredMatches.reduce((acc, m) => acc + m.innings.length, 0);
+    }, [filteredMatches]);
+
+    const totalPages = Math.ceil(filteredMatches.length / PAGE_SIZE) || 1;
+    const pagedMatches = filteredMatches.slice(
+        (page - 1) * PAGE_SIZE,
+        page * PAGE_SIZE
+    );
 
     const handleDelete = async (item) => {
         const desc = `Innings ${item.innings_no} (${item.batting_team_name} vs ${item.bowling_team_name})`;
-        if (!confirm(`Are you sure you want to delete ${desc}? Linked scorecard records must be removed first.`)) {
+        if (
+            !confirm(
+                `Are you sure you want to delete ${desc}? Linked scorecard records must be removed first.`
+            )
+        ) {
             return;
         }
         setError(null);
         setNotice(null);
         try {
-            const res = await fetch(`/api/match-innings/${item.id}`, { method: "DELETE" });
+            const res = await fetch(`/api/match-innings/${item.id}`, {
+                method: "DELETE",
+            });
             const json = await res.json();
             if (!res.ok || !json.success) {
                 throw new Error(json.message || "Unable to delete match innings.");
@@ -134,279 +335,529 @@ export default function MatchInningsPage() {
         }
     };
 
-    // Calculate quick stats
-    const stats = useMemo(() => {
-        const total = inningsList.length;
-        const inProgress = inningsList.filter((i) => i.innings_status === "In Progress").length;
-        const completed = inningsList.filter((i) => i.innings_status === "Completed").length;
-        const totalRuns = inningsList.reduce((acc, i) => acc + (Number(i.total_runs) || 0), 0);
-        return { total, inProgress, completed, totalRuns };
-    }, [inningsList]);
-
     return (
-        <div className="container-fluid">
-            <div className="row g-3">
-                {/* Header */}
-                <div className="col-12">
-                    <div className="bg-white rounded-4 shadow-sm p-4 mb-2">
-                        <div className="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                            <div>
-                                <Link
-                                    href="/next_panel/match-management"
-                                    className="btn btn-sm btn-outline-secondary mb-3"
-                                >
-                                    <ArrowLeft size={16} className="me-2" /> Back to Match Management
-                                </Link>
-                                <h3 className="mb-1 d-flex align-items-center gap-2">
-                                    <Layers className="text-primary" /> Match Innings
-                                </h3>
-                                <p className="text-muted mb-0">
-                                    Track match innings, team scores, overs, wickets, extras, and target runs.
-                                </p>
-                            </div>
-                            <div className="d-flex gap-2">
-                                <Link
-                                    href={`/next_panel/match-innings/new${matchId ? `?match_id=${matchId}` : ""}`}
-                                    className="btn btn-primary px-3"
-                                >
-                                    <PlusCircle size={18} className="me-1" /> Add Innings
-                                </Link>
-                            </div>
-                        </div>
+        <div className="w-100 pb-4">
+            {/* Top Header & Filter Pills */}
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+                <div>
+                    <h1
+                        className="fw-bold mb-1"
+                        style={{
+                            fontSize: "1.9rem",
+                            color: "#0f172a",
+                            letterSpacing: "-0.02em",
+                        }}
+                    >
+                        Innings
+                    </h1>
+                    <div style={{ color: "#64748b", fontSize: "0.875rem" }}>
+                        {filteredMatches.length}{" "}
+                        {filteredMatches.length === 1 ? "match" : "matches"} ·{" "}
+                        {totalFilteredInningsCount}{" "}
+                        {totalFilteredInningsCount === 1 ? "innings" : "innings"}
                     </div>
                 </div>
 
-                {/* Summary Stats */}
-                <div className="col-12">
-                    <div className="row g-3">
-                        <div className="col-6 col-md-3">
-                            <div className="bg-white p-3 rounded-4 shadow-sm border-start border-primary border-4">
-                                <div className="text-muted small">Total Innings</div>
-                                <div className="fs-4 fw-bold">{stats.total}</div>
-                            </div>
-                        </div>
-                        <div className="col-6 col-md-3">
-                            <div className="bg-white p-3 rounded-4 shadow-sm border-start border-warning border-4">
-                                <div className="text-muted small">In Progress</div>
-                                <div className="fs-4 fw-bold text-warning">{stats.inProgress}</div>
-                            </div>
-                        </div>
-                        <div className="col-6 col-md-3">
-                            <div className="bg-white p-3 rounded-4 shadow-sm border-start border-success border-4">
-                                <div className="text-muted small">Completed</div>
-                                <div className="fs-4 fw-bold text-success">{stats.completed}</div>
-                            </div>
-                        </div>
-                        <div className="col-6 col-md-3">
-                            <div className="bg-white p-3 rounded-4 shadow-sm border-start border-info border-4">
-                                <div className="text-muted small">Total Runs Scored</div>
-                                <div className="fs-4 fw-bold text-info">{stats.totalRuns}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                    {/* All matches pill */}
+                    <button
+                        type="button"
+                        onClick={() => handleTypeSelect("ALL")}
+                        className="btn btn-sm rounded-pill"
+                        style={{
+                            backgroundColor: selectedType === "ALL" ? "#0e5f59" : "#ffffff",
+                            color: selectedType === "ALL" ? "#ffffff" : "#334155",
+                            border: selectedType === "ALL" ? "none" : "1px solid #e2e8f0",
+                            padding: "7px 20px",
+                            fontSize: "0.85rem",
+                            fontWeight: 500,
+                            boxShadow: "none",
+                            transition: "all 0.15s ease",
+                        }}
+                    >
+                        All matches
+                    </button>
 
-                {/* Filters */}
-                <div className="col-12">
-                    <div className="d-flex flex-wrap align-items-center gap-3">
-                        <div className="input-group" style={{ maxWidth: "260px" }}>
-                            <span className="input-group-text bg-light border-end-0">
-                                <Search size={16} />
-                            </span>
-                            <input
-                                type="text"
-                                className="form-control border-start-0"
-                                placeholder="Search teams, match..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </div>
-
-                        <select
-                            className="form-select"
-                            style={{ maxWidth: "260px" }}
-                            value={matchId}
-                            onChange={(e) => setMatchId(e.target.value)}
-                        >
-                            <option value="">All Matches</option>
-                            {matches.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                    {m.match_no ? `Match ${m.match_no}` : `Match #${m.id}`}: {m.team_a_name} vs {m.team_b_name}
-                                </option>
-                            ))}
-                        </select>
-
-                        <select
-                            className="form-select"
-                            style={{ maxWidth: "180px" }}
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
-                        >
-                            <option value="">All Statuses</option>
-                            {INNINGS_STATUSES.map((st) => (
-                                <option key={st} value={st}>
-                                    {st}
-                                </option>
-                            ))}
-                        </select>
-
-                        <button
-                            type="button"
-                            className="btn btn-outline-danger"
-                            onClick={handleClear}
-                            title="Clear Filters"
-                        >
-                            <SearchSlash size={16} />
-                        </button>
-
-                        <button
-                            type="button"
-                            className="btn btn-outline-secondary ms-auto"
-                            onClick={() => setReload((n) => n + 1)}
-                            title="Refresh"
-                        >
-                            <RotateCcw size={16} />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Innings Table */}
-                <div className="col-12">
-                    {error && <div className="alert alert-danger">{error}</div>}
-                    {notice && <div className="alert alert-success">{notice}</div>}
-
-                    {loading ? (
-                        <div className="text-center py-5 text-muted bg-white rounded-4 shadow-sm">
-                            <Clock className="spinner-border spinner-border-sm me-2" />
-                            Loading match innings...
-                        </div>
-                    ) : visibleInnings.length === 0 ? (
-                        <div className="text-center py-5 text-muted bg-white rounded-4 shadow-sm">
-                            <p className="mb-2">No match innings found.</p>
-                            <Link
-                                href={`/next_panel/match-innings/new${matchId ? `?match_id=${matchId}` : ""}`}
-                                className="btn btn-sm btn-primary"
+                    {/* Match Type Pills (Friendly, Practice, etc.) */}
+                    {availableTypes.map((type) => {
+                        const isSelected =
+                            selectedType.toLowerCase() === type.toLowerCase();
+                        return (
+                            <button
+                                key={type}
+                                type="button"
+                                onClick={() => handleTypeSelect(type)}
+                                className="btn btn-sm rounded-pill"
+                                style={{
+                                    backgroundColor: isSelected ? "#0e5f59" : "#ffffff",
+                                    color: isSelected ? "#ffffff" : "#334155",
+                                    border: isSelected ? "none" : "1px solid #e2e8f0",
+                                    padding: "7px 18px",
+                                    fontSize: "0.85rem",
+                                    fontWeight: 500,
+                                    boxShadow: "none",
+                                    transition: "all 0.15s ease",
+                                }}
                             >
-                                <PlusCircle size={16} className="me-1" /> Create the first innings
-                            </Link>
+                                {type}
+                            </button>
+                        );
+                    })}
+
+                    {/* Add Innings Action */}
+                    <Link
+                        href="/next_panel/match-innings/new"
+                        className="btn btn-sm rounded-pill ms-2 d-inline-flex align-items-center gap-1.5"
+                        style={{
+                            backgroundColor: "#062f38",
+                            color: "#ffffff",
+                            padding: "7px 18px",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            boxShadow: "none",
+                        }}
+                    >
+                        <Plus size={16} /> Add Innings
+                    </Link>
+                </div>
+            </div>
+
+            {/* Quick search and back navigation */}
+            <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                <Link
+                    href="/next_panel/match-management"
+                    className="text-muted text-decoration-none d-inline-flex align-items-center gap-1"
+                    style={{ fontSize: "0.825rem", fontWeight: 500 }}
+                >
+                    <ArrowLeft size={14} /> Back to Match Management
+                </Link>
+
+                <div className="d-flex align-items-center gap-2">
+                    <div className="input-group input-group-sm" style={{ width: "220px" }}>
+                        <span className="input-group-text bg-white border-end-0 text-muted">
+                            <Search size={14} />
+                        </span>
+                        <input
+                            type="text"
+                            className="form-control border-start-0 ps-0"
+                            placeholder="Search team or match..."
+                            value={search}
+                            onChange={(e) => handleSearchChange(e.target.value)}
+                        />
+                        {search && (
+                            <button
+                                className="btn btn-white border border-start-0 text-muted"
+                                type="button"
+                                onClick={() => handleSearchChange("")}
+                            >
+                                <X size={13} />
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => setReload((n) => n + 1)}
+                        title="Refresh"
+                        style={{ borderRadius: "8px" }}
+                    >
+                        <RotateCcw size={14} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Alerts */}
+            {error && (
+                <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+                    {error}
+                    <button
+                        type="button"
+                        className="btn-close"
+                        onClick={() => setError(null)}
+                    ></button>
+                </div>
+            )}
+            {notice && (
+                <div className="alert alert-success alert-dismissible fade show mb-4" role="alert">
+                    {notice}
+                    <button
+                        type="button"
+                        className="btn-close"
+                        onClick={() => setNotice(null)}
+                    ></button>
+                </div>
+            )}
+
+            {/* Main Content Area */}
+            {loading ? (
+                <div
+                    className="text-center py-5 bg-white text-muted shadow-sm"
+                    style={{ borderRadius: "14px" }}
+                >
+                    <Clock className="spinner-border spinner-border-sm me-2" />
+                    Loading match innings...
+                </div>
+            ) : filteredMatches.length === 0 ? (
+                <div
+                    className="text-center py-5 bg-white text-muted shadow-sm"
+                    style={{ borderRadius: "14px" }}
+                >
+                    <p className="mb-2 fs-6">No match innings found.</p>
+                    <Link
+                        href="/next_panel/match-innings/new"
+                        className="btn btn-sm text-white"
+                        style={{
+                            backgroundColor: "#062f38",
+                            borderRadius: "8px",
+                            padding: "6px 16px",
+                        }}
+                    >
+                        <Plus size={16} className="me-1" /> Create the first innings
+                    </Link>
+                </div>
+            ) : (
+                <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                    <div style={{ minWidth: "860px" }}>
+                        {/* Table Header Labels */}
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns:
+                                    "85px minmax(160px, 1.8fr) 85px 85px 125px 85px 170px",
+                                gap: "12px",
+                                padding: "0 20px",
+                                marginBottom: "10px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                color: "#64748b",
+                                letterSpacing: "0.06em",
+                                textTransform: "uppercase",
+                            }}
+                        >
+                            <div>INNINGS</div>
+                            <div>BATTING VS BOWLING</div>
+                            <div>SCORE</div>
+                            <div>OVERS</div>
+                            <div>EXTRAS</div>
+                            <div>TARGET</div>
+                            <div className="text-end">ACTIONS</div>
                         </div>
-                    ) : (
-                        <>
-                        <div className="table-responsive bg-white rounded-4 shadow-sm p-3">
-                            <table className="table align-middle table-hover mb-0">
-                                <thead className="table-success">
-                                    <tr>
-                                        <th>Innings</th>
-                                        <th>Match &amp; Date</th>
-                                        <th>Batting Team</th>
-                                        <th>Bowling Team</th>
-                                        <th>Score</th>
-                                        <th>Extras</th>
-                                        <th>Target</th>
-                                        <th>Status</th>
-                                        <th className="text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pagedInnings.map((item) => (
-                                        <tr key={item.id}>
-                                            <td>
-                                                <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fs-6">
+
+                        {/* Match Cards */}
+                        {pagedMatches.map((group) => {
+                            const resultText = getMatchResultText(group, group.innings);
+                            const statusInfo = getMatchStatusBadge(group, group.innings);
+
+                            return (
+                                <div
+                                    key={group.match_id}
+                                    className="bg-white mb-4"
+                                    style={{
+                                        borderRadius: "14px",
+                                        border: "1px solid #e5e7eb",
+                                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+                                        overflow: "hidden",
+                                    }}
+                                >
+                                    {/* Match Card Header Banner */}
+                                    <div
+                                        className="d-flex flex-wrap align-items-center justify-content-between gap-2"
+                                        style={{
+                                            backgroundColor: "#e8f3ee",
+                                            padding: "10px 20px",
+                                            borderBottom: "1px solid rgba(0, 0, 0, 0.03)",
+                                        }}
+                                    >
+                                        {/* Left Side: Match #, Match Type Badge, Date */}
+                                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                                            <span
+                                                style={{
+                                                    fontSize: "0.95rem",
+                                                    fontWeight: 700,
+                                                    color: "#0f172a",
+                                                }}
+                                            >
+                                                Match #{group.match_no || group.match_id}
+                                            </span>
+
+                                            {group.match_type && (
+                                                <span
+                                                    className="badge rounded-pill"
+                                                    style={{
+                                                        ...getMatchTypeBadgeStyle(group.match_type),
+                                                        fontSize: "0.72rem",
+                                                        fontWeight: 600,
+                                                        padding: "3px 10px",
+                                                    }}
+                                                >
+                                                    {group.match_type}
+                                                </span>
+                                            )}
+
+                                            <span
+                                                style={{
+                                                    fontSize: "0.825rem",
+                                                    color: "#64748b",
+                                                    fontWeight: 500,
+                                                }}
+                                            >
+                                                {formatMatchHeaderDate(group.match_date)}
+                                            </span>
+                                        </div>
+
+                                        {/* Right Side: Result text, Status Badge */}
+                                        <div className="d-flex align-items-center gap-3 flex-wrap">
+                                            {resultText && (
+                                                <span
+                                                    style={{
+                                                        fontSize: "0.875rem",
+                                                        fontWeight: 600,
+                                                        color: "#1e293b",
+                                                    }}
+                                                >
+                                                    {resultText}
+                                                </span>
+                                            )}
+
+                                            <span
+                                                className="badge rounded-pill d-inline-flex align-items-center gap-1"
+                                                style={{
+                                                    backgroundColor: statusInfo.bg,
+                                                    color: statusInfo.color,
+                                                    fontSize: "0.78rem",
+                                                    fontWeight: 600,
+                                                    padding: "4px 12px",
+                                                }}
+                                            >
+                                                {statusInfo.icon}
+                                                <span>{statusInfo.label}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Innings Rows */}
+                                    {group.innings.map((item, idx) => (
+                                        <div
+                                            key={item.id}
+                                            style={{
+                                                display: "grid",
+                                                gridTemplateColumns:
+                                                    "85px minmax(160px, 1.8fr) 85px 85px 125px 85px 170px",
+                                                gap: "12px",
+                                                alignItems: "center",
+                                                padding: "16px 20px",
+                                                borderTop: idx > 0 ? "1px solid #f1f5f9" : "none",
+                                            }}
+                                        >
+                                            {/* Col 1: Innings Badge */}
+                                            <div>
+                                                <span
+                                                    className="badge rounded-pill"
+                                                    style={{
+                                                        backgroundColor: "#e0edff",
+                                                        color: "#2563eb",
+                                                        fontWeight: 600,
+                                                        fontSize: "0.75rem",
+                                                        padding: "4px 10px",
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                >
                                                     Innings {item.innings_no}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                <div className="fw-semibold">
-                                                    Match #{item.match_id}
-                                                </div>
-                                                <small className="text-muted d-block">
-                                                    {formatDate(item.match_date)} · {item.match_type}
-                                                </small>
-                                            </td>
-                                            <td>
-                                                <span className="fw-semibold text-dark">
+                                            </div>
+
+                                            {/* Col 2: Batting vs Bowling */}
+                                            <div>
+                                                <div
+                                                    style={{
+                                                        fontWeight: 700,
+                                                        color: "#0f172a",
+                                                        fontSize: "0.92rem",
+                                                        lineHeight: 1.25,
+                                                    }}
+                                                >
                                                     {item.batting_team_name}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span className="text-secondary">
-                                                    {item.bowling_team_name}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="fs-6 fw-bold">
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        color: "#64748b",
+                                                        fontSize: "0.78rem",
+                                                        marginTop: "2px",
+                                                    }}
+                                                >
+                                                    vs {item.bowling_team_name}
+                                                </div>
+                                            </div>
+
+                                            {/* Col 3: Score */}
+                                            <div>
+                                                <div
+                                                    style={{
+                                                        fontSize: "1.3rem",
+                                                        fontWeight: 800,
+                                                        color: "#0f172a",
+                                                        letterSpacing: "-0.02em",
+                                                        lineHeight: 1.1,
+                                                    }}
+                                                >
                                                     {item.total_runs}/{item.total_wickets}
                                                 </div>
-                                                <small className="text-muted">
-                                                    {item.total_overs} ov ({item.total_balls} balls)
-                                                </small>
-                                            </td>
-                                            <td>
-                                                <span className="fw-medium">{item.extras}</span>
-                                                <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
-                                                    w:{item.wides} nb:{item.no_balls} b:{item.byes} lb:{item.leg_byes}
-                                                </small>
-                                            </td>
-                                            <td>
-                                                {item.target_runs !== null && item.target_runs !== undefined ? (
-                                                    <span className="badge bg-info-subtle text-info border">
+                                            </div>
+
+                                            {/* Col 4: Overs */}
+                                            <div>
+                                                <div
+                                                    style={{
+                                                        fontWeight: 700,
+                                                        color: "#0f172a",
+                                                        fontSize: "0.9rem",
+                                                    }}
+                                                >
+                                                    {Number(item.total_overs || 0).toFixed(1)} ov
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        color: "#64748b",
+                                                        fontSize: "0.75rem",
+                                                        marginTop: "1px",
+                                                    }}
+                                                >
+                                                    {item.total_balls || 0} balls
+                                                </div>
+                                            </div>
+
+                                            {/* Col 5: Extras */}
+                                            <div>
+                                                <div
+                                                    style={{
+                                                        fontWeight: 700,
+                                                        color: "#0f172a",
+                                                        fontSize: "0.9rem",
+                                                    }}
+                                                >
+                                                    {item.extras || 0}
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        color: "#64748b",
+                                                        fontSize: "0.73rem",
+                                                        marginTop: "1px",
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                >
+                                                    w {item.wides ?? 0} · nb {item.no_balls ?? 0} · b {item.byes ?? 0} · lb {item.leg_byes ?? 0}
+                                                </div>
+                                            </div>
+
+                                            {/* Col 6: Target */}
+                                            <div>
+                                                {item.target_runs ? (
+                                                    <span
+                                                        className="badge rounded-pill"
+                                                        style={{
+                                                            backgroundColor: "#e0f2fe",
+                                                            color: "#0284c7",
+                                                            fontWeight: 600,
+                                                            fontSize: "0.75rem",
+                                                            padding: "4px 12px",
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
                                                         {item.target_runs} runs
                                                     </span>
                                                 ) : (
-                                                    "—"
+                                                    <span style={{ color: "#94a3b8", fontSize: "1.1rem" }}>
+                                                        —
+                                                    </span>
                                                 )}
-                                            </td>
-                                            <td>
-                                                <span
-                                                    className={`badge ${
-                                                        INNINGS_STATUS_BADGE[item.innings_status] || "bg-secondary"
-                                                    }`}
+                                            </div>
+
+                                            {/* Col 7: Actions */}
+                                            <div
+                                                className="d-flex align-items-center justify-content-end gap-1.5"
+                                                style={{ flexShrink: 0, whiteSpace: "nowrap" }}
+                                            >
+                                                <Link
+                                                    href={`/next_panel/matches/${item.match_id}/scorecard?innings_id=${item.id}`}
+                                                    className="btn btn-sm d-inline-flex align-items-center gap-1.5"
+                                                    style={{
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #cbd5e1",
+                                                        borderRadius: "8px",
+                                                        padding: "5px 12px",
+                                                        color: "#334155",
+                                                        fontWeight: 600,
+                                                        fontSize: "0.8rem",
+                                                        whiteSpace: "nowrap",
+                                                        flexShrink: 0,
+                                                        transition: "all 0.15s ease",
+                                                    }}
+                                                    title="Full Match Scorecard"
                                                 >
-                                                    {item.innings_status}
-                                                </span>
-                                            </td>
-                                            <td className="text-end">
-                                                <div className="d-flex justify-content-end gap-2">
-                                                    <Link
-                                                        href={`/next_panel/matches/${item.match_id}/scorecard?innings_id=${item.id}`}
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        title="Full Match Scorecard"
-                                                    >
-                                                        <Trophy size={14} className="me-1" /> Scorecard
-                                                    </Link>
-                                                    <Link
-                                                        href={`/next_panel/match-innings/${item.id}/edit`}
-                                                        className="btn btn-sm btn-outline-secondary"
-                                                        title="Edit Innings"
-                                                    >
-                                                        <Edit size={14} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => handleDelete(item)}
-                                                        title="Delete Innings"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                                    <FileText size={14} style={{ color: "#475569" }} />
+                                                    <span>Scorecard</span>
+                                                </Link>
+                                                <Link
+                                                    href={`/next_panel/match-innings/${item.id}/edit`}
+                                                    className="btn btn-sm d-inline-flex align-items-center justify-content-center"
+                                                    style={{
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #cbd5e1",
+                                                        borderRadius: "8px",
+                                                        width: "32px",
+                                                        height: "32px",
+                                                        minWidth: "32px",
+                                                        flexShrink: 0,
+                                                        padding: 0,
+                                                        color: "#475569",
+                                                        transition: "all 0.15s ease",
+                                                    }}
+                                                    title="Edit Innings"
+                                                >
+                                                    <Pencil size={13} />
+                                                </Link>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm d-inline-flex align-items-center justify-content-center"
+                                                    style={{
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #fecdd3",
+                                                        borderRadius: "8px",
+                                                        width: "32px",
+                                                        height: "32px",
+                                                        minWidth: "32px",
+                                                        flexShrink: 0,
+                                                        padding: 0,
+                                                        color: "#e11d48",
+                                                        transition: "all 0.15s ease",
+                                                    }}
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Delete Innings"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </div>
+                                        </div>
                                     ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination
-                            page={page}
-                            totalPages={totalPages}
-                            total={visibleInnings.length}
-                            onPageChange={setPage}
-                            pageSize={PAGE_SIZE}
-                        />
-                        </>
-                    )}
+                                </div>
+                            );
+                        })}
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="mt-3">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    total={filteredMatches.length}
+                                    onPageChange={setPage}
+                                    pageSize={PAGE_SIZE}
+                                />
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

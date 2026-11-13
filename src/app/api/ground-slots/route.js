@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 export async function GET(request) {
     const connection = await pool.getConnection();
 
     try {
+        const { user: authUser } = await getAuthenticatedUser(request);
         const { searchParams } = new URL(request.url);
 
         const ground_id = searchParams.get("ground_id");
@@ -60,11 +62,27 @@ export async function GET(request) {
             values.push(Number(ground_id));
         }
 
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND g.branch_id = ? AND g.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND g.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND g.academy_id = ?";
+                values.push(authUser.academy_id);
+                const allowed = authUser.assignedBranchIds || [authUser.branch_id];
+                sql += ` AND g.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                values.push(...allowed);
+            }
+        }
+
         // =====================================================
         // ACADEMY FILTER
         // =====================================================
 
-        if (academy_id !== null && academy_id !== "") {
+        if (!authUser && academy_id !== null && academy_id !== "") {
 
             if (isNaN(academy_id)) {
                 return NextResponse.json(
@@ -184,12 +202,19 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Insufficient permissions to create slots." }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
         const body = await request.json();
 
-        const {
+        let {
             academy_id,
             branch_id,
             ground_id,
@@ -199,6 +224,14 @@ export async function POST(request) {
             price = 0,
             status = 1,
         } = body;
+
+        // Enforce tenant scoping
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         // =====================================================
         // VALIDATION

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 const ROUND_TYPES = [
@@ -55,6 +56,8 @@ const MATCH_SELECT = `
         tm.*,
         t.tournament_name,
         t.tournament_code,
+        t.academy_id,
+        t.branch_id,
         ma.match_no AS actual_match_no,
         ma.match_type,
         ma.match_date,
@@ -107,9 +110,25 @@ export async function GET(request, { params }) {
             );
         }
 
+        const match = rows[0];
+
+        // Check authentication
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser && !authUser.isSuperAdmin) {
+                if (match.academy_id && Number(match.academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json({ success: false, message: "Tournament match not found or access denied" }, { status: 404 });
+                }
+                if (authUser.isBranchAdmin && match.branch_id && Number(match.branch_id) !== Number(authUser.branch_id)) {
+                    return NextResponse.json({ success: false, message: "Tournament match not found or access denied" }, { status: 404 });
+                }
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: match,
         });
     } catch (error) {
         console.error("GET tournament match error:", error);
@@ -127,6 +146,16 @@ export async function GET(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot update tournament matches." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -147,7 +176,10 @@ export async function PUT(request, { params }) {
         await connection.beginTransaction();
 
         const [existingRows] = await connection.query(
-            `SELECT * FROM cst_tournament_matches WHERE id = ? FOR UPDATE`,
+            `SELECT tm.*, t.academy_id, t.branch_id 
+             FROM cst_tournament_matches tm
+             INNER JOIN cst_tournaments t ON t.id = tm.tournament_id
+             WHERE tm.id = ? FOR UPDATE`,
             [matchRowId]
         );
 
@@ -164,6 +196,23 @@ export async function PUT(request, { params }) {
         }
 
         const old = existingRows[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (Number(old.academy_id) !== Number(authUser.academy_id)) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Tournament match belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(old.branch_id) !== Number(authUser.branch_id)) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Tournament match belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
 
         const tournamentId =
             body.tournament_id === undefined
@@ -521,6 +570,16 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot delete tournament matches." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -535,6 +594,37 @@ export async function DELETE(request, { params }) {
         }
 
         connection = await pool.getConnection();
+
+        // Check ownership
+        const [existingRows] = await connection.query(
+            `SELECT tm.id, t.academy_id, t.branch_id
+             FROM cst_tournament_matches tm
+             INNER JOIN cst_tournaments t ON t.id = tm.tournament_id
+             WHERE tm.id = ? LIMIT 1`,
+            [matchRowId]
+        );
+
+        if (!existingRows.length) {
+            return NextResponse.json(
+                { success: false, message: "Tournament match not found" },
+                { status: 404 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin) {
+            if (Number(existingRows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Tournament match belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existingRows[0].branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Tournament match belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
 
         const [result] = await connection.query(
             `DELETE FROM cst_tournament_matches WHERE id = ?`,

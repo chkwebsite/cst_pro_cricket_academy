@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // =====================================================
 // GET - SINGLE MATCH TYPE
 // =====================================================
 export async function GET(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -67,6 +73,14 @@ export async function GET(request, { params }) {
 // PUT - UPDATE MATCH TYPE
 // =====================================================
 export async function PUT(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (Number(authUser.role_id) !== 1 && Number(authUser.role_id) !== 2) {
+        return NextResponse.json({ success: false, message: "Forbidden. Only administrators can update match types." }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -259,6 +273,14 @@ export async function PUT(request, { params }) {
 // DELETE - SOFT DELETE
 // =====================================================
 export async function DELETE(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (Number(authUser.role_id) !== 1 && Number(authUser.role_id) !== 2) {
+        return NextResponse.json({ success: false, message: "Forbidden. Only administrators can delete match types." }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {

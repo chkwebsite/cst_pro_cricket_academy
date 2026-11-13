@@ -1,13 +1,26 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET: All cart items with filters
 export async function GET(request) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const { searchParams } = new URL(request.url);
 
         const conditions = [];
         const values = [];
+
+        if (authUser) {
+            if (authUser.isPlayer) {
+                conditions.push("c.customer_user_id = ?");
+                values.push(authUser.id);
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                conditions.push("p.academy_id = ?");
+                values.push(authUser.academy_id);
+            }
+        }
 
         const filters = [
             ["id", "ci.id"],
@@ -110,11 +123,12 @@ export async function GET(request) {
 
         const [rows] = await db.execute(
             `SELECT
-ci.*,
-    p.product_name,
-    p.product_code,
-    p.slug AS product_slug
+                ci.*,
+                p.product_name,
+                p.product_code,
+                p.slug AS product_slug
              FROM cst_cart_items ci
+             JOIN cst_cart c ON c.id = ci.cart_id
              LEFT JOIN cst_products p
                 ON p.id = ci.product_id
              ${where}
@@ -143,6 +157,7 @@ ci.*,
 // POST: Add product to cart
 export async function POST(request) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const body = await request.json();
 
         const cart_id = Number(body.cart_id);
@@ -156,6 +171,19 @@ export async function POST(request) {
                 { success: false, message: "Valid cart_id is required" },
                 { status: 400 }
             );
+        }
+
+        if (authUser && authUser.isPlayer) {
+            const [userCart] = await db.execute(
+                "SELECT customer_user_id FROM cst_cart WHERE id = ? LIMIT 1",
+                [cart_id]
+            );
+            if (userCart.length === 0 || userCart[0].customer_user_id !== authUser.id) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden: You cannot modify another user's cart." },
+                    { status: 403 }
+                );
+            }
         }
 
         if (!Number.isInteger(product_id) || product_id <= 0) {

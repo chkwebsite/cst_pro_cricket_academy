@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 const validRoles = [
     "Player",
@@ -86,6 +87,22 @@ export async function GET(request, { params }) {
             );
         }
 
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser && !authUser.isSuperAdmin) {
+                if (rows[0].academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
+                }
+                if (authUser.isPlayer && Number(rows[0].user_id) !== Number(authUser.id)) {
+                    return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
+                }
+                if (authUser.isBranchAdmin && rows[0].branch_id && Number(rows[0].branch_id) !== Number(authUser.branch_id)) {
+                    return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
+                }
+            }
+        }
+
         const { resolved_tournament_id, ...player } = rows[0];
 
         return NextResponse.json({
@@ -116,6 +133,16 @@ export async function GET(request, { params }) {
 
 // PUT: Update tournament team player and fee ledger
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot update tournament team players." },
+            { status: 403 }
+        );
+    }
+
     let connection;
     let transactionStarted = false;
 
@@ -140,12 +167,14 @@ export async function PUT(request, { params }) {
         // Lock existing player
         const [existingRows] = await connection.execute(
             `
-    SELECT *
-        FROM cst_tournament_team_players
-        WHERE id = ?
-        AND is_deleted = 0
-        FOR UPDATE
-        `,
+            SELECT ttp.*, t.academy_id, t.branch_id
+            FROM cst_tournament_team_players ttp
+            INNER JOIN cst_tournament_teams tt ON tt.id = ttp.tournament_team_id
+            INNER JOIN cst_tournaments t ON t.id = tt.tournament_id
+            WHERE ttp.id = ?
+            AND ttp.is_deleted = 0
+            FOR UPDATE
+            `,
             [playerId]
         );
 
@@ -160,6 +189,17 @@ export async function PUT(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        if (!authUser.isSuperAdmin) {
+            if (Number(existingRows[0].academy_id) !== Number(authUser.academy_id)) {
+                await connection.rollback();
+                return NextResponse.json({ success: false, message: "Tournament team player belongs to another academy" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && Number(existingRows[0].branch_id) !== Number(authUser.branch_id)) {
+                await connection.rollback();
+                return NextResponse.json({ success: false, message: "Tournament team player belongs to another branch" }, { status: 403 });
+            }
         }
 
         const existing = existingRows[0];
@@ -716,6 +756,16 @@ export async function PUT(request, { params }) {
 
 // DELETE: Soft delete player and cancel fee record
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot delete tournament team players." },
+            { status: 403 }
+        );
+    }
+
     let connection;
     let transactionStarted = false;
 
@@ -737,12 +787,14 @@ export async function DELETE(request, { params }) {
 
         const [rows] = await connection.execute(
             `
-        SELECT id
-        FROM cst_tournament_team_players
-        WHERE id = ?
-        AND is_deleted = 0
-        FOR UPDATE
-        `,
+            SELECT ttp.id, t.academy_id, t.branch_id
+            FROM cst_tournament_team_players ttp
+            INNER JOIN cst_tournament_teams tt ON tt.id = ttp.tournament_team_id
+            INNER JOIN cst_tournaments t ON t.id = tt.tournament_id
+            WHERE ttp.id = ?
+            AND ttp.is_deleted = 0
+            FOR UPDATE
+            `,
             [playerId]
         );
 
@@ -757,6 +809,17 @@ export async function DELETE(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        if (!authUser.isSuperAdmin) {
+            if (Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                await connection.rollback();
+                return NextResponse.json({ success: false, message: "Tournament team player belongs to another academy" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && Number(rows[0].branch_id) !== Number(authUser.branch_id)) {
+                await connection.rollback();
+                return NextResponse.json({ success: false, message: "Tournament team player belongs to another branch" }, { status: 403 });
+            }
         }
 
         // Soft delete the player

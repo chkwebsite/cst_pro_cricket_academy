@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { syncOnUserProgramInsert } from "@/app/components/lib/playerFlowSync.js";
+import { getAuthenticatedUser, validateBranchBelongsToAcademy, validateProgramBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 // =====================================================
 // GET USER PROGRAMS
 // GET /api/user-programs
 // =====================================================
 export async function GET(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     let connection;
 
     try {
@@ -35,28 +39,49 @@ export async function GET(request) {
         `;
         const values = [];
 
+        // Tenant Isolation
+        if (!authUser.isSuperAdmin) {
+            where += ` AND (p.academy_id = ? OR b.academy_id = ?) `;
+            values.push(authUser.academy_id, authUser.academy_id);
+
+            if (authUser.isPlayer) {
+                where += ` AND up.user_id = ? `;
+                values.push(authUser.id);
+            } else if (authUser.isBranchAdmin) {
+                where += ` AND up.branch_id = ? `;
+                values.push(authUser.branch_id);
+            } else if (!authUser.isAcademyAdmin) {
+                // Staff / Coach
+                const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+                if (allowedBranches.length > 0) {
+                    where += ` AND up.branch_id IN (?) `;
+                    values.push(allowedBranches);
+                } else {
+                    where += ` AND 1 = 0 `;
+                }
+            } else {
+                // Academy Admin can filter by branch
+                if (branch_id) {
+                    where += ` AND up.branch_id = ? `;
+                    values.push(Number(branch_id));
+                }
+            }
+        } else {
+            // Super Admin
+            if (academy_id) {
+                where += ` AND (p.academy_id = ? OR b.academy_id = ?) `;
+                values.push(Number(academy_id), Number(academy_id));
+            }
+            if (branch_id) {
+                where += ` AND up.branch_id = ? `;
+                values.push(Number(branch_id));
+            }
+        }
+
         // USER FILTER
-        if (user_id) {
+        if (user_id && !authUser.isPlayer) {
             where += ` AND up.user_id = ? `;
             values.push(Number(user_id));
-        }
-
-        // PROGRAM FILTER
-        if (program_id && !isNaN(Number(program_id))) {
-            where += ` AND up.program_id = ? `;
-            values.push(Number(program_id));
-        }
-
-        // BRANCH FILTER
-        if (branch_id) {
-            where += ` AND up.branch_id = ? `;
-            values.push(Number(branch_id));
-        }
-
-        // ACADEMY FILTER (via program)
-        if (academy_id) {
-            where += ` AND p.academy_id = ? `;
-            values.push(Number(academy_id));
         }
 
         // ADMISSION PLAYER FILTER
@@ -199,12 +224,22 @@ export async function GET(request) {
 // POST /api/user-programs
 // =====================================================
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to assign user programs" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
         const body = await request.json();
 
-        const {
+        let {
             user_id,
             program_id,
             branch_id,
@@ -213,6 +248,10 @@ export async function POST(request) {
             end_date,
             status,
         } = body;
+
+        if (authUser.isBranchAdmin) {
+            branch_id = authUser.branch_id;
+        }
 
         if (!program_id) {
             return NextResponse.json(
@@ -237,15 +276,43 @@ export async function POST(request) {
 
         connection = await pool.getConnection();
 
+        // Validate program belongs to authorized academy
+        if (!authUser.isSuperAdmin) {
+            const isProgramValid = await validateProgramBelongsToAcademy(connection, program_id, authUser.academy_id);
+            if (!isProgramValid) {
+                return NextResponse.json(
+                    { success: false, message: "Program does not belong to your academy" },
+                    { status: 400 }
+                );
+            }
+
+            const isBranchValid = await validateBranchBelongsToAcademy(connection, branch_id, authUser.academy_id);
+            if (!isBranchValid) {
+                return NextResponse.json(
+                    { success: false, message: "Branch does not belong to your academy" },
+                    { status: 400 }
+                );
+            }
+        }
+
         let appointment_no = null;
         if (admission_players_id) {
-            const [playerRows] = await connection.query(
-                `SELECT admission_no FROM cst_admission_players WHERE id = ? LIMIT 1`,
-                [admission_players_id]
-            );
-            if (playerRows.length > 0) {
-                appointment_no = playerRows[0].admission_no;
+            let playerSql = `SELECT admission_no, branch_id FROM cst_admission_players WHERE id = ? AND is_deleted = 0`;
+            const playerParams = [admission_players_id];
+            if (!authUser.isSuperAdmin && authUser.isBranchAdmin) {
+                playerSql += ` AND branch_id = ?`;
+                playerParams.push(authUser.branch_id);
             }
+            playerSql += ` LIMIT 1`;
+
+            const [playerRows] = await connection.query(playerSql, playerParams);
+            if (playerRows.length === 0) {
+                return NextResponse.json(
+                    { success: false, message: "Player admission not found or belongs to another branch" },
+                    { status: 404 }
+                );
+            }
+            appointment_no = playerRows[0].admission_no;
         }
 
         const [result] = await connection.query(

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 
 const isPositiveInt = (value) => {
@@ -20,6 +21,10 @@ export async function GET(request, context) {
 
     try {
         const { id } = await getParams(context);
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         if (!isPositiveInt(id)) {
             return NextResponse.json(
@@ -33,12 +38,15 @@ export async function GET(request, context) {
         const [rows] = await connection.execute(
             `SELECT
                 mp.*,
+                m.academy_id,
+                m.branch_id,
                 m.match_no,
                 m.match_type,
                 m.match_date,
                 m.tournament_id,
                 t.team_name,
                 t.team_code,
+                ttp.user_id AS ttp_user_id,
                 COALESCE(u.first_name, ttpu.first_name) AS first_name,
                 COALESCE(u.last_name, ttpu.last_name) AS last_name,
                 COALESCE(op.player_name, ttpop.player_name) AS outside_player_name
@@ -62,9 +70,22 @@ export async function GET(request, context) {
             );
         }
 
+        const record = rows[0];
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            const matchesPlayer = (
+                Number(record.user_id) === Number(authUser.id) ||
+                Number(record.ttp_user_id) === Number(authUser.id)
+            );
+            if (!matchesPlayer) {
+                return NextResponse.json({ success: false, message: "Forbidden. You can only view your own match player records." }, { status: 403 });
+            }
+        } else if (!verifyRecordAccess(authUser, { academy_id: record.academy_id, branch_id: record.branch_id })) {
+            return NextResponse.json({ success: false, message: "Forbidden. You do not have access to this match player record." }, { status: 403 });
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
     } catch (error) {
         console.error("GET single match player error:", error);
@@ -84,6 +105,16 @@ export async function PUT(request, context) {
 
     try {
         const { id } = await getParams(context);
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
+        if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Players and coaches cannot edit match players." },
+                { status: 403 }
+            );
+        }
 
         if (!isPositiveInt(id)) {
             return NextResponse.json(
@@ -98,9 +129,10 @@ export async function PUT(request, context) {
         await connection.beginTransaction();
 
         const [existingRows] = await connection.execute(
-            `SELECT *
-             FROM cst_match_players
-             WHERE id = ?
+            `SELECT mp.*, m.academy_id, m.branch_id
+             FROM cst_match_players mp
+             INNER JOIN cst_matches m ON m.id = mp.match_id
+             WHERE mp.id = ?
              FOR UPDATE`,
             [Number(id)]
         );
@@ -115,6 +147,14 @@ export async function PUT(request, context) {
         }
 
         const old = existingRows[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: old.academy_id, branch_id: old.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Match player belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
         const playerFee = body.player_fee === undefined
             ? Number(old.player_fee || 0)
             : Number(body.player_fee);
@@ -748,6 +788,17 @@ export async function PUT(request, context) {
 
 // DELETE /api/match-players/10
 export async function DELETE(request, context) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot delete match players." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -763,7 +814,11 @@ export async function DELETE(request, context) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            "SELECT id FROM cst_match_players WHERE id = ? LIMIT 1",
+            `SELECT mp.id, m.academy_id, m.branch_id
+             FROM cst_match_players mp
+             INNER JOIN cst_matches m ON m.id = mp.match_id
+             WHERE mp.id = ?
+             LIMIT 1`,
             [Number(id)]
         );
 
@@ -771,6 +826,13 @@ export async function DELETE(request, context) {
             return NextResponse.json(
                 { success: false, message: "Match player not found." },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Match player belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

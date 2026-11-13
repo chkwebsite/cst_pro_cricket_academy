@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 const validRoles = [
@@ -168,14 +169,42 @@ export async function GET(request) {
             values.push(filters.status);
         }
 
-        if (filters.academy_id) {
-            sql += " AND t.academy_id = ?";
-            values.push(filters.academy_id);
-        }
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser) {
+                if (authUser.isPlayer) {
+                    sql += ` AND (ttp.user_id = ? OR (t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)))`;
+                    values.push(authUser.id, authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                    sql += ` AND t.academy_id = ? AND t.branch_id = ?`;
+                    values.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                    sql += ` AND t.academy_id = ?`;
+                    values.push(authUser.academy_id);
+                    if (filters.branch_id) {
+                        sql += ` AND t.branch_id = ?`;
+                        values.push(filters.branch_id);
+                    }
+                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                    sql += ` AND t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                    values.push(authUser.academy_id, ...allowed);
+                } else {
+                    if (filters.academy_id) { sql += ` AND t.academy_id = ?`; values.push(filters.academy_id); }
+                    if (filters.branch_id) { sql += ` AND t.branch_id = ?`; values.push(filters.branch_id); }
+                }
+            }
+        } else {
+            if (filters.academy_id) {
+                sql += " AND t.academy_id = ?";
+                values.push(filters.academy_id);
+            }
 
-        if (filters.branch_id) {
-            sql += " AND t.branch_id = ?";
-            values.push(filters.branch_id);
+            if (filters.branch_id) {
+                sql += " AND t.branch_id = ?";
+                values.push(filters.branch_id);
+            }
         }
 
         sql += " ORDER BY ttp.id DESC";
@@ -209,6 +238,16 @@ export async function GET(request) {
 
 // POST: Add player to tournament team and create fee record
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot add tournament team players." },
+            { status: 403 }
+        );
+    }
+
     let connection;
     let transactionStarted = false;
 
@@ -413,6 +452,17 @@ export async function POST(request) {
         }
 
         const registration = tournamentTeams[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (Number(registration.academy_id) !== Number(authUser.academy_id)) {
+                await connection.rollback();
+                return NextResponse.json({ success: false, message: "Tournament belongs to another academy" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && Number(registration.branch_id) !== Number(authUser.branch_id)) {
+                await connection.rollback();
+                return NextResponse.json({ success: false, message: "Tournament belongs to another branch" }, { status: 403 });
+            }
+        }
 
         if (
             tournament_id !== undefined &&

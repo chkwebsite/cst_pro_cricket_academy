@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET - List menu permissions
@@ -176,6 +177,14 @@ export async function POST(request) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser || !authUser.isSuperAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Only super admin can assign menu permissions." },
+                { status: 403 }
+            );
+        }
+
         connection = await pool.getConnection();
 
         const body = await request.json();

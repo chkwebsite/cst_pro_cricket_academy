@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, validateBranchBelongsToAcademy, validateProgramBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 
 // GET: Fetch batches with filters
@@ -43,15 +43,18 @@ b.*,
 
         const params = [];
 
-        const authUser = await getAuthUser(request);
-        if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized. Authentication required." },
-                { status: 401 }
-            );
-        }
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
 
-        if (authUser.isCoach) {
+        if (authUser.isPlayer) {
+            // Player only sees batches they are enrolled in
+            sql += ` AND b.id IN (
+                SELECT bp.batch_id FROM cst_batch_players bp
+                INNER JOIN cst_user_programs up ON up.id = bp.user_program_id
+                WHERE up.user_id = ? AND bp.status = 'Active' AND up.is_deleted = 0
+            )`;
+            params.push(authUser.id);
+        } else if (authUser.isCoach) {
             // Coach only sees their assigned batches
             sql += ` AND b.id IN (
                 SELECT batch_id FROM cst_batch_coaches
@@ -71,9 +74,15 @@ b.*,
         } else if (!authUser.isSuperAdmin && authUser.academy_id) {
             sql += " AND b.academy_id = ?";
             params.push(authUser.academy_id);
-            if (branch_id) {
+            const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+            if (branch_id && allowedBranches.includes(Number(branch_id))) {
                 sql += " AND b.branch_id = ?";
                 params.push(branch_id);
+            } else if (allowedBranches.length > 0) {
+                sql += " AND b.branch_id IN (?)";
+                params.push(allowedBranches);
+            } else {
+                sql += " AND 1 = 0";
             }
         } else {
             if (academy_id) {
@@ -159,25 +168,31 @@ AND(
 
 // POST: Create a new batch
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (authUser) {
-        if (authUser.isCoach || authUser.isPlayer) {
-            return NextResponse.json(
-                { success: false, message: "Coaches and Players cannot create batches" },
-                { status: 403 }
-            );
-        }
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isCoach || authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to create batches" },
+            { status: 403 }
+        );
     }
 
     let connection;
 
     try {
         const body = await request.json();
+        connection = await pool.getConnection();
 
-        if (authUser && authUser.isAcademyAdmin && authUser.academy_id) {
+        if (authUser.isAcademyAdmin) {
             body.academy_id = authUser.academy_id;
-        }
-        if (authUser && authUser.isBranchAdmin) {
+            if (body.branch_id) {
+                const isValid = await validateBranchBelongsToAcademy(connection, body.branch_id, authUser.academy_id);
+                if (!isValid) {
+                    return NextResponse.json({ success: false, message: "Branch does not belong to your academy" }, { status: 400 });
+                }
+            }
+        } else if (authUser.isBranchAdmin) {
             body.academy_id = authUser.academy_id;
             body.branch_id = authUser.branch_id;
         }
@@ -409,12 +424,22 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
 // PUT: Update an existing batch
 export async function PUT(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isCoach || authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to update batches" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
         const body = await request.json();
 
-        const {
+        let {
             id,
             academy_id,
             branch_id,
@@ -461,6 +486,35 @@ export async function PUT(request) {
         }
 
         const existing = existingRows[0];
+
+        // Tenant access check
+        if (!authUser.isSuperAdmin) {
+            if (existing.academy_id && Number(existing.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Batch belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existing.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Batch belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+
+            if (authUser.isAcademyAdmin) {
+                academy_id = authUser.academy_id;
+                if (branch_id) {
+                    const isValidBranch = await validateBranchBelongsToAcademy(connection, branch_id, authUser.academy_id);
+                    if (!isValidBranch) {
+                        return NextResponse.json({ success: false, message: "Branch does not belong to your academy" }, { status: 400 });
+                    }
+                }
+            } else if (authUser.isBranchAdmin) {
+                academy_id = authUser.academy_id;
+                branch_id = authUser.branch_id;
+            }
+        }
 
         const updated = {
             academy_id: academy_id ?? existing.academy_id,
@@ -675,6 +729,16 @@ academy_id = ?,
 
 // DELETE: Soft delete a batch
 export async function DELETE(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isCoach || authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to delete batches" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -694,7 +758,7 @@ export async function DELETE(request) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.query(
-            "SELECT id FROM cst_batches WHERE id = ? AND is_deleted = 0",
+            "SELECT id, academy_id, branch_id FROM cst_batches WHERE id = ? AND is_deleted = 0",
             [id]
         );
 
@@ -706,6 +770,22 @@ export async function DELETE(request) {
                 },
                 { status: 404 }
             );
+        }
+
+        const batch = rows[0];
+        if (!authUser.isSuperAdmin) {
+            if (batch.academy_id && Number(batch.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Batch belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(batch.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Batch belongs to another branch" },
+                    { status: 403 }
+                );
+            }
         }
 
         const [activePlayers] = await connection.query(

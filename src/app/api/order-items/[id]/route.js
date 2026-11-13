@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 function validId(value) {
     return (
@@ -38,6 +39,10 @@ oi.*,
     o.order_status,
     o.payment_status,
     o.customer_name,
+    o.customer_user_id,
+    o.customer_email,
+    o.academy_id,
+    o.fulfillment_branch_id,
     p.slug AS product_slug
             FROM cst_order_items oi
             INNER JOIN cst_orders o ON o.id = oi.order_id
@@ -53,6 +58,23 @@ oi.*,
                 { success: false, message: "Order item not found." },
                 { status: 404 }
             );
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                if (Number(rows[0].customer_user_id) !== Number(authUser.id) && String(rows[0].customer_email || "").toLowerCase() !== String(authUser.email || "").toLowerCase()) {
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. You can only view your own order items." },
+                        { status: 403 }
+                    );
+                }
+            } else if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].fulfillment_branch_id })) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Order item belongs to another academy or branch." },
+                    { status: 403 }
+                );
+            }
         }
 
         return NextResponse.json({
@@ -90,7 +112,10 @@ export async function PUT(request, { params }) {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            "SELECT * FROM cst_order_items WHERE id = ? FOR UPDATE",
+            `SELECT oi.*, o.academy_id, o.fulfillment_branch_id 
+             FROM cst_order_items oi 
+             INNER JOIN cst_orders o ON o.id = oi.order_id 
+             WHERE oi.id = ? FOR UPDATE`,
             [Number(id)]
         );
 
@@ -104,6 +129,15 @@ export async function PUT(request, { params }) {
         }
 
         const existing = rows[0];
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order item belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
         const item = { ...existing };
 
         for (const field of editableFields) {
@@ -345,7 +379,10 @@ export async function DELETE(request, { params }) {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            "SELECT * FROM cst_order_items WHERE id = ? FOR UPDATE",
+            `SELECT oi.*, o.academy_id, o.fulfillment_branch_id 
+             FROM cst_order_items oi 
+             INNER JOIN cst_orders o ON o.id = oi.order_id 
+             WHERE oi.id = ? FOR UPDATE`,
             [Number(id)]
         );
 
@@ -359,6 +396,15 @@ export async function DELETE(request, { params }) {
         }
 
         const item = rows[0];
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: item.academy_id, branch_id: item.fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order item belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         await connection.execute(
             "DELETE FROM cst_order_items WHERE id = ?",

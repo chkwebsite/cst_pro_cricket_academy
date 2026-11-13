@@ -2,6 +2,7 @@
 
 import {
     AlertCircle,
+    Building2,
     Calendar,
     CheckCircle2,
     Clock,
@@ -67,13 +68,33 @@ export default function OrdersPage() {
     const { user } = useUser();
     const currentUserType = String(user?.user_type || "").toLowerCase().trim();
     const isPlayer = currentUserType.includes("player") || currentUserType === "7";
+    const isSuperAdmin = Boolean(
+        Number(user?.role_id) === 1 ||
+        currentUserType.includes("super")
+    );
 
     const [orders, setOrders] = useState([]);
+    const [academies, setAcademies] = useState([]);
+    const [academyFilter, setAcademyFilter] = useState("");
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
+
+    // Load Academies for Super Admin
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+        (async () => {
+            try {
+                const res = await fetch("/api/academies");
+                const json = await res.json();
+                if (res.ok && json.success) setAcademies(json.data || []);
+            } catch {
+                /* non-fatal */
+            }
+        })();
+    }, [isSuperAdmin]);
 
     // Filters
     const [search, setSearch] = useState("");
@@ -120,6 +141,7 @@ export default function OrdersPage() {
                 if (fulfillmentFilter) params.set("fulfillment_type", fulfillmentFilter);
                 if (startDate) params.set("start_date", startDate);
                 if (endDate) params.set("end_date", endDate);
+                if (isSuperAdmin && academyFilter) params.set("academy_id", academyFilter);
 
                 // If logged in user is a player, restrict to their orders
                 if (isPlayer && user?.id) {
@@ -142,11 +164,11 @@ export default function OrdersPage() {
 
         fetchOrders();
         return () => { cancelled = true; };
-    }, [search, statusFilter, paymentFilter, fulfillmentFilter, startDate, endDate, reloadCount, isPlayer, user]);
+    }, [search, statusFilter, paymentFilter, fulfillmentFilter, startDate, endDate, reloadCount, isPlayer, user, isSuperAdmin, academyFilter]);
 
     useEffect(() => {
         setPage(1);
-    }, [search, statusFilter, paymentFilter, fulfillmentFilter, startDate, endDate]);
+    }, [search, statusFilter, paymentFilter, fulfillmentFilter, startDate, endDate, academyFilter]);
 
     // KPI Metrics
     const totalOrders = orders.length;
@@ -411,6 +433,20 @@ export default function OrdersPage() {
                             />
                         </div>
 
+                        {isSuperAdmin && (
+                            <select
+                                className="form-select"
+                                value={academyFilter}
+                                onChange={(e) => setAcademyFilter(e.target.value)}
+                                style={{ maxWidth: "200px" }}
+                            >
+                                <option value="">All Academies</option>
+                                {academies.map((ac) => (
+                                    <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
+                                ))}
+                            </select>
+                        )}
+
                         <select
                             className="form-select"
                             value={statusFilter}
@@ -451,12 +487,13 @@ export default function OrdersPage() {
                             <option value="Pickup">Store Pickup</option>
                         </select>
 
-                        {(search || statusFilter || paymentFilter || fulfillmentFilter) && (
+                        {(search || academyFilter || statusFilter || paymentFilter || fulfillmentFilter) && (
                             <button
                                 type="button"
                                 className="btn btn-outline-secondary d-flex align-items-center gap-1"
                                 onClick={() => {
                                     setSearch("");
+                                    setAcademyFilter("");
                                     setStatusFilter("");
                                     setPaymentFilter("");
                                     setFulfillmentFilter("");

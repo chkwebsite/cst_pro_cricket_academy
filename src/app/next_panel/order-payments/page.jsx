@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
     AlertCircle,
     ArrowUpDown,
+    Building2,
     Calendar,
     CheckCircle2,
     Clock,
@@ -22,6 +23,7 @@ import {
     X,
     XCircle,
 } from "lucide-react";
+import { useUser } from "../components/UserContext";
 import Pagination from "../components/Pagination";
 
 const PAYMENT_METHODS = ["Cash", "UPI", "Card", "Bank Transfer", "COD"];
@@ -41,7 +43,15 @@ function formatPaymentDate(dateVal) {
 }
 
 export default function OrderPaymentsPage() {
+    const { user } = useUser();
+    const isSuperAdmin = Boolean(
+        Number(user?.role_id) === 1 ||
+        String(user?.user_type || "").toLowerCase().includes("super")
+    );
+
     const [payments, setPayments] = useState([]);
+    const [academies, setAcademies] = useState([]);
+    const [academyFilter, setAcademyFilter] = useState("");
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
     const [orders, setOrders] = useState([]);
@@ -56,6 +66,20 @@ export default function OrderPaymentsPage() {
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [reloadCount, setReloadCount] = useState(0);
+
+    // Load Academies for Super Admin
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+        (async () => {
+            try {
+                const res = await fetch("/api/academies");
+                const json = await res.json();
+                if (res.ok && json.success) setAcademies(json.data || []);
+            } catch {
+                /* non-fatal */
+            }
+        })();
+    }, [isSuperAdmin]);
 
     // Modal states
     const [showRecordModal, setShowRecordModal] = useState(false);
@@ -92,6 +116,7 @@ export default function OrderPaymentsPage() {
                 if (statusFilter) params.set("payment_status", statusFilter);
                 if (startDate) params.set("start_date", startDate);
                 if (endDate) params.set("end_date", endDate);
+                if (isSuperAdmin && academyFilter) params.set("academy_id", academyFilter);
 
                 const res = await fetch(`/api/order-payments?${params.toString()}`);
                 const json = await res.json();
@@ -108,7 +133,7 @@ export default function OrderPaymentsPage() {
         return () => {
             isMounted = false;
         };
-    }, [search, methodFilter, statusFilter, startDate, endDate, reloadCount]);
+    }, [search, methodFilter, statusFilter, startDate, endDate, reloadCount, isSuperAdmin, academyFilter]);
 
     // Fetch recent orders for the record payment modal dropdown
     useEffect(() => {
@@ -132,7 +157,7 @@ export default function OrderPaymentsPage() {
 
     useEffect(() => {
         setPage(1);
-    }, [search, methodFilter, statusFilter, startDate, endDate]);
+    }, [search, methodFilter, statusFilter, startDate, endDate, academyFilter]);
 
     const totalPages = Math.ceil(payments.length / PAGE_SIZE) || 1;
     const pagedPayments = payments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -394,7 +419,7 @@ export default function OrderPaymentsPage() {
             {/* Filters Bar */}
             <div className="card border-0 shadow-sm rounded-4 p-3 bg-white mb-4">
                 <div className="row g-2">
-                    <div className="col-12 col-md-4">
+                    <div className={isSuperAdmin ? "col-12 col-md-3" : "col-12 col-md-4"}>
                         <div className="input-group">
                             <span className="input-group-text bg-light border-end-0">
                                 <Search size={16} className="text-muted" />
@@ -408,6 +433,23 @@ export default function OrderPaymentsPage() {
                             />
                         </div>
                     </div>
+
+                    {isSuperAdmin && (
+                        <div className="col-6 col-md-2">
+                            <select
+                                className="form-select bg-light"
+                                value={academyFilter}
+                                onChange={(e) => setAcademyFilter(e.target.value)}
+                            >
+                                <option value="">All Academies</option>
+                                {academies.map((ac) => (
+                                    <option key={ac.id} value={ac.id}>
+                                        {ac.academy_name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     <div className="col-6 col-md-2">
                         <select
@@ -439,7 +481,7 @@ export default function OrderPaymentsPage() {
                         </select>
                     </div>
 
-                    <div className="col-6 col-md-2">
+                    <div className={isSuperAdmin ? "col-6 col-md-1.5" : "col-6 col-md-2"}>
                         <input
                             type="date"
                             className="form-control bg-light"
@@ -449,7 +491,7 @@ export default function OrderPaymentsPage() {
                         />
                     </div>
 
-                    <div className="col-6 col-md-2">
+                    <div className={isSuperAdmin ? "col-6 col-md-1.5" : "col-6 col-md-2"}>
                         <input
                             type="date"
                             className="form-control bg-light"
@@ -469,6 +511,7 @@ export default function OrderPaymentsPage() {
                             <tr className="text-uppercase small text-muted">
                                 <th className="ps-4">ID</th>
                                 <th>Order #</th>
+                                <th>Academy</th>
                                 <th>Customer</th>
                                 <th>Method</th>
                                 <th>Amount</th>
@@ -481,14 +524,14 @@ export default function OrderPaymentsPage() {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={9} className="text-center py-5 text-muted">
+                                    <td colSpan={10} className="text-center py-5 text-muted">
                                         <div className="spinner-border spinner-border-sm text-secondary me-2"></div>
                                         Loading payments...
                                     </td>
                                 </tr>
                             ) : payments.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="text-center py-5 text-muted">
+                                    <td colSpan={10} className="text-center py-5 text-muted">
                                         No order payment records found matching the criteria.
                                     </td>
                                 </tr>
@@ -521,6 +564,12 @@ export default function OrderPaymentsPage() {
                                                     <span>{p.order_no || `Order #${p.order_id}`}</span>
                                                     <ExternalLink size={13} style={{ color: "#475569" }} />
                                                 </Link>
+                                            </td>
+                                            <td>
+                                                <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5 d-inline-flex align-items-center gap-1">
+                                                    <Building2 size={12} />
+                                                    <span>{p.academy_name || "Academy"}</span>
+                                                </span>
                                             </td>
                                             <td>
                                                 <div className="fw-semibold text-dark small">{p.customer_name || "—"}</div>

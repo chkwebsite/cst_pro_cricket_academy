@@ -1,8 +1,9 @@
 "use client";
 
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, Building2, GitBranch } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useUser } from "../components/UserContext";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const MAX_IMAGE_MB = 2;
@@ -23,8 +24,13 @@ const EMPTY_FORM = {
 export default function OutsidePlayerForm({ id = null, embedded = false, onCreated, onCancel }) {
     const router = useRouter();
     const isEdit = Boolean(id);
+    const { user } = useUser();
 
     const [formData, setFormData] = useState(EMPTY_FORM);
+    const [academyId, setAcademyId] = useState("");
+    const [branchId, setBranchId] = useState("");
+    const [academies, setAcademies] = useState([]);
+    const [branches, setBranches] = useState([]);
     const [ageGroups, setAgeGroups] = useState([]);
     const [imageFile, setImageFile] = useState(null);
     const [preview, setPreview] = useState("");
@@ -32,6 +38,65 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
 
+    const isSuperAdmin = !user?.academy_id || user?.user_type === "Super Admin";
+    const isAcademyAdmin = user?.user_type === "Academy Admin";
+    const isBranchAdmin = user?.user_type === "Branch Admin" || (!isSuperAdmin && !isAcademyAdmin && Boolean(user?.branch_id));
+
+    // Auto-populate academy & branch from logged-in user in Add mode
+    useEffect(() => {
+        if (isEdit || !user) return;
+
+        if (user.academy_id && !academyId) {
+            setAcademyId(String(user.academy_id));
+        }
+        if (user.branch_id && !branchId) {
+            setBranchId(String(user.branch_id));
+        }
+    }, [user, isEdit]);
+
+    // Load academies for dropdown / labels
+    useEffect(() => {
+        let isMounted = true;
+        const fetchAcademies = async () => {
+            try {
+                const res = await fetch("/api/academies");
+                const json = await res.json();
+                if (isMounted && res.ok && json.success) {
+                    setAcademies(json.data || []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch academies:", err);
+            }
+        };
+        fetchAcademies();
+        return () => { isMounted = false; };
+    }, []);
+
+    // Load branches when academyId changes
+    useEffect(() => {
+        const targetAcad = academyId || user?.academy_id;
+        if (!targetAcad) {
+            setBranches([]);
+            return;
+        }
+
+        let isMounted = true;
+        const fetchBranches = async () => {
+            try {
+                const res = await fetch(`/api/branch?academy_id=${targetAcad}`);
+                const json = await res.json();
+                if (isMounted && res.ok && json.success) {
+                    setBranches(json.data || []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch branches:", err);
+            }
+        };
+        fetchBranches();
+        return () => { isMounted = false; };
+    }, [academyId, user?.academy_id]);
+
+    // Load age groups
     useEffect(() => {
         const getAgeGroups = async () => {
             try {
@@ -67,11 +132,12 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                 }
 
                 const d = result.data;
+                setAcademyId(d.academy_id ? String(d.academy_id) : "");
+                setBranchId(d.branch_id ? String(d.branch_id) : "");
                 setFormData({
                     player_name: d.player_name || "",
                     phone: d.phone || "",
                     email: d.email || "",
-                    // MySQL DATE arrives as ISO string; date input needs YYYY-MM-DD
                     date_of_birth: d.date_of_birth ? String(d.date_of_birth).slice(0, 10) : "",
                     age_group_id: d.age_group_id ?? "",
                     gender: d.gender || "",
@@ -98,7 +164,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
         }));
     };
 
-    // IMAGE PICK  (same rules as the API: jpg / jpeg / png / webp)
+    // IMAGE PICK (same rules as the API: jpg / jpeg / png / webp)
     const handleImageChange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -120,22 +186,35 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Mirrors the API's validation
+        // Validation
         if (!formData.player_name.trim()) return setError("Player name is required");
         if (formData.email.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
             return setError("Please enter a valid email address");
+        }
+
+        const effectiveAcademyId = academyId || user?.academy_id;
+        if (!effectiveAcademyId && isSuperAdmin) {
+            return setError("Please select an academy");
         }
 
         try {
             setLoading(true);
             setError("");
 
-            // API expects multipart/form-data (image upload) - do NOT set Content-Type,
-            // the browser adds the multipart boundary itself.
             const body = new FormData();
             Object.entries(formData).forEach(([key, value]) => {
                 body.append(key, typeof value === "string" ? value.trim() : value);
             });
+
+            // Append academy_id and branch_id
+            if (effectiveAcademyId) {
+                body.append("academy_id", effectiveAcademyId);
+            }
+            const effectiveBranchId = branchId || (isBranchAdmin ? user?.branch_id : null);
+            if (effectiveBranchId) {
+                body.append("branch_id", effectiveBranchId);
+            }
+
             if (imageFile) body.append("profile_image", imageFile);
 
             const res = await fetch(isEdit ? `/api/outside-players/${id}` : `/api/outside-players`, {
@@ -150,7 +229,13 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
             }
 
             if (embedded && !isEdit) {
-                onCreated?.({ ...data.data, player_name: formData.player_name.trim(), email: formData.email.trim() });
+                onCreated?.({
+                    ...data.data,
+                    player_name: formData.player_name.trim(),
+                    email: formData.email.trim(),
+                    academy_id: effectiveAcademyId,
+                    branch_id: effectiveBranchId,
+                });
                 return;
             }
 
@@ -169,6 +254,16 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
         return <div className="text-center py-5">Loading...</div>;
     }
 
+    const currentAcademyName =
+        user?.academy_name ||
+        academies.find((a) => Number(a.id) === Number(academyId || user?.academy_id))?.academy_name ||
+        "CST Pro Cricket Academy";
+
+    const currentBranchName =
+        user?.branch_name ||
+        branches.find((b) => Number(b.id) === Number(branchId || user?.branch_id))?.branch_name ||
+        "Main Branch";
+
     return (
         <div className={embedded ? "" : "card shadow-sm"}>
             {!embedded && (
@@ -181,6 +276,119 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                 {error && <div className="alert alert-danger">{error}</div>}
 
                 <form onSubmit={handleSubmit}>
+                    {/* Academy & Branch Selection / Auto-filled Display */}
+                    <div className="row mb-3 p-3 bg-light rounded-3 border">
+                        {isSuperAdmin ? (
+                            <>
+                                <div className="col-md-6 mb-2 mb-md-0">
+                                    <label className="form-label fw-semibold">
+                                        <Building2 size={16} className="me-1 text-primary" />
+                                        Academy <span className="text-danger">*</span>
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={academyId}
+                                        onChange={(e) => {
+                                            setAcademyId(e.target.value);
+                                            setBranchId("");
+                                        }}
+                                        required
+                                    >
+                                        <option value="">Select Academy</option>
+                                        {academies.map((a) => (
+                                            <option key={a.id} value={a.id}>
+                                                {a.academy_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label fw-semibold">
+                                        <GitBranch size={16} className="me-1 text-primary" />
+                                        Branch (optional)
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={branchId}
+                                        onChange={(e) => setBranchId(e.target.value)}
+                                        disabled={!academyId}
+                                    >
+                                        <option value="">Select Branch (All / Main)</option>
+                                        {branches.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.branch_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        ) : isAcademyAdmin ? (
+                            <>
+                                <div className="col-md-6 mb-2 mb-md-0">
+                                    <label className="form-label fw-semibold">
+                                        <Building2 size={16} className="me-1 text-primary" />
+                                        Academy (Auto Assigned)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control bg-white"
+                                        value={currentAcademyName}
+                                        readOnly
+                                        disabled
+                                    />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label fw-semibold">
+                                        <GitBranch size={16} className="me-1 text-primary" />
+                                        Branch (optional)
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={branchId}
+                                        onChange={(e) => setBranchId(e.target.value)}
+                                    >
+                                        <option value="">Select Branch (All / Main)</option>
+                                        {branches.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.branch_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        ) : (
+                            /* Branch Admin / Staff: both auto-filled */
+                            <>
+                                <div className="col-md-6 mb-2 mb-md-0">
+                                    <label className="form-label fw-semibold">
+                                        <Building2 size={16} className="me-1 text-primary" />
+                                        Academy (Auto Assigned)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control bg-white"
+                                        value={currentAcademyName}
+                                        readOnly
+                                        disabled
+                                    />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label fw-semibold">
+                                        <GitBranch size={16} className="me-1 text-primary" />
+                                        Branch (Auto Assigned)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control bg-white"
+                                        value={currentBranchName}
+                                        readOnly
+                                        disabled
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
+
                     {/* Profile image */}
                     <div className="mb-3">
                         <label className="form-label">Profile Image (optional)</label>
@@ -215,7 +423,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Player Name</label>
+                            <label className="form-label">Player Name <span className="text-danger">*</span></label>
                             <input
                                 type="text"
                                 name="player_name"
@@ -368,7 +576,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                         <button
                             type="button"
                             className="btn btn-secondary"
-                            onClick={() => embedded ? onCancel?.() : router.push("/next_panel/outside-players")}
+                            onClick={() => (embedded ? onCancel?.() : router.push("/next_panel/outside-players"))}
                         >
                             {embedded ? "Close" : "Cancel"}
                         </button>

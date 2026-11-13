@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 // GET: All order items with filters
 export async function GET(request) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const { searchParams } = new URL(request.url);
 
         const order_id = searchParams.get("order_id");
@@ -37,6 +39,37 @@ oi.*,
     `;
 
         const values = [];
+
+        if (authUser) {
+            if (authUser.isPlayer) {
+                sql += " AND (o.customer_user_id = ? OR LOWER(o.customer_email) = LOWER(?))";
+                values.push(authUser.id, authUser.email || "");
+            } else if (authUser.isSuperAdmin) {
+                const academy_id = searchParams.get("academy_id");
+                if (academy_id) {
+                    sql += " AND o.academy_id = ?";
+                    values.push(Number(academy_id));
+                }
+            } else if (authUser.isAcademyAdmin) {
+                sql += " AND o.academy_id = ?";
+                values.push(authUser.academy_id);
+            } else if (authUser.isBranchAdmin) {
+                sql += " AND o.fulfillment_branch_id = ?";
+                values.push(authUser.branch_id);
+            } else {
+                if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                    const placeholders = authUser.accessibleBranchIds.map(() => "?").join(", ");
+                    sql += ` AND o.fulfillment_branch_id IN (${placeholders})`;
+                    values.push(...authUser.accessibleBranchIds);
+                } else if (authUser.branch_id) {
+                    sql += " AND o.fulfillment_branch_id = ?";
+                    values.push(authUser.branch_id);
+                } else if (authUser.academy_id) {
+                    sql += " AND o.academy_id = ?";
+                    values.push(authUser.academy_id);
+                }
+            }
+        }
 
         if (order_id !== null) {
             sql += " AND oi.order_id = ?";
@@ -220,7 +253,7 @@ export async function POST(request) {
 
         // Lock order and verify it exists.
         const [orders] = await connection.execute(
-            "SELECT id, fulfillment_branch_id, order_status FROM cst_orders WHERE id = ? FOR UPDATE",
+            "SELECT id, academy_id, fulfillment_branch_id, customer_user_id, order_status FROM cst_orders WHERE id = ? FOR UPDATE",
             [Number(order_id)]
         );
 
@@ -230,6 +263,14 @@ export async function POST(request) {
             return NextResponse.json(
                 { success: false, message: "Order not found." },
                 { status: 404 }
+            );
+        }
+
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: orders[0].academy_id, branch_id: orders[0].fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

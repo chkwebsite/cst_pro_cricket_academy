@@ -293,21 +293,46 @@ export async function POST(request) {
             }
         }
 
+        const userRole = getUserRole(user);
         const isPlayer =
             user.user_type === "7" ||
-            String(user.user_type || "").toLowerCase().includes("player");
+            userRole === ROLES.PLAYER ||
+            String(user.user_type || "").toLowerCase().includes("player") ||
+            String(user.role_name || "").toLowerCase().includes("player");
 
         if (isPlayer) {
-            // Remove dashboard, player-dashboard, and administrative product management menus from sidebar for player
+            // Remove general dashboard and administrative product management menus from sidebar for player
             const filteredPlayerPerms = uniquePermissions.filter((item) => {
                 if (item.menu_url === "/next_panel/dashboard" || item.menu_key === "dashboard") return false;
-                if (item.menu_url === "/next_panel/player-dashboard" || item.menu_key === "player-dashboard") return false;
                 if (item.menu_id === 54 || item.menu_key === "Product_Master") return false;
                 if ([55, 56, 57, 58, 60].includes(item.menu_id)) return false;
                 return true;
             });
             uniquePermissions.length = 0;
             uniquePermissions.push(...filteredPlayerPerms);
+
+            const hasPlayerDashboard = uniquePermissions.some(
+                (item) => item.menu_url === "/next_panel/player-dashboard" || item.menu_key === "player-dashboard"
+            );
+            if (!hasPlayerDashboard) {
+                uniquePermissions.unshift({
+                    user_permission_id: null,
+                    permission_id: null,
+                    module_name: "Player Dashboard",
+                    permission_name: "view_player_dashboard",
+                    menu_id: 99991,
+                    parent_id: null,
+                    menu_key: "player-dashboard",
+                    menu_name: "Player Dashboard",
+                    menu_title: "Player Dashboard",
+                    menu_icon: "player-dashboard",
+                    menu_url: "/next_panel/player-dashboard",
+                    menu_type: "link",
+                    menu_order: 0,
+                    is_sidebar: 1,
+                    is_active: 1,
+                });
+            }
 
             const hasAttendance = uniquePermissions.some(
                 (item) => item.menu_url === "/next_panel/attendance"
@@ -453,7 +478,6 @@ export async function POST(request) {
         /*
          * JWT with Full Role & Scope Context
          */
-        const userRole = getUserRole(user);
         const isSuperAdmin = userRole === ROLES.SUPER_ADMIN;
 
         const roleAllowed = ROLE_ALLOWED_ROUTES[userRole] || [];

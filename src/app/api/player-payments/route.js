@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import crypto from "crypto";
 import { syncOnPaymentRecorded } from "@/app/components/lib/playerFlowSync.js";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 
 // ============================================
@@ -238,36 +238,57 @@ pay.id,
             values.push(player_program_fee_id);
         }
 
-        const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
-                sql += " AND f.branch_id = ? AND f.academy_id = ?";
-                values.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
+
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            if (authUser.academy_id) {
                 sql += " AND f.academy_id = ?";
                 values.push(authUser.academy_id);
-                if (branch_id) {
-                    sql += " AND f.branch_id = ?";
-                    values.push(branch_id);
-                }
-            } else if (authUser.isAccountant && authUser.academy_id) {
-                sql += " AND f.academy_id = ?";
-                values.push(authUser.academy_id);
-                if (authUser.branch_id) {
-                    sql += " AND f.branch_id = ?";
-                    values.push(authUser.branch_id);
-                } else if (branch_id) {
-                    sql += " AND f.branch_id = ?";
-                    values.push(branch_id);
-                }
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                sql += " AND f.academy_id = ?";
-                values.push(authUser.academy_id);
-            } else {
-                if (academy_id) { sql += ` AND f.academy_id = ? `; values.push(academy_id); }
-                if (branch_id) { sql += ` AND f.branch_id = ? `; values.push(branch_id); }
             }
-        } else {
+            sql += " AND (ap.user_id = ? OR f.admission_players_id IN (SELECT id FROM cst_admission_players WHERE user_id = ?))";
+            values.push(authUser.id, authUser.id);
+        } else if (authUser.isCoach) {
+            if (authUser.academy_id) {
+                sql += " AND f.academy_id = ?";
+                values.push(authUser.academy_id);
+            }
+            sql += ` AND f.user_program_id IN (
+                SELECT bp.user_program_id FROM cst_batch_players bp
+                JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
+                WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
+            )`;
+            values.push(authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND f.branch_id = ? AND f.academy_id = ?";
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND f.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND f.branch_id = ?";
+                values.push(branch_id);
+            }
+        } else if (authUser.isAccountant && authUser.academy_id) {
+            sql += " AND f.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (authUser.branch_id) {
+                sql += " AND f.branch_id = ?";
+                values.push(authUser.branch_id);
+            } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                sql += ` AND f.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`;
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND f.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                sql += ` AND (f.branch_id IS NULL OR f.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`;
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (authUser.isSuperAdmin) {
             if (academy_id) { sql += ` AND f.academy_id = ? `; values.push(academy_id); }
             if (branch_id) { sql += ` AND f.branch_id = ? `; values.push(branch_id); }
         }
@@ -361,10 +382,13 @@ AND(
 // POST: Receive Payment
 // ============================================
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isCoach || authUser.isPlayer)) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json(
-            { success: false, message: "Coaches and Players do not have permission to record payments" },
+            { success: false, message: "Forbidden. Coaches and Players do not have permission to record payments" },
             { status: 403 }
         );
     }
@@ -381,8 +405,8 @@ export async function POST(request) {
             transaction_no = null,
             payment_date,
             remarks = null,
-            received_by = null
         } = body;
+        const received_by = Number(authUser.id);
 
         if (!player_program_fee_id || !isValidAmount(paid_amount)) {
             return NextResponse.json(
@@ -431,16 +455,18 @@ export async function POST(request) {
         // Lock invoice row to prevent concurrent overpayment.
         const [fees] = await connection.query(
             `
-SELECT
-id,
-    total_amount,
-    paid_amount,
-    due_amount,
-    payment_status
+            SELECT
+                id,
+                academy_id,
+                branch_id,
+                total_amount,
+                paid_amount,
+                due_amount,
+                payment_status
             FROM cst_player_program_fees
             WHERE id = ?
-    FOR UPDATE
-        `,
+            FOR UPDATE
+            `,
             [player_program_fee_id]
         );
 
@@ -457,6 +483,14 @@ id,
         }
 
         const fee = fees[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: fee.academy_id, branch_id: fee.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Fee invoice belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         if (fee.payment_status === "Cancelled") {
             await connection.rollback();

@@ -5,7 +5,7 @@ import path from "path";
 import { syncOnUserProgramInsert, syncOnUserProgramUpdate } from "@/app/components/lib/playerFlowSync.js";
 import { syncPlayerUserAndRole } from "@/app/components/lib/playerUserSync.js";
 import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
-import { getAuthUser } from "@/app/components/lib/rbac.js";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 const uploadDir = path.join(
     process.cwd(),
@@ -369,48 +369,48 @@ export async function GET(request) {
 
         const values = [];
 
-        const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isCoach) {
-                // Coach only sees players enrolled in their assigned batches
-                sql += ` AND p.id IN (
-                    SELECT up.admission_players_id
-                    FROM cst_user_programs up
-                    JOIN cst_batch_players bp ON bp.user_program_id = up.id
-                    JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
-                    WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
-                )`;
-                values.push(authUser.id);
-            } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                sql += ` AND p.branch_id = ? AND b.academy_id = ? `;
-                values.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                sql += ` AND b.academy_id = ? `;
-                values.push(authUser.academy_id);
-                if (branch_id) {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (authUser.isPlayer) {
+            sql += " AND p.user_id = ?";
+            values.push(authUser.id);
+        } else if (authUser.isCoach) {
+            // Coach only sees players enrolled in their assigned batches
+            sql += ` AND p.id IN (
+                SELECT up.admission_players_id
+                FROM cst_user_programs up
+                JOIN cst_batch_players bp ON bp.user_program_id = up.id
+                JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
+                WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
+            )`;
+            values.push(authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += ` AND p.branch_id = ? AND b.academy_id = ? `;
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += ` AND b.academy_id = ? `;
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += ` AND p.branch_id = ? `;
+                values.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += ` AND b.academy_id = ? `;
+            values.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+            if (branch_id) {
+                if (allowed.includes(Number(branch_id))) {
                     sql += ` AND p.branch_id = ? `;
                     values.push(branch_id);
-                }
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                sql += ` AND b.academy_id = ? `;
-                values.push(authUser.academy_id);
-                if (authUser.branch_id) {
-                    sql += ` AND p.branch_id = ? `;
-                    values.push(authUser.branch_id);
+                } else {
+                    sql += ` AND p.branch_id = -1 `;
                 }
             } else {
-                if (academy_id) {
-                    const academyIdNumber = Number(academy_id);
-                    if (!Number.isInteger(academyIdNumber) || academyIdNumber <= 0) {
-                        return NextResponse.json({ success: false, message: "Invalid academy ID" }, { status: 400 });
-                    }
-                    sql += ` AND b.academy_id = ? `;
-                    values.push(academyIdNumber);
-                }
-                if (branch_id) {
-                    sql += ` AND p.branch_id = ? `;
-                    values.push(branch_id);
-                }
+                sql += ` AND p.branch_id IN (${allowed.map(() => "?").join(",")}) `;
+                values.push(...allowed);
             }
         } else {
             if (academy_id) {
@@ -525,6 +525,13 @@ export async function GET(request) {
 ========================================================= */
 
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json({ success: false, message: "Forbidden: Players cannot create admission players." }, { status: 403 });
+    }
+
     const connection =
         await pool.getConnection();
 
@@ -588,10 +595,30 @@ export async function POST(request) {
         const playing_academy =
             formData.get("playing_academy");
 
-        const branch_id =
+        let branch_id =
             toNumberOrNull(
                 formData.get("branch_id")
             );
+
+        // Force/Verify tenant authorization
+        if (authUser.isBranchAdmin) {
+            branch_id = Number(authUser.branch_id);
+        } else if (authUser.isAcademyAdmin) {
+            if (branch_id) {
+                const [bRows] = await connection.query(
+                    "SELECT id FROM cst_branch WHERE id = ? AND academy_id = ? AND status = 1 LIMIT 1",
+                    [branch_id, authUser.academy_id]
+                );
+                if (bRows.length === 0) {
+                    return NextResponse.json({ success: false, message: "Selected branch does not belong to your academy" }, { status: 400 });
+                }
+            }
+        } else if (!authUser.isSuperAdmin) {
+            const allowed = authUser.assignedBranchIds || [Number(authUser.branch_id)];
+            if (!allowed.includes(Number(branch_id))) {
+                return NextResponse.json({ success: false, message: "Forbidden: Unauthorized branch" }, { status: 403 });
+            }
+        }
 
         const role_id =
             toNumberOrNull(

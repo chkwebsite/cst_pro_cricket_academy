@@ -40,7 +40,7 @@ import { getUserRole, ROLES } from "../../components/lib/rbac-rules";
 import PageLoader, { PageProgressBar, PageLoadingContext } from "./PageLoader";
 
 const iconMap = {
-    "player-dashboard": UserCheck,
+    "player-dashboard": LayoutDashboard,
     "my-orders": ShoppingBag,
     orders: ShoppingBag,
     "shopping-bag": ShoppingBag,
@@ -290,8 +290,8 @@ export default function Sidebar({ children }) {
         };
     }, []);
 
-    const currentUserType = String(user?.user_type || "").toLowerCase().trim();
-    const isPlayer = currentUserType.includes("player") || currentUserType === "7";
+    const currentUserType = String(user?.user_type || user?.role || "").toLowerCase().trim();
+    const isPlayer = currentUserType.includes("player") || currentUserType === "7" || getUserRole(user) === ROLES.PLAYER;
     const isSuperAdmin = currentUserType === "super admin" || currentUserType === "superadmin" || currentUserType.includes("super");
 
     // Prevent body scroll when mobile sidebar drawer is open
@@ -465,10 +465,11 @@ export default function Sidebar({ children }) {
                     }).sort((a, b) => (Number(a.menu_order) || 99) - (Number(b.menu_order) || 99));
                 } else if (userIsPlayer) {
                     // PLAYER SPECIFIC MENU RULES:
-                    // 1. General "Dashboard" and "Player Dashboard" are strictly REMOVED because Player already lands on the Player Dashboard.
+                    // 1. "Player Dashboard" is shown at the top. General "Dashboard" (/next_panel/dashboard) is removed.
                     // 2. "Product master" and administrative management menus MUST NOT be shown.
-                    // 3. Permitted player menus: My Attendance, My Fee Status, My Program Fees, Ground Availability, Ground Bookings, My Orders.
+                    // 3. Permitted player menus: Player Dashboard, My Attendance, My Fee Status, My Program Fees, Ground Availability, Ground Bookings, My Orders.
                     const playerAllowedUrls = new Set([
+                        "/next_panel/player-dashboard",
                         "/next_panel/attendance",
                         "/next_panel/fee-status",
                         "/next_panel/player-program-fees",
@@ -484,7 +485,6 @@ export default function Sidebar({ children }) {
                             url &&
                             url !== "/" &&
                             url !== "/next_panel/dashboard" &&
-                            url !== "/next_panel/player-dashboard" &&
                             !url.includes("product") &&
                             !url.includes("stock") &&
                             !url.includes("order-payments")
@@ -495,21 +495,30 @@ export default function Sidebar({ children }) {
 
                     const playerItems = allMenus
                         .filter((m) => {
-                            // Strictly remove general dashboard and player-dashboard for player
+                            // Strictly remove general dashboard for player
                             if (
                                 m.menu_url === "/next_panel/dashboard" ||
-                                m.menu_url === "/next_panel/player-dashboard" ||
-                                m.menu_key === "dashboard" ||
-                                m.menu_key === "player-dashboard"
+                                m.menu_key === "dashboard"
                             ) return false;
                             if (m.id === 54 || m.menu_key === "Product_Master" || m.menu_key === "store-management") return false;
                             if (["product-categories", "products", "product-images", "product-stock", "order-payments"].includes(m.menu_key)) return false;
                             const normUrl = normalizeMenuPath(m.menu_url);
-                            return playerAllowedUrls.has(normUrl) || playerAllowedUrls.has(m.menu_url);
+                            return playerAllowedUrls.has(normUrl) || playerAllowedUrls.has(m.menu_url) || m.menu_key === "player-dashboard";
                         })
                         .map((m) => {
                             // Present player items cleanly at top level
                             const normUrl = normalizeMenuPath(m.menu_url);
+                            if (normUrl === "/next_panel/player-dashboard" || m.menu_key === "player-dashboard") {
+                                return {
+                                    ...m,
+                                    parent_id: null,
+                                    menu_url: "/next_panel/player-dashboard",
+                                    menu_name: "Player Dashboard",
+                                    menu_title: "Player Dashboard",
+                                    menu_icon: "player-dashboard",
+                                    menu_order: 0,
+                                };
+                            }
                             if (normUrl === "/next_panel/attendance" || m.menu_key === "attendance") {
                                 return {
                                     ...m,
@@ -582,6 +591,19 @@ export default function Sidebar({ children }) {
                                 menu_url: normUrl,
                             };
                         });
+
+                    if (!playerItems.some((m) => normalizeMenuPath(m.menu_url) === "/next_panel/player-dashboard" || m.menu_key === "player-dashboard")) {
+                        playerItems.unshift({
+                            id: 99991,
+                            parent_id: null,
+                            menu_key: "player-dashboard",
+                            menu_name: "Player Dashboard",
+                            menu_title: "Player Dashboard",
+                            menu_url: "/next_panel/player-dashboard",
+                            menu_icon: "player-dashboard",
+                            menu_order: 0,
+                        });
+                    }
 
                     if (!playerItems.some((m) => normalizeMenuPath(m.menu_url) === "/next_panel/attendance")) {
                         playerItems.push({
@@ -710,14 +732,39 @@ export default function Sidebar({ children }) {
                 // GUARANTEE DASHBOARD MENU AT TOP FOR ALL USERS
                 // =====================================================
                 if (userIsPlayer) {
-                    // For Player: Strictly purge BOTH general "/next_panel/dashboard" AND "/next_panel/player-dashboard" from the sidebar
+                    // For Player: Remove general "/next_panel/dashboard", and guarantee Player Dashboard is at the top
                     filtered = filtered.filter(
                         (m) =>
                             m.menu_url !== "/next_panel/dashboard" &&
-                            m.menu_url !== "/next_panel/player-dashboard" &&
-                            m.menu_key !== "dashboard" &&
-                            m.menu_key !== "player-dashboard"
+                            m.menu_key !== "dashboard"
                     );
+
+                    const existingPlayerDashIdx = filtered.findIndex(
+                        (m) => m.menu_url === "/next_panel/player-dashboard" || m.menu_key === "player-dashboard"
+                    );
+
+                    if (existingPlayerDashIdx > -1) {
+                        const [dashItem] = filtered.splice(existingPlayerDashIdx, 1);
+                        filtered.unshift({
+                            ...dashItem,
+                            parent_id: null,
+                            menu_name: "Player Dashboard",
+                            menu_title: "Player Dashboard",
+                            menu_icon: dashItem.menu_icon || "player-dashboard",
+                            menu_order: 0,
+                        });
+                    } else {
+                        filtered.unshift({
+                            id: 99991,
+                            parent_id: null,
+                            menu_key: "player-dashboard",
+                            menu_name: "Player Dashboard",
+                            menu_title: "Player Dashboard",
+                            menu_url: "/next_panel/player-dashboard",
+                            menu_icon: "player-dashboard",
+                            menu_order: 0,
+                        });
+                    }
                 } else {
                     const targetDashboardUrl = "/next_panel/dashboard";
                     const targetDashboardTitle = "Dashboard";

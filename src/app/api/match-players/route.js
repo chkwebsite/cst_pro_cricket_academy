@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 
 const VALID_ROLES = ["playing_11", "substitute", "captain", "vice_captain", "wicket_keeper"];
@@ -240,6 +241,10 @@ export async function GET(request) {
 
     try {
         const { searchParams } = new URL(request.url);
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         const filters = {
             id: searchParams.get("id"),
@@ -260,6 +265,54 @@ export async function GET(request) {
 
         const conditions = [];
         const values = [];
+
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            if (authUser.academy_id) {
+                conditions.push("m.academy_id = ?");
+                values.push(authUser.academy_id);
+            }
+            conditions.push("(mp.user_id = ? OR ttp.user_id = ?)");
+            values.push(authUser.id, authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            conditions.push("m.branch_id = ? AND m.academy_id = ?");
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            conditions.push("m.academy_id = ?");
+            values.push(authUser.academy_id);
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam && isPositiveInt(branchIdParam)) {
+                conditions.push("m.branch_id = ?");
+                values.push(Number(branchIdParam));
+            }
+        } else if (authUser.isAccountant && authUser.academy_id) {
+            conditions.push("m.academy_id = ?");
+            values.push(authUser.academy_id);
+            if (authUser.branch_id) {
+                conditions.push("m.branch_id = ?");
+                values.push(authUser.branch_id);
+            } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                conditions.push(`m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`);
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            conditions.push("m.academy_id = ?");
+            values.push(authUser.academy_id);
+            if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                conditions.push(`(m.branch_id IS NULL OR m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`);
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (authUser.isSuperAdmin) {
+            const academyIdParam = searchParams.get("academy_id");
+            if (academyIdParam && isPositiveInt(academyIdParam)) {
+                conditions.push("m.academy_id = ?");
+                values.push(Number(academyIdParam));
+            }
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam && isPositiveInt(branchIdParam)) {
+                conditions.push("m.branch_id = ?");
+                values.push(Number(branchIdParam));
+            }
+        }
 
         const numericFilters = [
             "id",
@@ -369,6 +422,17 @@ export async function GET(request) {
 
 // POST /api/match-players
 export async function POST(request) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Coaches and Players cannot add match players." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -402,9 +466,7 @@ export async function POST(request) {
         const requestedAcademyId = body.academy_id === undefined || body.academy_id === null || body.academy_id === ""
             ? null
             : Number(body.academy_id);
-        const createdBy = body.created_by === undefined || body.created_by === null || body.created_by === ""
-            ? null
-            : Number(body.created_by);
+        const createdBy = Number(authUser.id);
 
         if (!Number.isFinite(playerFee) || playerFee < 0) {
             return NextResponse.json(
@@ -468,6 +530,14 @@ export async function POST(request) {
                     message: matchTeam.message,
                 },
                 { status: 400 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: matchTeam.match.academy_id, branch_id: matchTeam.match.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Match belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

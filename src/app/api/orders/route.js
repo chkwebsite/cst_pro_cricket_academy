@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
 import crypto from "crypto";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET: All orders with filters
 export async function GET(request) {
@@ -48,34 +48,56 @@ SELECT
 
         const values = [];
 
-        // If not a customer looking up their specific order, require admin auth & scope
-        const isSpecificLookup = Boolean(order_no || customer_user_id || customer_email || public_user_id);
-        if (!isSpecificLookup) {
-            const authUser = await getAuthUser(request);
-            if (!authUser) {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                sql += " AND (o.customer_user_id = ? OR LOWER(o.customer_email) = LOWER(?))";
+                values.push(authUser.id, authUser.email || "");
+            } else if (authUser.isSuperAdmin) {
+                // Super Admin: full access, optional filters
+                if (academy_id !== null && academy_id !== "" && academy_id !== undefined) {
+                    sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
+                    values.push(academy_id, academy_id);
+                }
+                if (fulfillment_branch_id !== null && fulfillment_branch_id !== "" && fulfillment_branch_id !== undefined) {
+                    sql += " AND o.fulfillment_branch_id = ?";
+                    values.push(fulfillment_branch_id);
+                }
+            } else if (authUser.isAcademyAdmin) {
+                // Academy Admin: strictly own academy
+                sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
+                values.push(authUser.academy_id, authUser.academy_id);
+                if (fulfillment_branch_id !== null && fulfillment_branch_id !== "" && fulfillment_branch_id !== undefined) {
+                    sql += " AND o.fulfillment_branch_id = ?";
+                    values.push(fulfillment_branch_id);
+                }
+            } else if (authUser.isBranchAdmin) {
+                // Branch Admin: strictly own branch
+                sql += " AND o.fulfillment_branch_id = ?";
+                values.push(authUser.branch_id);
+            } else {
+                // Branch staff / coaches
+                if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                    const placeholders = authUser.accessibleBranchIds.map(() => "?").join(", ");
+                    sql += ` AND o.fulfillment_branch_id IN (${placeholders})`;
+                    values.push(...authUser.accessibleBranchIds);
+                } else if (authUser.branch_id) {
+                    sql += " AND o.fulfillment_branch_id = ?";
+                    values.push(authUser.branch_id);
+                } else if (authUser.academy_id) {
+                    sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
+                    values.push(authUser.academy_id, authUser.academy_id);
+                }
+            }
+        } else {
+            // Unauthenticated lookup: must provide order_no AND (customer_email OR customer_phone)
+            if (!order_no || (!customer_email && !searchParams.get("customer_phone"))) {
                 return NextResponse.json(
-                    { success: false, message: "Unauthorized. Authentication required to view full orders list." },
+                    { success: false, message: "Unauthorized. Authentication required to view orders." },
                     { status: 401 }
                 );
             }
-            if (authUser.isBranchAdmin && authUser.branch_id) {
-                sql += " AND o.fulfillment_branch_id = ?";
-                values.push(authUser.branch_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                sql += " AND o.academy_id = ?";
-                values.push(authUser.academy_id);
-            }
-        }
-
-        // ID filters
-        if (academy_id !== null && academy_id !== "" && academy_id !== undefined) {
-            sql += " AND o.academy_id = ?";
-            values.push(academy_id);
-        }
-
-        if (fulfillment_branch_id !== null && fulfillment_branch_id !== "" && fulfillment_branch_id !== undefined) {
-            sql += " AND o.fulfillment_branch_id = ?";
-            values.push(fulfillment_branch_id);
         }
 
         if (customer_user_id && customer_email) {
@@ -187,9 +209,10 @@ export async function POST(request) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
         const body = await request.json();
 
-        const {
+        let {
             academy_id = null,
             customer_user_id = null,
             public_user_id = null,
@@ -216,6 +239,15 @@ export async function POST(request) {
             notes = null,
             estimated_delivery_date = null,
         } = body;
+
+        if (authUser) {
+            if (authUser.isPlayer) {
+                customer_user_id = authUser.id;
+                public_user_id = null;
+            } else if (Number(authUser.role_id) === 3 && authUser.branch_id) {
+                fulfillment_branch_id = authUser.branch_id;
+            }
+        }
 
         // Exactly one customer ID is required
         const customerId = customer_user_id === "" ? null : customer_user_id;
@@ -368,7 +400,7 @@ export async function POST(request) {
         await connection.beginTransaction();
 
         let resolvedAcademyId = academy_id || null;
-        if (!resolvedAcademyId && fulfillment_branch_id) {
+        if (fulfillment_branch_id) {
             const [bRows] = await connection.execute(
                 "SELECT academy_id FROM cst_branch WHERE id = ? LIMIT 1",
                 [fulfillment_branch_id]
@@ -377,6 +409,16 @@ export async function POST(request) {
                 resolvedAcademyId = bRows[0].academy_id;
             } else {
                 resolvedAcademyId = 1;
+            }
+
+            if (authUser && !authUser.isSuperAdmin) {
+                if (Number(resolvedAcademyId) !== Number(authUser.academy_id)) {
+                    await connection.rollback();
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. Fulfillment branch belongs to another academy." },
+                        { status: 403 }
+                    );
+                }
             }
         }
 

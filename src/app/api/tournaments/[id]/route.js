@@ -121,6 +121,15 @@ export async function GET(request, { params }) {
             if (authUser.isBranchAdmin && (Number(tournament.branch_id) !== Number(authUser.branch_id) || (authUser.academy_id && Number(tournament.academy_id) !== Number(authUser.academy_id)))) {
                 return NextResponse.json({ success: false, message: "Forbidden. Tournament belongs to another branch." }, { status: 403 });
             }
+            if (!authUser.isAcademyAdmin && !authUser.isBranchAdmin && !authUser.isPlayer && authUser.academy_id) {
+                if (Number(tournament.academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json({ success: false, message: "Forbidden. Tournament belongs to another academy." }, { status: 403 });
+                }
+                const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                if (!allowed.includes(Number(tournament.branch_id))) {
+                    return NextResponse.json({ success: false, message: "Forbidden. Tournament belongs to another branch." }, { status: 403 });
+                }
+            }
         }
 
         return NextResponse.json({

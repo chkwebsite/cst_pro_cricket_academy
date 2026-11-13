@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, validateBranchBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "images", "uploads", "programs");
 const ALLOWED_MIME_TYPES = [
@@ -64,6 +65,9 @@ async function deleteOldImage(imagePath) {
 // GET SINGLE PROGRAM
 // =====================================================
 export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     const connection = await pool.getConnection();
 
     try {
@@ -128,10 +132,24 @@ export async function GET(request, { params }) {
             }, { status: 404 });
         }
 
+        const program = rows[0];
+
+        // Tenant access check
+        if (!authUser.isSuperAdmin) {
+            if (program.academy_id && Number(program.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Program belongs to another academy" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && program.branch_id && Number(program.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Program not available for your branch" }, { status: 403 });
+            }
+            if (authUser.isPlayer && program.branch_id && Number(program.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Program not available for your branch" }, { status: 403 });
+            }
+        }
 
         return NextResponse.json({
             success: true,
-            data: rows[0]
+            data: program
         });
 
 
@@ -154,6 +172,13 @@ export async function GET(request, { params }) {
 // UPDATE PROGRAM
 // =====================================================
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json({ success: false, message: "Forbidden: You are not authorized to update programs" }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
     let uploadedFilePath = null;
 
@@ -190,6 +215,15 @@ export async function PUT(request, { params }) {
         }
 
         const current = existingProgram[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (current.academy_id && Number(current.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Program belongs to another academy" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && current.branch_id && Number(current.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Program belongs to another branch" }, { status: 403 });
+            }
+        }
 
         const contentType = request.headers.get("content-type") || "";
 
@@ -253,6 +287,23 @@ export async function PUT(request, { params }) {
                     programImageString = "";
                 }
             }
+        }
+
+        // Force and validate tenant scoping
+        if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+            if (branch_id) {
+                const isValid = await validateBranchBelongsToAcademy(connection, branch_id, authUser.academy_id);
+                if (!isValid) {
+                    return NextResponse.json(
+                        { success: false, message: "Branch does not belong to your academy" },
+                        { status: 400 }
+                    );
+                }
+            }
+        } else if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
         }
 
         // =================================================
@@ -503,6 +554,13 @@ export async function PUT(request, { params }) {
 // DELETE PROGRAM - SOFT DELETE
 // =====================================================
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json({ success: false, message: "Forbidden: You are not authorized to delete programs" }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -523,7 +581,7 @@ export async function DELETE(request, { params }) {
 
         const [existingProgram] = await connection.query(
             `
-            SELECT id
+            SELECT id, academy_id, branch_id
             FROM cst_programs
             WHERE id = ?
                 AND is_deleted = 0
@@ -538,6 +596,16 @@ export async function DELETE(request, { params }) {
                 success: false,
                 message: "Program not found"
             }, { status: 404 });
+        }
+
+        const current = existingProgram[0];
+        if (!authUser.isSuperAdmin) {
+            if (current.academy_id && Number(current.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Program belongs to another academy" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && current.branch_id && Number(current.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied: Program belongs to another branch" }, { status: 403 });
+            }
         }
 
 

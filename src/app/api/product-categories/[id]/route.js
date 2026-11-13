@@ -3,6 +3,7 @@ import db from "@/app/components/lib/db";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
@@ -136,9 +137,20 @@ id,
             );
         }
 
+        const category = rows[0];
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (category.academy_id && authUser.academy_id && Number(category.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Category belongs to another academy." },
+                    { status: 403 }
+                );
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: category,
         });
     } catch (error) {
         console.error("Get single category error:", error);
@@ -155,6 +167,21 @@ export async function PUT(request, context) {
     let uploadedImage = null;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can update categories." },
+                { status: 403 }
+            );
+        }
+
         const id = await getId(context);
 
         if (!id) {
@@ -165,7 +192,7 @@ export async function PUT(request, context) {
         }
 
         const [existingRows] = await db.execute(
-            `SELECT id, category_image
+            `SELECT id, academy_id, category_image
              FROM cst_product_categories
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
@@ -180,6 +207,14 @@ export async function PUT(request, context) {
         }
 
         const existing = existingRows[0];
+        if (!authUser.isSuperAdmin) {
+            if (existing.academy_id && Number(existing.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. You can only update categories belonging to your academy." },
+                    { status: 403 }
+                );
+            }
+        }
         const contentType = request.headers.get("content-type") || "";
         let academyIdValue, categoryName, slug, description, sortOrderValue, statusValue, image = null;
 
@@ -361,6 +396,21 @@ academy_id = ?,
 // DELETE: Soft delete category
 export async function DELETE(request, context) {
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can delete categories." },
+                { status: 403 }
+            );
+        }
+
         const id = await getId(context);
 
         if (!id) {
@@ -368,6 +418,27 @@ export async function DELETE(request, context) {
                 { success: false, message: "Invalid category ID." },
                 { status: 400 }
             );
+        }
+
+        const [existingRows] = await db.execute(
+            `SELECT id, academy_id FROM cst_product_categories WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "Category not found." },
+                { status: 404 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin) {
+            if (existingRows[0].academy_id && Number(existingRows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. You can only delete categories belonging to your academy." },
+                    { status: 403 }
+                );
+            }
         }
 
         const [result] = await db.execute(

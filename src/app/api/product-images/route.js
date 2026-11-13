@@ -3,6 +3,7 @@ import db from "@/app/components/lib/db";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
@@ -92,6 +93,7 @@ function validStatus(value) {
 // GET: Product images with filters
 export async function GET(request) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const { searchParams } = new URL(request.url);
 
         const productId = searchParams.get("product_id");
@@ -120,6 +122,13 @@ pi.id,
     `;
 
         const params = [];
+
+        if (authUser) {
+            if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND p.academy_id = ?";
+                params.push(authUser.academy_id);
+            }
+        }
 
         if (productId !== null && productId !== "") {
             const value = Number(productId);
@@ -220,6 +229,21 @@ export async function POST(request) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can upload product images." },
+                { status: 403 }
+            );
+        }
+
         const formData = await request.formData();
 
         const productId = Number(formData.get("product_id"));
@@ -268,7 +292,7 @@ export async function POST(request) {
         await connection.beginTransaction();
 
         const [products] = await connection.execute(
-            `SELECT id
+            `SELECT id, academy_id
              FROM cst_products
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
@@ -281,6 +305,14 @@ export async function POST(request) {
             return NextResponse.json(
                 { success: false, message: "Product not found." },
                 { status: 404 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && products[0].academy_id && Number(products[0].academy_id) !== Number(authUser.academy_id)) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. You can only upload images for your academy's products." },
+                { status: 403 }
             );
         }
 

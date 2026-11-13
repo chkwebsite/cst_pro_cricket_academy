@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 export const dynamic = "force-dynamic";
 
@@ -180,9 +180,62 @@ export async function GET(request) {
 
     try {
         const { searchParams } = new URL(request.url);
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user || (authResult?.id ? authResult : null);
+        if (!authUser || authResult?.errorResponse) {
+            return authResult?.errorResponse || NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         const conditions = [];
         const values = [];
+
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            if (authUser.academy_id) {
+                conditions.push("fs.academy_id = ?");
+                values.push(authUser.academy_id);
+            }
+            conditions.push("(fs.user_id = ? OR ttp.user_id = ? OR mp.user_id = ?)");
+            values.push(authUser.id, authUser.id, authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            conditions.push("fs.branch_id = ? AND fs.academy_id = ?");
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            conditions.push("fs.academy_id = ?");
+            values.push(authUser.academy_id);
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam && isPositiveInt(branchIdParam)) {
+                conditions.push("fs.branch_id = ?");
+                values.push(Number(branchIdParam));
+            }
+        } else if (authUser.isAccountant && authUser.academy_id) {
+            conditions.push("fs.academy_id = ?");
+            values.push(authUser.academy_id);
+            if (authUser.branch_id) {
+                conditions.push("fs.branch_id = ?");
+                values.push(authUser.branch_id);
+            } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                conditions.push(`fs.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`);
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            conditions.push("fs.academy_id = ?");
+            values.push(authUser.academy_id);
+            if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                conditions.push(`(fs.branch_id IS NULL OR fs.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`);
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (authUser.isSuperAdmin) {
+            const academyIdParam = searchParams.get("academy_id");
+            if (academyIdParam && isPositiveInt(academyIdParam)) {
+                conditions.push("fs.academy_id = ?");
+                values.push(Number(academyIdParam));
+            }
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam && isPositiveInt(branchIdParam)) {
+                conditions.push("fs.branch_id = ?");
+                values.push(Number(branchIdParam));
+            }
+        }
 
         const idFilters = [
             "id",
@@ -360,23 +413,27 @@ export async function GET(request) {
 
 // POST /api/fee-payments
 export async function POST(request) {
+    const authResult = await getAuthenticatedUser(request);
+    const authUser = authResult?.user || (authResult?.id ? authResult : null);
+    if (!authUser || authResult?.errorResponse) {
+        return authResult?.errorResponse || NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot record fee payments." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
         const body = await request.json();
-        const authUser = await getAuthUser(request);
 
         const feeStatusId = Number(body.fee_status_id);
         const amount = Number(body.amount);
         const paymentMode = body.payment_mode;
-        const createdBy =
-            authUser?.id
-                ? Number(authUser.id)
-                : body.created_by !== undefined &&
-                  body.created_by !== null &&
-                  body.created_by !== ""
-                ? Number(body.created_by)
-                : null;
+        const createdBy = Number(authUser.id);
 
         if (!isPositiveInt(feeStatusId)) {
             return NextResponse.json(
@@ -408,19 +465,6 @@ export async function POST(request) {
             );
         }
 
-        if (
-            createdBy !== null &&
-            !isPositiveInt(createdBy)
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "created_by must be a positive integer or null.",
-                },
-                { status: 400 }
-            );
-        }
-
         const paymentDate =
             body.payment_date === undefined ||
                 body.payment_date === null ||
@@ -445,7 +489,7 @@ export async function POST(request) {
         await connection.beginTransaction();
 
         const [feeRows] = await connection.execute(
-            `SELECT id, fee_amount, paid_amount, status
+            `SELECT id, academy_id, branch_id, fee_amount, paid_amount, status
              FROM cst_fee_status
              WHERE id = ?
              FOR UPDATE`,
@@ -465,6 +509,14 @@ export async function POST(request) {
         }
 
         const fee = feeRows[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: fee.academy_id, branch_id: fee.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Fee record belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         if (fee.status === "Cancelled") {
             await connection.rollback();

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { syncOnUserProgramUpdate } from "@/app/components/lib/playerFlowSync.js";
+import { getAuthenticatedUser, validateBranchBelongsToAcademy, validateProgramBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 // =====================================================
 // GET SINGLE USER PROGRAM
@@ -8,6 +9,9 @@ import { syncOnUserProgramUpdate } from "@/app/components/lib/playerFlowSync.js"
 // =====================================================
 
 export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     let connection;
 
     try {
@@ -75,9 +79,33 @@ export async function GET(request, { params }) {
             );
         }
 
+        const record = rows[0];
+
+        // Tenant Scoping
+        if (!authUser.isSuperAdmin) {
+            if (authUser.isPlayer && Number(record.user_id) !== Number(authUser.id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: You cannot view other player enrollments" },
+                    { status: 403 }
+                );
+            }
+            if (record.academy_id && Number(record.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Program belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(record.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Enrollment belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0]
+            data: record
         });
 
     } catch (error) {
@@ -105,6 +133,16 @@ export async function GET(request, { params }) {
 // =====================================================
 
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to update user programs" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -122,7 +160,7 @@ export async function PUT(request, { params }) {
 
         const body = await request.json();
 
-        const {
+        let {
             user_id,
             program_id,
             branch_id,
@@ -133,6 +171,64 @@ export async function PUT(request, { params }) {
         } = body;
 
         connection = await pool.getConnection();
+
+        // Check existing record
+        const [existingRows] = await connection.query(
+            `
+            SELECT up.id, up.branch_id, up.program_id, p.academy_id
+            FROM cst_user_programs up
+            LEFT JOIN cst_programs p ON p.id = up.program_id
+            WHERE up.id = ? AND up.is_deleted = 0
+            LIMIT 1
+            `,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "User program not found" },
+                { status: 404 }
+            );
+        }
+
+        const existingRecord = existingRows[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (existingRecord.academy_id && Number(existingRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existingRecord.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+
+            if (authUser.isBranchAdmin) {
+                branch_id = authUser.branch_id;
+            } else if (authUser.isAcademyAdmin && branch_id) {
+                const isValidBranch = await validateBranchBelongsToAcademy(connection, branch_id, authUser.academy_id);
+                if (!isValidBranch) {
+                    return NextResponse.json(
+                        { success: false, message: "Branch does not belong to your academy" },
+                        { status: 400 }
+                    );
+                }
+            }
+
+            if (program_id) {
+                const isValidProg = await validateProgramBelongsToAcademy(connection, program_id, authUser.academy_id);
+                if (!isValidProg) {
+                    return NextResponse.json(
+                        { success: false, message: "Program does not belong to your academy" },
+                        { status: 400 }
+                    );
+                }
+            }
+        }
 
         let appointment_no = undefined;
         if (admission_players_id) {
@@ -276,6 +372,16 @@ export async function PUT(request, { params }) {
 // =====================================================
 
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to delete user programs" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -292,6 +398,42 @@ export async function DELETE(request, { params }) {
         }
 
         connection = await pool.getConnection();
+
+        // Check existing record
+        const [existingRows] = await connection.query(
+            `
+            SELECT up.id, up.branch_id, p.academy_id
+            FROM cst_user_programs up
+            LEFT JOIN cst_programs p ON p.id = up.program_id
+            WHERE up.id = ? AND up.is_deleted = 0
+            LIMIT 1
+            `,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "User program not found" },
+                { status: 404 }
+            );
+        }
+
+        const existingRecord = existingRows[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (existingRecord.academy_id && Number(existingRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existingRecord.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
 
         const [result] = await connection.query(
             `

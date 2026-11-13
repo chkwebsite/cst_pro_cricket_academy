@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import pool from "@/app/components/lib/db";
-
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -11,6 +12,9 @@ import pool from "@/app/components/lib/db";
 */
 
 export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     const connection = await pool.getConnection();
 
     try {
@@ -29,24 +33,35 @@ export async function GET(request, { params }) {
         const [rows] = await connection.query(
             `
             SELECT
-                id,
-                player_name,
-                age_group_id,
-                phone,
-                email,
-                date_of_birth,
-                gender,
-                batting_style,
-                bowling_style,
-                address,
-                profile_image,
-                status,
-                is_deleted,
-                created_at,
-                updated_at
-            FROM cst_outside_players
-            WHERE id = ?
-            AND is_deleted = 0
+                outside_player.id,
+                outside_player.academy_id,
+                academy.academy_name,
+                outside_player.branch_id,
+                branch.branch_name,
+                outside_player.player_name,
+                outside_player.age_group_id,
+                age_group.age_group,
+                outside_player.phone,
+                outside_player.email,
+                outside_player.date_of_birth,
+                outside_player.gender,
+                outside_player.batting_style,
+                outside_player.bowling_style,
+                outside_player.address,
+                outside_player.profile_image,
+                outside_player.status,
+                outside_player.is_deleted,
+                outside_player.created_at,
+                outside_player.updated_at
+            FROM cst_outside_players AS outside_player
+            LEFT JOIN cst_academy AS academy
+                ON academy.id = outside_player.academy_id
+            LEFT JOIN cst_branch AS branch
+                ON branch.id = outside_player.branch_id
+            LEFT JOIN cst_age_groups AS age_group
+                ON age_group.id = outside_player.age_group_id
+            WHERE outside_player.id = ?
+            AND outside_player.is_deleted = 0
             LIMIT 1
             `,
             [Number(id)]
@@ -62,10 +77,35 @@ export async function GET(request, { params }) {
             );
         }
 
+        const player = rows[0];
+
+        // Tenant authorization check
+        if (!authUser.isSuperAdmin) {
+            if (authUser.academy_id && Number(player.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden: You cannot access outside players from another academy."
+                    },
+                    { status: 403 }
+                );
+            }
+
+            if (authUser.isBranchAdmin && authUser.branch_id && player.branch_id && Number(player.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden: You cannot access outside players from another branch."
+                    },
+                    { status: 403 }
+                );
+            }
+        }
+
         return NextResponse.json({
             success: true,
             message: "Outside player fetched successfully",
-            data: rows[0]
+            data: player
         });
 
     } catch (error) {
@@ -92,6 +132,16 @@ export async function GET(request, { params }) {
 */
 
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: Players cannot update outside players." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -132,8 +182,33 @@ export async function PUT(request, { params }) {
 
         const existingPlayer = existingRows[0];
 
+        // Tenant authorization check
+        if (!authUser.isSuperAdmin) {
+            if (authUser.academy_id && Number(existingPlayer.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden: You cannot modify outside players from another academy."
+                    },
+                    { status: 403 }
+                );
+            }
+
+            if (authUser.isBranchAdmin && authUser.branch_id && existingPlayer.branch_id && Number(existingPlayer.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden: You cannot modify outside players from another branch."
+                    },
+                    { status: 403 }
+                );
+            }
+        }
+
         const formData = await request.formData();
 
+        const formAcademyId = formData.get("academy_id");
+        const formBranchId = formData.get("branch_id");
         const player_name = formData.get("player_name");
         const age_group_id = formData.get("age_group_id");
         const phone = formData.get("phone");
@@ -144,7 +219,6 @@ export async function PUT(request, { params }) {
         const bowling_style = formData.get("bowling_style");
         const address = formData.get("address");
         const status = formData.get("status");
-
         const profileImage = formData.get("profile_image");
 
         // REQUIRED PLAYER NAME
@@ -158,19 +232,58 @@ export async function PUT(request, { params }) {
             );
         }
 
-        // CHECK PHONE DUPLICATE
+        // Resolve updated academy_id and branch_id
+        let targetAcademyId = existingPlayer.academy_id || 1;
+        let targetBranchId = existingPlayer.branch_id || null;
+
+        if (authUser.isSuperAdmin) {
+            if (formAcademyId) targetAcademyId = Number(formAcademyId);
+            if (formBranchId !== null && formBranchId !== undefined) {
+                targetBranchId = formBranchId ? Number(formBranchId) : null;
+            }
+        } else if (authUser.isAcademyAdmin) {
+            targetAcademyId = Number(authUser.academy_id);
+            if (formBranchId !== null && formBranchId !== undefined) {
+                targetBranchId = formBranchId ? Number(formBranchId) : null;
+            }
+        } else {
+            // Branch Admin / Staff: keep assigned
+            targetAcademyId = Number(authUser.academy_id);
+            if (authUser.branch_id) targetBranchId = Number(authUser.branch_id);
+        }
+
+        // Verify branch belongs to academy if provided
+        if (targetBranchId) {
+            const [branchCheck] = await connection.query(
+                "SELECT id FROM cst_branch WHERE id = ? AND academy_id = ? AND is_deleted = 0 LIMIT 1",
+                [targetBranchId, targetAcademyId]
+            );
+            if (branchCheck.length === 0) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Selected branch does not belong to the authorized academy"
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+
+        // CHECK PHONE DUPLICATE WITHIN ACADEMY
         if (phone && phone.toString().trim()) {
             const [existingPhone] = await connection.query(
                 `
                 SELECT id
                 FROM cst_outside_players
                 WHERE phone = ?
+                AND academy_id = ?
                 AND id != ?
                 AND is_deleted = 0
                 LIMIT 1
                 `,
                 [
                     phone.toString().trim(),
+                    targetAcademyId,
                     playerId
                 ]
             );
@@ -179,26 +292,28 @@ export async function PUT(request, { params }) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message: "Phone number already exists"
+                        message: "Phone number already exists in this academy"
                     },
                     { status: 409 }
                 );
             }
         }
 
-        // CHECK EMAIL DUPLICATE
+        // CHECK EMAIL DUPLICATE WITHIN ACADEMY
         if (email && email.toString().trim()) {
             const [existingEmail] = await connection.query(
                 `
                 SELECT id
                 FROM cst_outside_players
                 WHERE email = ?
+                AND academy_id = ?
                 AND id != ?
                 AND is_deleted = 0
                 LIMIT 1
                 `,
                 [
                     email.toString().trim(),
+                    targetAcademyId,
                     playerId
                 ]
             );
@@ -207,7 +322,7 @@ export async function PUT(request, { params }) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message: "Email already exists"
+                        message: "Email already exists in this academy"
                     },
                     { status: 409 }
                 );
@@ -216,12 +331,7 @@ export async function PUT(request, { params }) {
 
         let profileImagePath = existingPlayer.profile_image;
 
-        /*
-        |--------------------------------------------------------------------------
-        | IMAGE UPLOAD
-        |--------------------------------------------------------------------------
-        */
-
+        // IMAGE UPLOAD
         if (
             profileImage &&
             typeof profileImage === "object" &&
@@ -262,75 +372,49 @@ export async function PUT(request, { params }) {
                 "outside-players"
             );
 
-            if (!fs.existsSync(uploadDir)) {
-                fs.mkdirSync(uploadDir, {
+            if (!fsSync.existsSync(uploadDir)) {
+                fsSync.mkdirSync(uploadDir, {
                     recursive: true
                 });
             }
 
             const extension = path.extname(profileImage.name);
-
             const fileName = `${Date.now()}-${Math.floor(
                 Math.random() * 1000000
             )}${extension}`;
 
-            const filePath = path.join(
-                uploadDir,
-                fileName
-            );
-
+            const filePath = path.join(uploadDir, fileName);
             const bytes = await profileImage.arrayBuffer();
 
-            fs.writeFileSync(
-                filePath,
-                Buffer.from(bytes)
-            );
+            await fs.writeFile(filePath, Buffer.from(bytes));
 
-            profileImagePath =
-                `/images/uploads/outside-players/${fileName}`;
+            profileImagePath = `/images/uploads/outside-players/${fileName}`;
 
-            /*
-            |--------------------------------------------------------------------------
-            | DELETE OLD IMAGE
-            |--------------------------------------------------------------------------
-            */
-
+            // DELETE OLD IMAGE
             if (existingPlayer.profile_image) {
                 const oldImagePath = path.join(
                     process.cwd(),
                     "public",
-                    existingPlayer.profile_image.replace(
-                        /^\/+/,
-                        ""
-                    )
+                    existingPlayer.profile_image.replace(/^\/+/, "")
                 );
 
-                if (
-                    fs.existsSync(oldImagePath) &&
-                    fs.statSync(oldImagePath).isFile()
-                ) {
+                if (fsSync.existsSync(oldImagePath) && fsSync.statSync(oldImagePath).isFile()) {
                     try {
-                        fs.unlinkSync(oldImagePath);
+                        await fs.unlink(oldImagePath);
                     } catch (deleteError) {
-                        console.error(
-                            "OLD IMAGE DELETE ERROR:",
-                            deleteError
-                        );
+                        console.error("OLD IMAGE DELETE ERROR:", deleteError);
                     }
                 }
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE
-        |--------------------------------------------------------------------------
-        */
-
+        // UPDATE
         await connection.query(
             `
             UPDATE cst_outside_players
             SET
+                academy_id = ?,
+                branch_id = ?,
                 player_name = ?,
                 age_group_id = ?,
                 phone = ?,
@@ -345,6 +429,8 @@ export async function PUT(request, { params }) {
             WHERE id = ?
             `,
             [
+                targetAcademyId,
+                targetBranchId || null,
                 player_name.toString().trim(),
                 age_group_id || null,
                 phone ? phone.toString().trim() : null,
@@ -371,6 +457,8 @@ export async function PUT(request, { params }) {
             message: "Outside player updated successfully",
             data: {
                 id: playerId,
+                academy_id: targetAcademyId,
+                branch_id: targetBranchId,
                 profile_image: profileImagePath
             }
         });
@@ -399,6 +487,16 @@ export async function PUT(request, { params }) {
 */
 
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: Players cannot delete outside players." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -418,7 +516,7 @@ export async function DELETE(request, { params }) {
 
         const [existingRows] = await connection.query(
             `
-            SELECT id
+            SELECT id, academy_id, branch_id
             FROM cst_outside_players
             WHERE id = ?
             AND is_deleted = 0
@@ -435,6 +533,31 @@ export async function DELETE(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        const existingPlayer = existingRows[0];
+
+        // Authorization check
+        if (!authUser.isSuperAdmin) {
+            if (authUser.academy_id && Number(existingPlayer.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden: You cannot delete outside players from another academy."
+                    },
+                    { status: 403 }
+                );
+            }
+
+            if (authUser.isBranchAdmin && authUser.branch_id && existingPlayer.branch_id && Number(existingPlayer.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden: You cannot delete outside players from another branch."
+                    },
+                    { status: 403 }
+                );
+            }
         }
 
         await connection.query(

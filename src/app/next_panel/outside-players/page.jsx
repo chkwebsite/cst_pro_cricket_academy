@@ -1,17 +1,27 @@
 "use client";
 
-import { Edit, Search, SearchSlash, Trash2, UserPlus, Users, Phone } from "lucide-react";
+import { Edit, Search, SearchSlash, Trash2, UserPlus, Users, Phone, Building2, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import Pagination from "../components/Pagination";
+import { useUser } from "../components/UserContext";
 
 export default function OutsidePlayersPage() {
+    const { user } = useUser();
+    const isSuperAdmin = !user?.academy_id || user?.user_type === "Super Admin";
+    const isAcademyAdmin = user?.user_type === "Academy Admin";
+    const isBranchAdmin = user?.user_type === "Branch Admin" || (!isSuperAdmin && !isAcademyAdmin && Boolean(user?.branch_id));
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [players, setPlayers] = useState([]);
     const [ageGroups, setAgeGroups] = useState([]);
+    const [academies, setAcademies] = useState([]);
+    const [branches, setBranches] = useState([]);
 
     // Filters (all supported server-side by GET /api/outside-players)
+    const [academyId, setAcademyId] = useState("");
+    const [branchId, setBranchId] = useState("");
     const [playerName, setPlayerName] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
@@ -23,6 +33,7 @@ export default function OutsidePlayersPage() {
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
 
+    // Load age groups
     useEffect(() => {
         const controller = new AbortController();
 
@@ -45,6 +56,47 @@ export default function OutsidePlayersPage() {
         return () => controller.abort();
     }, []);
 
+    // Load academies for Super Admin
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+        let isMounted = true;
+        (async () => {
+            try {
+                const res = await fetch("/api/academies");
+                const json = await res.json();
+                if (isMounted && res.ok && json.success) {
+                    setAcademies(json.data || []);
+                }
+            } catch (err) {
+                console.error("Failed to load academies:", err);
+            }
+        })();
+        return () => { isMounted = false; };
+    }, [isSuperAdmin]);
+
+    // Load branches for Super Admin (by selected academyId) or Academy Admin (by user.academy_id)
+    useEffect(() => {
+        const targetAcad = isSuperAdmin ? academyId : user?.academy_id;
+        if (!targetAcad) {
+            setBranches([]);
+            return;
+        }
+
+        let isMounted = true;
+        (async () => {
+            try {
+                const res = await fetch(`/api/branch?academy_id=${targetAcad}`);
+                const json = await res.json();
+                if (isMounted && res.ok && json.success) {
+                    setBranches(json.data || []);
+                }
+            } catch (err) {
+                console.error("Failed to load branches:", err);
+            }
+        })();
+        return () => { isMounted = false; };
+    }, [isSuperAdmin, academyId, user?.academy_id]);
+
     // Debounced fetch so we don't hit the API on every keystroke
     useEffect(() => {
         const controller = new AbortController();
@@ -54,6 +106,8 @@ export default function OutsidePlayersPage() {
             setError(null);
             try {
                 const params = new URLSearchParams();
+                if (academyId) params.set("academy_id", academyId);
+                if (branchId) params.set("branch_id", branchId);
                 if (playerName.trim()) params.set("player_name", playerName.trim());
                 if (phone.trim()) params.set("phone", phone.trim());
                 if (email.trim()) params.set("email", email.trim());
@@ -73,6 +127,7 @@ export default function OutsidePlayersPage() {
                     throw new Error(json.message || "Unable to load Outside Players.");
                 }
                 setPlayers(json.data || []);
+                setPage(1);
             } catch (err) {
                 if (err.name !== "AbortError") setError(err.message);
             } finally {
@@ -84,10 +139,12 @@ export default function OutsidePlayersPage() {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [playerName, phone, email, ageGroupId, gender, battingStyle, bowlingStyle, status]);
+    }, [academyId, branchId, playerName, phone, email, ageGroupId, gender, battingStyle, bowlingStyle, status]);
 
     const handleClear = (e) => {
         e.preventDefault();
+        setAcademyId("");
+        setBranchId("");
         setPlayerName("");
         setPhone("");
         setEmail("");
@@ -137,7 +194,43 @@ export default function OutsidePlayersPage() {
                 {/* Filters */}
                 <div className="col-sm-12">
                     <div className="d-flex flex-wrap align-items-center gap-3">
-                        <div className="input-group" style={{ maxWidth: "260px" }}>
+                        {isSuperAdmin && (
+                            <select
+                                className="form-select"
+                                value={academyId}
+                                onChange={(e) => {
+                                    setAcademyId(e.target.value);
+                                    setBranchId("");
+                                }}
+                                style={{ maxWidth: "200px" }}
+                            >
+                                <option value="">All Academies</option>
+                                {academies.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.academy_name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+
+                        {(isSuperAdmin || isAcademyAdmin) && (
+                            <select
+                                className="form-select"
+                                value={branchId}
+                                onChange={(e) => setBranchId(e.target.value)}
+                                style={{ maxWidth: "180px" }}
+                                disabled={isSuperAdmin && !academyId}
+                            >
+                                <option value="">All Branches</option>
+                                {branches.map((b) => (
+                                    <option key={b.id} value={b.id}>
+                                        {b.branch_name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+
+                        <div className="input-group" style={{ maxWidth: "240px" }}>
                             <span className="input-group-text bg-white"><Search size={18} /></span>
                             <input
                                 type="text"
@@ -152,7 +245,7 @@ export default function OutsidePlayersPage() {
                             type="text"
                             className="form-control"
                             placeholder="Phone"
-                            style={{ maxWidth: "160px" }}
+                            style={{ maxWidth: "150px" }}
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
                         />
@@ -161,7 +254,7 @@ export default function OutsidePlayersPage() {
                             type="text"
                             className="form-control"
                             placeholder="Email"
-                            style={{ maxWidth: "200px" }}
+                            style={{ maxWidth: "180px" }}
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                         />
@@ -170,7 +263,7 @@ export default function OutsidePlayersPage() {
                             className="form-select"
                             value={ageGroupId}
                             onChange={(e) => setAgeGroupId(e.target.value)}
-                            style={{ maxWidth: "180px" }}
+                            style={{ maxWidth: "170px" }}
                         >
                             <option value="">Choose Age Group</option>
                             {ageGroups.map((item) => (
@@ -184,7 +277,7 @@ export default function OutsidePlayersPage() {
                             className="form-select"
                             value={gender}
                             onChange={(e) => setGender(e.target.value)}
-                            style={{ maxWidth: "160px" }}
+                            style={{ maxWidth: "150px" }}
                         >
                             <option value="">Choose Gender</option>
                             <option value="Male">Male</option>
@@ -196,7 +289,7 @@ export default function OutsidePlayersPage() {
                             type="text"
                             className="form-control"
                             placeholder="Batting style"
-                            style={{ maxWidth: "170px" }}
+                            style={{ maxWidth: "160px" }}
                             value={battingStyle}
                             onChange={(e) => setBattingStyle(e.target.value)}
                         />
@@ -205,7 +298,7 @@ export default function OutsidePlayersPage() {
                             type="text"
                             className="form-control"
                             placeholder="Bowling style"
-                            style={{ maxWidth: "170px" }}
+                            style={{ maxWidth: "160px" }}
                             value={bowlingStyle}
                             onChange={(e) => setBowlingStyle(e.target.value)}
                         />
@@ -214,7 +307,7 @@ export default function OutsidePlayersPage() {
                             className="form-select"
                             value={status}
                             onChange={(e) => setStatus(e.target.value)}
-                            style={{ maxWidth: "180px" }}
+                            style={{ maxWidth: "160px" }}
                         >
                             <option value="">Choose Status</option>
                             <option value="1">Active</option>
@@ -247,6 +340,7 @@ export default function OutsidePlayersPage() {
                                     <tr>
                                         <th>#</th>
                                         <th>Player</th>
+                                        <th>Academy / Branch</th>
                                         <th>Contact</th>
                                         <th>Gender</th>
                                         <th>Age Group</th>
@@ -278,8 +372,12 @@ export default function OutsidePlayersPage() {
                                                             {item.player_name?.[0]?.toUpperCase()}
                                                         </div>
                                                     )}
-                                                    <div>{item.player_name}</div>
+                                                    <div className="fw-semibold">{item.player_name}</div>
                                                 </div>
+                                            </td>
+                                            <td>
+                                                <div className="fw-medium text-dark">{item.academy_name || "—"}</div>
+                                                <small className="text-muted">{item.branch_name || "Main Branch"}</small>
                                             </td>
                                             <td>
                                                 {item.phone ? (

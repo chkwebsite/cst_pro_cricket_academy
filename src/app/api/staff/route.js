@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 async function generateAppointmentNo(connection) {
     const year = new Date().getFullYear();
@@ -51,24 +51,39 @@ export async function GET(request) {
             const q = `%${search}%`;
             params.push(q, q, q, q);
         }
-        const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
-                where.push("s.branch_id = ?", "s.academy_id = ?");
-                params.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                where.push("s.academy_id = ?");
-                params.push(authUser.academy_id);
-                if (branchId) {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (authUser.isPlayer) {
+            return NextResponse.json({ success: false, message: "Forbidden: Players cannot view staff directory" }, { status: 403 });
+        }
+
+        if (authUser.isBranchAdmin && authUser.branch_id) {
+            where.push("s.branch_id = ?", "s.academy_id = ?");
+            params.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            where.push("s.academy_id = ?");
+            params.push(authUser.academy_id);
+            if (branchId) {
+                where.push("s.branch_id = ?");
+                params.push(Number(branchId));
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            where.push("s.academy_id = ?");
+            params.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+            if (branchId) {
+                if (allowed.includes(Number(branchId))) {
                     where.push("s.branch_id = ?");
                     params.push(Number(branchId));
+                } else {
+                    where.push("s.branch_id = -1");
                 }
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                where.push("s.academy_id = ?");
-                params.push(authUser.academy_id);
             } else {
-                if (academyId) { where.push("s.academy_id = ?"); params.push(Number(academyId)); }
-                if (branchId) { where.push("s.branch_id = ?"); params.push(Number(branchId)); }
+                where.push(`s.branch_id IN (${allowed.map(() => "?").join(",")})`);
+                params.push(...allowed);
             }
         } else {
             if (academyId) { where.push("s.academy_id = ?"); params.push(Number(academyId)); }
@@ -128,10 +143,17 @@ export async function GET(request) {
 // POST - CREATE STAFF
 // =====================================================
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Insufficient permissions to create staff" }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
     try {
         const body = await request.json();
-        const {
+        let {
             user_id,
             role_id,
             academy_id,
@@ -154,6 +176,14 @@ export async function POST(request) {
             date_of_appointment,
             status,
         } = body;
+
+        // Force/enforce tenant isolation
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         // ---------------- VALIDATION ----------------
         if (!first_name || !String(first_name).trim()) {

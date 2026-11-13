@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 /* =====================================================
    GET SINGLE BRANCH
@@ -65,13 +65,21 @@ export async function GET(request, { params }) {
             );
         }
 
-        const authUser = await getAuthUser(request);
-        if (authUser && !authUser.isSuperAdmin) {
-            if (authUser.isAcademyAdmin && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin) {
+            if (authUser.isAcademyAdmin && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
                 return NextResponse.json({ success: false, message: "Branch not found or access denied" }, { status: 403 });
             }
-            if (authUser.isBranchAdmin && authUser.branch_id && Number(id) !== Number(authUser.branch_id)) {
+            if (authUser.isBranchAdmin && Number(id) !== Number(authUser.branch_id)) {
                 return NextResponse.json({ success: false, message: "Access denied: You can only access your assigned branch" }, { status: 403 });
+            }
+            if (!authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+                const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+                if (!allowedBranches.includes(Number(id)) || Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json({ success: false, message: "Access denied: Branch not authorized" }, { status: 403 });
+                }
             }
         }
 
@@ -108,6 +116,16 @@ export async function GET(request, { params }) {
 ===================================================== */
 
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: Only Academy Admin and Super Admin can update branches" },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
     try {
 
@@ -117,6 +135,9 @@ export async function PUT(request, { params }) {
         const body =
             await request.json();
 
+        if (authUser.isAcademyAdmin) {
+            body.academy_id = authUser.academy_id;
+        }
 
         const {
             academy_id,
@@ -140,7 +161,7 @@ export async function PUT(request, { params }) {
         const [branchRows] =
             await connection.query(
                 `
-                SELECT id
+                SELECT id, academy_id
                 FROM cst_branch
                 WHERE id = ?
                 AND is_deleted = 0
@@ -159,6 +180,13 @@ export async function PUT(request, { params }) {
                         "Branch not found",
                 },
                 { status: 404 }
+            );
+        }
+
+        if (authUser.isAcademyAdmin && Number(branchRows[0].academy_id) !== Number(authUser.academy_id)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied: Branch belongs to another academy" },
+                { status: 403 }
             );
         }
 
@@ -430,7 +458,7 @@ export async function DELETE(
         const [rows] =
             await connection.execute(
                 `
-                SELECT id
+                SELECT id, academy_id
                 FROM cst_branch
                 WHERE id = ?
                 AND is_deleted = 0
@@ -452,14 +480,18 @@ export async function DELETE(
             );
         }
 
-        const authUser = await getAuthUser(request);
-        if (authUser && !authUser.isSuperAdmin) {
-            if (authUser.isAcademyAdmin && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
-                return NextResponse.json({ success: false, message: "Branch not found or access denied" }, { status: 403 });
-            }
-            if (authUser.isBranchAdmin && authUser.branch_id && Number(id) !== Number(authUser.branch_id)) {
-                return NextResponse.json({ success: false, message: "Access denied: You can only access your assigned branch" }, { status: 403 });
-            }
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Only Super Admin and Academy Admin can delete branches" },
+                { status: 403 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+            return NextResponse.json({ success: false, message: "Access denied: Branch belongs to another academy" }, { status: 403 });
         }
 
 

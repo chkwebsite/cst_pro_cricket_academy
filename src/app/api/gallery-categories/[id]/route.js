@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET: Single Gallery Category
@@ -32,6 +33,16 @@ gc.*,
                 success: false,
                 message: "Gallery category not found"
             }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && Number(authUser.role_id) !== 1) {
+            if (rows[0].academy_id && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({
+                    success: false,
+                    message: "Forbidden. Gallery category belongs to another academy."
+                }, { status: 403 });
+            }
         }
 
         return NextResponse.json({
@@ -130,7 +141,7 @@ export async function PUT(request, { params }) {
         connection = await pool.getConnection();
 
         const [existingRows] = await connection.execute(
-            `SELECT id, featured_image
+            `SELECT id, academy_id, featured_image
              FROM cst_gallery_categories
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
@@ -148,6 +159,16 @@ export async function PUT(request, { params }) {
                 success: false,
                 message: "Gallery category not found"
             }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && Number(authUser.role_id) !== 1) {
+            if (existingRows[0].academy_id && authUser.academy_id && Number(existingRows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({
+                    success: false,
+                    message: "Forbidden. Gallery category belongs to another academy."
+                }, { status: 403 });
+            }
         }
 
         const oldImagePath = existingRows[0].featured_image;
@@ -275,7 +296,7 @@ export async function DELETE(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            `SELECT id
+            `SELECT id, academy_id
              FROM cst_gallery_categories
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
@@ -287,6 +308,16 @@ export async function DELETE(request, { params }) {
                 success: false,
                 message: "Gallery category not found"
             }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && Number(authUser.role_id) !== 1) {
+            if (rows[0].academy_id && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({
+                    success: false,
+                    message: "Forbidden. Gallery category belongs to another academy."
+                }, { status: 403 });
+            }
         }
 
         // Category with active albums cannot be deleted

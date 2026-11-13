@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
-
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 // ============================================
 // GET: Attendance List with Filters
@@ -10,6 +9,9 @@ export async function GET(request) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
         const { searchParams } = new URL(request.url);
 
         const id = searchParams.get("id");
@@ -86,45 +88,46 @@ export async function GET(request) {
 
         const values = [];
 
-        if (id) {
-            sql += ` AND a.id = ?`;
-            values.push(id);
-        }
-
-        const authUser = await getAuthUser(request);
-        if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized. Authentication required." },
-                { status: 401 }
-            );
-        }
-
+        // Role-based Tenant Scoping
         if (authUser.isPlayer) {
             sql += " AND up.user_id = ?";
             values.push(authUser.id);
         } else if (authUser.isCoach) {
-            // Coach only sees attendance for players in their assigned batches
             sql += ` AND a.admission_players_id IN (
-                SELECT up.admission_players_id
-                FROM cst_user_programs up
-                JOIN cst_batch_players bp ON bp.user_program_id = up.id
-                JOIN cst_batch_coaches bc ON bc.batch_id = bp.batch_id
-                WHERE bc.coach_user_id = ? AND bc.status = 1 AND bc.is_deleted = 0
+                SELECT up_inner.admission_players_id
+                FROM cst_user_programs up_inner
+                JOIN cst_batch_players bp_inner ON bp_inner.user_program_id = up_inner.id
+                JOIN cst_batch_coaches bc_inner ON bc_inner.batch_id = bp_inner.batch_id
+                WHERE bc_inner.coach_user_id = ? AND bc_inner.status = 1 AND bc_inner.is_deleted = 0
             )`;
             values.push(authUser.id);
-        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+        } else if (authUser.isBranchAdmin) {
             sql += " AND a.branch_id = ? AND a.academy_id = ?";
             values.push(authUser.branch_id, authUser.academy_id);
-        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+        } else if (authUser.isAcademyAdmin) {
             sql += " AND a.academy_id = ?";
             values.push(authUser.academy_id);
             if (branch_id) {
                 sql += " AND a.branch_id = ?";
                 values.push(branch_id);
             }
-        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+        } else if (!authUser.isSuperAdmin) {
             sql += " AND a.academy_id = ?";
             values.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+            if (branch_id) {
+                if (allowed.includes(Number(branch_id))) {
+                    sql += " AND a.branch_id = ?";
+                    values.push(branch_id);
+                } else {
+                    sql += " AND a.branch_id = -1";
+                }
+            } else {
+                sql += ` AND a.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                values.push(...allowed);
+            }
         } else {
             if (academy_id) {
                 sql += ` AND a.academy_id = ?`;
@@ -134,6 +137,11 @@ export async function GET(request) {
                 sql += ` AND a.branch_id = ?`;
                 values.push(branch_id);
             }
+        }
+
+        if (id) {
+            sql += ` AND a.id = ?`;
+            values.push(id);
         }
 
         if (program_id) {
@@ -153,9 +161,9 @@ export async function GET(request) {
 
         if (batch_id && Number.isInteger(Number(batch_id)) && Number(batch_id) > 0) {
             sql += ` AND a.user_program_id IN (
-                SELECT bp.user_program_id
-                FROM cst_batch_players bp
-                WHERE bp.batch_id = ? AND (bp.status = 'Active' OR bp.status = 1)
+                SELECT bp_sub.user_program_id
+                FROM cst_batch_players bp_sub
+                WHERE bp_sub.batch_id = ? AND (bp_sub.status = 'Active' OR bp_sub.status = 1)
             )`;
             values.push(Number(batch_id));
         }
@@ -165,7 +173,6 @@ export async function GET(request) {
             values.push(attendance_date);
         }
 
-        // Example: month=2026-10
         if (month) {
             if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
                 return NextResponse.json(
@@ -177,44 +184,22 @@ export async function GET(request) {
                 );
             }
 
-            sql += ` AND a.attendance_date >= ?
-                     AND a.attendance_date < ?`;
-
+            sql += ` AND a.attendance_date >= ? AND a.attendance_date < ?`;
             values.push(`${month}-01`);
 
             const [year, monthNumber] = month.split("-").map(Number);
-
-            const nextMonth = new Date(
-                Date.UTC(year, monthNumber, 1)
-            );
-
+            const nextMonth = new Date(Date.UTC(year, monthNumber, 1));
             values.push(
-                `${nextMonth.getUTCFullYear()}-${String(
-                    nextMonth.getUTCMonth() + 1
-                ).padStart(2, "0")}-01`
+                `${nextMonth.getUTCFullYear()}-${String(nextMonth.getUTCMonth() + 1).padStart(2, "0")}-01`
             );
         }
 
         if (attendance_status) {
-            const allowedStatuses = [
-                "Present",
-                "Absent",
-                "Late",
-                "Leave"
-            ];
-
-            if (!allowedStatuses.includes(attendance_status)) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid attendance status."
-                    },
-                    { status: 400 }
-                );
+            const allowedStatuses = ["Present", "Absent", "Late", "Leave"];
+            if (allowedStatuses.includes(attendance_status)) {
+                sql += ` AND a.attendance_status = ?`;
+                values.push(attendance_status);
             }
-
-            sql += ` AND a.attendance_status = ?`;
-            values.push(attendance_status);
         }
 
         if (search) {
@@ -226,15 +211,8 @@ export async function GET(request) {
                     OR p.program_name LIKE ?
                 )
             `;
-
             const searchValue = `%${search}%`;
-
-            values.push(
-                searchValue,
-                searchValue,
-                searchValue,
-                searchValue
-            );
+            values.push(searchValue, searchValue, searchValue, searchValue);
         }
 
         sql += ` ORDER BY a.attendance_date DESC, a.id DESC`;
@@ -250,21 +228,14 @@ export async function GET(request) {
 
     } catch (error) {
         console.error("GET Attendance Error:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to fetch attendance.",
-                error: error.message
-            },
+            { success: false, message: "Failed to fetch attendance.", error: error.message },
             { status: 500 }
         );
-
     } finally {
         if (connection) connection.release();
     }
 }
-
 
 // ============================================
 // POST: Mark Attendance
@@ -273,55 +244,47 @@ export async function POST(request) {
     let connection;
 
     try {
-        const body = await request.json();
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
 
+        if (authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Players cannot mark player attendance." },
+                { status: 403 }
+            );
+        }
+
+        const body = await request.json();
         const {
             user_program_id,
             attendance_date,
             attendance_status = "Present",
-            remarks,
-            marked_by
+            remarks
         } = body;
 
         if (!user_program_id || !attendance_date) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "user_program_id and attendance_date are required."
-                },
+                { success: false, message: "user_program_id and attendance_date are required." },
                 { status: 400 }
             );
         }
 
         if (!/^\d{4}-\d{2}-\d{2}$/.test(attendance_date)) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid attendance_date. Use YYYY-MM-DD."
-                },
+                { success: false, message: "Invalid attendance_date. Use YYYY-MM-DD." },
                 { status: 400 }
             );
         }
 
-        const allowedStatuses = [
-            "Present",
-            "Absent",
-            "Late",
-            "Leave"
-        ];
-
+        const allowedStatuses = ["Present", "Absent", "Late", "Leave"];
         if (!allowedStatuses.includes(attendance_status)) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid attendance_status."
-                },
+                { success: false, message: "Invalid attendance_status." },
                 { status: 400 }
             );
         }
 
         connection = await pool.getConnection();
-
         await connection.beginTransaction();
 
         // Verify enrollment and derive academy, branch, player and program.
@@ -335,15 +298,9 @@ export async function POST(request) {
                 p.academy_id,
                 COALESCE(up.start_date, DATE(ap.created_at), DATE(up.created_at)) AS start_date,
                 up.end_date
-
             FROM cst_user_programs up
-
-            INNER JOIN cst_programs p
-                ON p.id = up.program_id
-
-            INNER JOIN cst_admission_players ap
-                ON ap.id = up.admission_players_id
-
+            INNER JOIN cst_programs p ON p.id = up.program_id
+            INNER JOIN cst_admission_players ap ON ap.id = up.admission_players_id
             WHERE up.id = ?
               AND up.status = 1
               AND up.is_deleted = 0
@@ -358,17 +315,41 @@ export async function POST(request) {
 
         if (enrollments.length === 0) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Active player enrollment not found."
-                },
+                { success: false, message: "Active player enrollment not found." },
                 { status: 404 }
             );
         }
 
         const enrollment = enrollments[0];
+
+        // Tenant verification
+        if (!authUser.isSuperAdmin) {
+            if (Number(enrollment.academy_id) !== Number(authUser.academy_id)) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Forbidden: Record belongs to another academy." },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(enrollment.branch_id) !== Number(authUser.branch_id)) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Forbidden: Record belongs to another branch." },
+                    { status: 403 }
+                );
+            }
+            if (!authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+                const allowed = authUser.assignedBranchIds || [Number(authUser.branch_id)];
+                if (!allowed.includes(Number(enrollment.branch_id))) {
+                    await connection.rollback();
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden: You are not authorized for this branch." },
+                        { status: 403 }
+                    );
+                }
+            }
+        }
 
         // Prevent duplicate attendance for the same enrollment and date.
         const [existing] = await connection.query(
@@ -384,7 +365,6 @@ export async function POST(request) {
 
         if (existing.length > 0) {
             await connection.rollback();
-
             return NextResponse.json(
                 {
                     success: false,
@@ -395,14 +375,10 @@ export async function POST(request) {
             );
         }
 
-        // Validate enrollment date range (attendance must strictly start from joining/enrollment date).
+        // Validate enrollment date range
         const effectiveStartDate = enrollment.start_date ? String(enrollment.start_date).slice(0, 10) : null;
-        if (
-            effectiveStartDate &&
-            attendance_date < effectiveStartDate
-        ) {
+        if (effectiveStartDate && attendance_date < effectiveStartDate) {
             await connection.rollback();
-
             return NextResponse.json(
                 {
                     success: false,
@@ -412,17 +388,10 @@ export async function POST(request) {
             );
         }
 
-        if (
-            enrollment.end_date &&
-            attendance_date > enrollment.end_date
-        ) {
+        if (enrollment.end_date && attendance_date > enrollment.end_date) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance date is after enrollment end date."
-                },
+                { success: false, message: "Attendance date is after enrollment end date." },
                 { status: 400 }
             );
         }
@@ -451,7 +420,7 @@ export async function POST(request) {
                 attendance_date,
                 attendance_status,
                 remarks || null,
-                marked_by || null
+                authUser.id
             ]
         );
 
@@ -471,42 +440,28 @@ export async function POST(request) {
                     attendance_date,
                     attendance_status,
                     remarks: remarks || null,
-                    marked_by: marked_by || null
+                    marked_by: authUser.id
                 }
             },
             { status: 201 }
         );
 
     } catch (error) {
-        if (connection) {
-            await connection.rollback();
-        }
-
+        if (connection) await connection.rollback();
         console.error("POST Attendance Error:", error);
 
-        // Unique key duplicate protection.
         if (error.code === "ER_DUP_ENTRY") {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance already exists for this date."
-                },
+                { success: false, message: "Attendance already exists for this date." },
                 { status: 409 }
             );
         }
 
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to mark attendance.",
-                error: error.message
-            },
+            { success: false, message: "Failed to mark attendance.", error: error.message },
             { status: 500 }
         );
-
     } finally {
         if (connection) connection.release();
     }
 }
-
-

@@ -3,6 +3,7 @@ import db from "@/app/components/lib/db";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
@@ -129,9 +130,20 @@ export async function GET(request, context) {
             );
         }
 
+        const imageRecord = rows[0];
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (imageRecord.academy_id && authUser.academy_id && Number(imageRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Image belongs to another academy's product." },
+                    { status: 403 }
+                );
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: imageRecord,
         });
     } catch (error) {
         console.error("Get product image error:", error);
@@ -149,6 +161,21 @@ export async function PUT(request, context) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can update product images." },
+                { status: 403 }
+            );
+        }
+
         const id = await getId(context);
 
         if (!id) {
@@ -216,9 +243,10 @@ export async function PUT(request, context) {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            `SELECT *
-             FROM cst_product_images
-             WHERE id = ?
+            `SELECT pi.*, p.academy_id
+             FROM cst_product_images pi
+             INNER JOIN cst_products p ON p.id = pi.product_id
+             WHERE pi.id = ?
              LIMIT 1
              FOR UPDATE`,
             [id]
@@ -234,6 +262,14 @@ export async function PUT(request, context) {
         }
 
         const existing = rows[0];
+
+        if (!authUser.isSuperAdmin && Number(existing.academy_id) !== Number(authUser.academy_id)) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. You can only update images for your academy's products." },
+                { status: 403 }
+            );
+        }
 
         let imagePath = existing.image_path;
 
@@ -337,6 +373,21 @@ export async function DELETE(request, context) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can delete product images." },
+                { status: 403 }
+            );
+        }
+
         const id = await getId(context);
 
         if (!id) {
@@ -350,9 +401,10 @@ export async function DELETE(request, context) {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            `SELECT id, image_path
-             FROM cst_product_images
-             WHERE id = ?
+            `SELECT pi.id, pi.image_path, p.academy_id
+             FROM cst_product_images pi
+             INNER JOIN cst_products p ON p.id = pi.product_id
+             WHERE pi.id = ?
              LIMIT 1
              FOR UPDATE`,
             [id]
@@ -364,6 +416,14 @@ export async function DELETE(request, context) {
             return NextResponse.json(
                 { success: false, message: "Product image not found." },
                 { status: 404 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. You can only delete images for your academy's products." },
+                { status: 403 }
             );
         }
 

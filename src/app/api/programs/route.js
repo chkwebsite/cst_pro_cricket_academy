@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, validateBranchBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "images", "uploads", "programs");
 const ALLOWED_MIME_TYPES = [
@@ -51,6 +52,9 @@ async function saveProgramImage(file) {
 // GET ALL PROGRAMS
 // =====================================================
 export async function GET(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     const connection = await pool.getConnection();
 
     try {
@@ -99,16 +103,43 @@ export async function GET(request) {
 
         const values = [];
 
-        // Academy filter
-        if (academy_id) {
+        // Tenant Isolation
+        if (!authUser.isSuperAdmin) {
             sql += ` AND p.academy_id = ? `;
-            values.push(academy_id);
-        }
+            values.push(authUser.academy_id);
 
-        // Branch filter
-        if (branch_id) {
-            sql += ` AND p.branch_id = ? `;
-            values.push(branch_id);
+            if (authUser.isBranchAdmin) {
+                sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
+                values.push(authUser.branch_id);
+            } else if (authUser.isPlayer) {
+                if (authUser.branch_id) {
+                    sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
+                    values.push(authUser.branch_id);
+                }
+            } else if (!authUser.isAcademyAdmin) {
+                // Staff / Coach
+                const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+                if (allowedBranches.length > 0) {
+                    sql += ` AND (p.branch_id IN (?) OR p.branch_id IS NULL) `;
+                    values.push(allowedBranches);
+                }
+            } else {
+                // Academy Admin can view all or filter by branch
+                if (branch_id) {
+                    sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
+                    values.push(branch_id);
+                }
+            }
+        } else {
+            // Super Admin
+            if (academy_id) {
+                sql += ` AND p.academy_id = ? `;
+                values.push(academy_id);
+            }
+            if (branch_id) {
+                sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
+                values.push(branch_id);
+            }
         }
 
         // Status filter
@@ -145,6 +176,16 @@ export async function GET(request) {
 // CREATE PROGRAM
 // =====================================================
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to create programs" },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
     let uploadedFilePath = null;
 
@@ -202,6 +243,23 @@ export async function POST(request) {
             if (typeof body.program_image === "string" && body.program_image.trim() && body.program_image.trim() !== "null") {
                 programImageString = body.program_image.trim();
             }
+        }
+
+        // Force and validate tenant scoping
+        if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+            if (branch_id) {
+                const isValid = await validateBranchBelongsToAcademy(connection, branch_id, authUser.academy_id);
+                if (!isValid) {
+                    return NextResponse.json(
+                        { success: false, message: "Branch does not belong to your academy" },
+                        { status: 400 }
+                    );
+                }
+            }
+        } else if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
         }
 
         // =================================================

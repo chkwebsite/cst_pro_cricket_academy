@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, buildTenantWhere, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
 // GET: Stock list with filters
 export async function GET(request) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const { searchParams } = new URL(request.url);
 
         const productId = searchParams.get("product_id");
@@ -37,19 +40,45 @@ WHEN(s.quantity - s.reserved_quantity) <= s.low_stock_alert
     p.price,
     p.sale_price,
     p.academy_id,
+    COALESCE(ac.academy_name, 'CST Pro Cricket Academy') AS academy_name,
     b.branch_name,
     b.city,
     b.address,
     b.phone AS branch_phone
-            FROM cst_product_stock s
-            INNER JOIN cst_products p
-                ON p.id = s.product_id
-            INNER JOIN cst_branch b
-                ON b.id = s.branch_id
-            WHERE p.is_deleted = 0
+FROM cst_product_stock s
+INNER JOIN cst_products p
+    ON p.id = s.product_id
+LEFT JOIN cst_academy ac
+    ON ac.id = p.academy_id
+INNER JOIN cst_branch b
+    ON b.id = s.branch_id
+WHERE p.is_deleted = 0
     `;
 
         const params = [];
+
+        if (authUser) {
+            const tenantClause = buildTenantWhere(authUser, {
+                academyColumn: "b.academy_id",
+                branchColumn: "s.branch_id"
+            });
+            if (tenantClause.clause) {
+                sql += ` AND ${tenantClause.clause}`;
+                params.push(...tenantClause.params);
+            }
+            if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND p.academy_id = ?";
+                params.push(authUser.academy_id);
+            }
+        }
+
+        if (academyId !== null && academyId !== "" && academyId !== undefined) {
+            const value = Number(academyId);
+            if (Number.isInteger(value) && value > 0) {
+                sql += " AND (p.academy_id = ? OR b.academy_id = ?)";
+                params.push(value, value);
+            }
+        }
 
         if (productId !== null && productId !== "") {
             const value = Number(productId);
@@ -185,6 +214,14 @@ export async function POST(request) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
         const body = await request.json();
 
         const {
@@ -245,7 +282,7 @@ export async function POST(request) {
         await connection.beginTransaction();
 
         const [products] = await connection.execute(
-            `SELECT id
+            `SELECT id, academy_id
              FROM cst_products
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
@@ -261,11 +298,19 @@ export async function POST(request) {
             );
         }
 
+        if (!authUser.isSuperAdmin && products[0].academy_id && Number(products[0].academy_id) !== Number(authUser.academy_id)) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Product belongs to another academy." },
+                { status: 403 }
+            );
+        }
+
         const [branches] = await connection.execute(
-            `SELECT id
+            `SELECT id, academy_id
              FROM cst_branch
              WHERE id = ?
-    LIMIT 1`,
+             LIMIT 1`,
             [branchId]
         );
 
@@ -275,6 +320,14 @@ export async function POST(request) {
             return NextResponse.json(
                 { success: false, message: "Branch not found." },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: branches[0].academy_id, branch_id: branches[0].id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. You are not authorized to create stock for this branch." },
+                { status: 403 }
             );
         }
 

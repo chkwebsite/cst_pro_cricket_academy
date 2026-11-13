@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET ACADEMY LIST WITH FILTER
@@ -41,8 +41,10 @@ export async function GET(request) {
 
         const params = [];
 
-        const authUser = await getAuthUser(request);
-        if (authUser && !authUser.isSuperAdmin && authUser.academy_id) {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin) {
             sql += ` AND id = ?`;
             params.push(authUser.academy_id);
         } else if (id) {
@@ -80,8 +82,10 @@ export async function GET(request) {
 // POST ACADEMY
 
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (!authUser || !authUser.isSuperAdmin) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
         return NextResponse.json(
             { success: false, message: "Only Super Admin can register new academies" },
             { status: 403 }

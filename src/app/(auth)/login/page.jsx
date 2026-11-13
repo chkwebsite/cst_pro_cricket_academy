@@ -115,8 +115,8 @@ function LoginContent() {
       }
 
       const redirectPath = searchParams.get("redirect");
-      const userTypeStr = String(rawUser?.user_type || "").trim().toLowerCase();
-      const isPlayer = userTypeStr === "player" || userTypeStr === "7";
+      const userTypeStr = String(rawUser?.user_type || rawUser?.role || "").trim().toLowerCase();
+      const isPlayer = userTypeStr.includes("player") || userTypeStr === "7";
       const targetDashboard = isPlayer ? "/next_panel/player-dashboard" : "/next_panel/dashboard";
       window.location.href = redirectPath || targetDashboard;
     } catch (requestError) {

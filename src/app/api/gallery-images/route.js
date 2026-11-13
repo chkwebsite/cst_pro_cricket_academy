@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_TYPES = {
@@ -37,6 +38,7 @@ async function saveImage(file) {
 export async function GET(request) {
     let connection;
     try {
+        const authUser = await getAuthenticatedUser(request);
         const { searchParams } = new URL(request.url);
         const album_id = searchParams.get("album_id");
         const status = searchParams.get("status");
@@ -44,13 +46,35 @@ export async function GET(request) {
 
         connection = await pool.getConnection();
         let sql = `
-            SELECT gi.*, ga.album_title, ga.category_id, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
+            SELECT gi.*, ga.album_title, ga.category_id, ga.academy_id, ga.branch_id, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
             FROM cst_gallery_images gi
             INNER JOIN cst_gallery_albums ga ON ga.id = gi.album_id AND ga.is_deleted = 0
             LEFT JOIN cst_users u ON u.id = gi.uploaded_by
             WHERE gi.is_deleted = 0
         `;
         const values = [];
+
+        if (authUser) {
+            const roleId = Number(authUser.role_id);
+            if (roleId === 2) {
+                sql += " AND (ga.academy_id = ? OR ga.academy_id IS NULL)";
+                values.push(authUser.academy_id);
+            } else if (roleId === 3) {
+                sql += " AND (ga.branch_id = ? OR (ga.academy_id = ? AND ga.branch_id IS NULL))";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (roleId !== 1) {
+                if (authUser.branchIds && authUser.branchIds.length > 0) {
+                    const placeholders = authUser.branchIds.map(() => "?").join(", ");
+                    sql += ` AND (ga.branch_id IN (${placeholders}) OR (ga.academy_id = ? AND ga.branch_id IS NULL))`;
+                    values.push(...authUser.branchIds, authUser.academy_id);
+                } else if (authUser.branch_id) {
+                    sql += " AND (ga.branch_id = ? OR (ga.academy_id = ? AND ga.branch_id IS NULL))";
+                    values.push(authUser.branch_id, authUser.academy_id);
+                }
+            }
+        } else {
+            sql += " AND gi.status = 1";
+        }
 
         if (album_id) {
             sql += " AND gi.album_id = ?";
@@ -103,11 +127,19 @@ export async function POST(request) {
 
         connection = await pool.getConnection();
         const [albumRows] = await connection.execute(
-            "SELECT id FROM cst_gallery_albums WHERE id = ? AND is_deleted = 0 LIMIT 1",
+            "SELECT id, academy_id, branch_id FROM cst_gallery_albums WHERE id = ? AND is_deleted = 0 LIMIT 1",
             [album_id]
         );
         if (!albumRows.length) {
             return NextResponse.json({ success: false, message: "Gallery album not found" }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: albumRows[0].academy_id, branch_id: albumRows[0].branch_id })) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Gallery album belongs to another academy or branch."
+            }, { status: 403 });
         }
 
         // Validate uploader when supplied, so the foreign key error is handled cleanly.

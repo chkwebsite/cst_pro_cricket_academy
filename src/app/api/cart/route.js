@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 function validateOwner(public_user_id, customer_user_id) {
     const hasPublicUser =
@@ -26,10 +27,16 @@ function validateOwner(public_user_id, customer_user_id) {
 // GET: All carts with filters
 export async function GET(request) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const { searchParams } = new URL(request.url);
 
         const conditions = [];
         const values = [];
+
+        if (authUser && authUser.isPlayer) {
+            conditions.push("c.customer_user_id = ?");
+            values.push(authUser.id);
+        }
 
         const id = searchParams.get("id");
         const public_user_id = searchParams.get("public_user_id");
@@ -128,17 +135,23 @@ c.*,
 // POST: Create cart
 export async function POST(request) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const body = await request.json();
 
-        const public_user_id =
+        let public_user_id =
             body.public_user_id === "" || body.public_user_id === undefined
                 ? null
                 : body.public_user_id;
 
-        const customer_user_id =
+        let customer_user_id =
             body.customer_user_id === "" || body.customer_user_id === undefined
                 ? null
                 : body.customer_user_id;
+
+        if (authUser && authUser.isPlayer) {
+            customer_user_id = authUser.id;
+            public_user_id = null;
+        }
 
         const validationError = validateOwner(
             public_user_id,

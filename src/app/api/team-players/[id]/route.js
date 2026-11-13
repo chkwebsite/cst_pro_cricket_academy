@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
-
+// Helper to check team access
+function isTeamAuthorized(team, authUser) {
+    if (authUser.isSuperAdmin) return true;
+    if (!team.academy_id && !team.branch_id) return true;
+    if (Number(team.academy_id) !== Number(authUser.academy_id)) return false;
+    if (authUser.isAcademyAdmin) return true;
+    if (authUser.isBranchAdmin) {
+        return Number(team.branch_id) === Number(authUser.branch_id) || !team.branch_id;
+    }
+    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return allowed.includes(Number(team.branch_id)) || !team.branch_id;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -103,15 +115,37 @@ export async function GET(request, { params }) {
             );
         }
 
+        const player = rows[0];
+
+        // Check authentication & tenant authorization
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser) {
+                if (authUser.isPlayer && Number(player.user_id) !== Number(authUser.id)) {
+                    if (!isTeamAuthorized(player, authUser)) {
+                        return NextResponse.json(
+                            { success: false, message: "Team player not found or access denied" },
+                            { status: 404 }
+                        );
+                    }
+                } else if (!isTeamAuthorized(player, authUser)) {
+                    return NextResponse.json(
+                        { success: false, message: "Team player not found or access denied" },
+                        { status: 404 }
+                    );
+                }
+            }
+        }
+
         return NextResponse.json({
             success: true,
             message: "Team player fetched successfully",
-            data: rows[0]
+            data: player
         });
 
     } catch (error) {
         console.error("GET SINGLE TEAM PLAYER ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
@@ -133,35 +167,36 @@ export async function GET(request, { params }) {
 */
 
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot update team players." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
         const { id } = await params;
+        const teamPlayerId = Number(id);
 
-        if (!id || isNaN(Number(id))) {
+        if (!teamPlayerId || isNaN(teamPlayerId)) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Valid team player ID is required"
-                },
+                { success: false, message: "Valid team player ID is required" },
                 { status: 400 }
             );
         }
 
-        const teamPlayerId = Number(id);
-
-        /*
-        |--------------------------------------------------------------------------
-        | EXISTING RECORD
-        |--------------------------------------------------------------------------
-        */
-
+        // Verify existing team player & authorization
         const [existingRows] = await connection.query(
             `
-            SELECT *
-            FROM cst_team_players
-            WHERE id = ?
-            AND is_deleted = 0
+            SELECT tp.*, t.academy_id, t.branch_id
+            FROM cst_team_players tp
+            INNER JOIN cst_teams t ON t.id = tp.team_id
+            WHERE tp.id = ? AND tp.is_deleted = 0
             LIMIT 1
             `,
             [teamPlayerId]
@@ -169,18 +204,20 @@ export async function PUT(request, { params }) {
 
         if (existingRows.length === 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Team player not found"
-                },
+                { success: false, message: "Team player not found" },
                 { status: 404 }
             );
         }
 
-        const existing = existingRows[0];
+        const existingPlayer = existingRows[0];
+        if (!isTeamAuthorized(existingPlayer, authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied: Unauthorized to edit this team player" },
+                { status: 403 }
+            );
+        }
 
         const body = await request.json();
-
         const {
             team_id,
             user_id,
@@ -192,166 +229,21 @@ export async function PUT(request, { params }) {
             status
         } = body;
 
-        /*
-        |--------------------------------------------------------------------------
-        | TEAM
-        |--------------------------------------------------------------------------
-        */
+        const finalTeamId = team_id ? Number(team_id) : existingPlayer.team_id;
 
-        const finalTeamId =
-            team_id !== null &&
-                team_id !== undefined &&
-                team_id !== ""
-                ? Number(team_id)
-                : existing.team_id;
-
-        const [teamRows] = await connection.query(
-            `
-            SELECT id
-            FROM cst_teams
-            WHERE id = ?
-            AND is_deleted = 0
-            LIMIT 1
-            `,
-            [finalTeamId]
-        );
-
-        if (teamRows.length === 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Team not found"
-                },
-                { status: 404 }
+        // If target team changed, verify authorization for new team
+        if (finalTeamId !== existingPlayer.team_id) {
+            const [newTeam] = await connection.query(
+                `SELECT id, academy_id, branch_id FROM cst_teams WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+                [finalTeamId]
             );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | PLAYER
-        |--------------------------------------------------------------------------
-        */
-
-        const hasUser =
-            user_id !== null &&
-            user_id !== undefined &&
-            user_id !== "";
-
-        const hasOutsidePlayer =
-            outside_player_id !== null &&
-            outside_player_id !== undefined &&
-            outside_player_id !== "";
-
-        /*
-        | If neither is supplied, keep existing player.
-        */
-
-        let finalUserId = existing.user_id;
-        let finalOutsidePlayerId =
-            existing.outside_player_id;
-
-        if (hasUser || hasOutsidePlayer) {
-
-            if (hasUser && hasOutsidePlayer) {
+            if (newTeam.length === 0 || !isTeamAuthorized(newTeam[0], authUser)) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message:
-                            "Only one of user_id or outside_player_id can be selected"
-                    },
-                    { status: 400 }
-                );
-            }
-
-            if (hasUser) {
-                finalUserId = Number(user_id);
-                finalOutsidePlayerId = null;
-            }
-
-            if (hasOutsidePlayer) {
-                finalUserId = null;
-                finalOutsidePlayerId =
-                    Number(outside_player_id);
-            }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE USER
-        |--------------------------------------------------------------------------
-        */
-
-        if (finalUserId !== null) {
-            const [userRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_users
-                WHERE id = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [finalUserId]
-            );
-
-            if (userRows.length === 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "User/player not found"
-                    },
-                    { status: 404 }
+                    { success: false, message: "Target team not found or access denied" },
+                    { status: 403 }
                 );
             }
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE OUTSIDE PLAYER
-        |--------------------------------------------------------------------------
-        */
-
-        if (finalOutsidePlayerId !== null) {
-            const [outsideRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_outside_players
-                WHERE id = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [finalOutsidePlayerId]
-            );
-
-            if (outsideRows.length === 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Outside player not found"
-                    },
-                    { status: 404 }
-                );
-            }
-        }
-
-        if (
-            finalUserId === null &&
-            finalOutsidePlayerId === null
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "A team player must have either user_id or outside_player_id"
-                },
-                { status: 400 }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | ROLE
-        |--------------------------------------------------------------------------
-        */
 
         const allowedRoles = [
             "Player",
@@ -363,161 +255,22 @@ export async function PUT(request, { params }) {
             "Batter"
         ];
 
-        const finalRole =
-            player_role !== null &&
-                player_role !== undefined &&
-                player_role !== ""
-                ? player_role.toString().trim()
-                : existing.player_role;
+        const finalRole = player_role && player_role.toString().trim()
+            ? player_role.toString().trim()
+            : existingPlayer.player_role;
 
         if (!allowedRoles.includes(finalRole)) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid player role"
-                },
+                { success: false, message: "Invalid player role" },
                 { status: 400 }
             );
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | DATES
-        |--------------------------------------------------------------------------
-        */
-
-        const finalJoinedDate =
-            joined_date !== null &&
-                joined_date !== undefined &&
-                joined_date !== ""
-                ? joined_date
-                : existing.joined_date;
-
-        const finalLeftDate =
-            left_date !== null &&
-                left_date !== undefined &&
-                left_date !== ""
-                ? left_date
-                : existing.left_date;
-
-        if (finalJoinedDate && finalLeftDate) {
-            if (
-                new Date(finalLeftDate) <
-                new Date(finalJoinedDate)
-            ) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message:
-                            "Left date cannot be before joined date"
-                    },
-                    { status: 400 }
-                );
-            }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | DUPLICATE PLAYER IN TEAM
-        |--------------------------------------------------------------------------
-        */
-
-        let duplicateSql = `
-            SELECT id
-            FROM cst_team_players
-            WHERE team_id = ?
-            AND id != ?
-            AND is_deleted = 0
-        `;
-
-        const duplicateParams = [
-            finalTeamId,
-            teamPlayerId
-        ];
-
-        if (finalUserId !== null) {
-            duplicateSql += ` AND user_id = ?`;
-            duplicateParams.push(finalUserId);
-        } else {
-            duplicateSql += ` AND outside_player_id = ?`;
-            duplicateParams.push(finalOutsidePlayerId);
-        }
-
-        duplicateSql += ` LIMIT 1`;
-
-        const [duplicateRows] =
-            await connection.query(
-                duplicateSql,
-                duplicateParams
-            );
-
-        if (duplicateRows.length > 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "This player is already added to this team"
-                },
-                { status: 409 }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | JERSEY NUMBER
-        |--------------------------------------------------------------------------
-        */
-
-        const finalJerseyNo =
-            jersey_no !== null &&
-                jersey_no !== undefined &&
-                jersey_no !== ""
-                ? jersey_no.toString().trim()
-                : null;
-
-        if (finalJerseyNo) {
-            const [jerseyRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_team_players
-                WHERE team_id = ?
-                AND jersey_no = ?
-                AND id != ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [
-                    finalTeamId,
-                    finalJerseyNo,
-                    teamPlayerId
-                ]
-            );
-
-            if (jerseyRows.length > 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message:
-                            "This jersey number is already assigned to this team"
-                    },
-                    { status: 409 }
-                );
-            }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE
-        |--------------------------------------------------------------------------
-        */
 
         await connection.query(
             `
             UPDATE cst_team_players
             SET
                 team_id = ?,
-                user_id = ?,
-                outside_player_id = ?,
                 jersey_no = ?,
                 player_role = ?,
                 joined_date = ?,
@@ -527,17 +280,11 @@ export async function PUT(request, { params }) {
             `,
             [
                 finalTeamId,
-                finalUserId,
-                finalOutsidePlayerId,
-                finalJerseyNo,
+                jersey_no !== null && jersey_no !== undefined && jersey_no !== "" ? Number(jersey_no) : existingPlayer.jersey_no,
                 finalRole,
-                finalJoinedDate || null,
-                finalLeftDate || null,
-                status !== null &&
-                    status !== undefined &&
-                    status !== ""
-                    ? Number(status)
-                    : existing.status,
+                joined_date !== undefined ? joined_date : existingPlayer.joined_date,
+                left_date !== undefined ? left_date : existingPlayer.left_date,
+                status !== null && status !== undefined && status !== "" ? Number(status) : existingPlayer.status,
                 teamPlayerId
             ]
         );
@@ -545,20 +292,13 @@ export async function PUT(request, { params }) {
         return NextResponse.json({
             success: true,
             message: "Team player updated successfully",
-            data: {
-                id: teamPlayerId
-            }
+            data: { id: teamPlayerId }
         });
 
     } catch (error) {
         console.error("UPDATE TEAM PLAYER ERROR:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to update team player",
-                error: error.message
-            },
+            { success: false, message: "Failed to update team player", error: error.message },
             { status: 500 }
         );
     } finally {
@@ -574,29 +314,35 @@ export async function PUT(request, { params }) {
 */
 
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot delete team players." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
         const { id } = await params;
+        const teamPlayerId = Number(id);
 
-        if (!id || isNaN(Number(id))) {
+        if (!teamPlayerId || isNaN(teamPlayerId)) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Valid team player ID is required"
-                },
+                { success: false, message: "Valid team player ID is required" },
                 { status: 400 }
             );
         }
 
-        const teamPlayerId = Number(id);
-
         const [existingRows] = await connection.query(
             `
-            SELECT id
-            FROM cst_team_players
-            WHERE id = ?
-            AND is_deleted = 0
+            SELECT tp.id, t.academy_id, t.branch_id
+            FROM cst_team_players tp
+            INNER JOIN cst_teams t ON t.id = tp.team_id
+            WHERE tp.id = ? AND tp.is_deleted = 0
             LIMIT 1
             `,
             [teamPlayerId]
@@ -604,39 +350,32 @@ export async function DELETE(request, { params }) {
 
         if (existingRows.length === 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Team player not found"
-                },
+                { success: false, message: "Team player not found" },
                 { status: 404 }
             );
         }
 
+        if (!isTeamAuthorized(existingRows[0], authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied: Unauthorized to delete this team player" },
+                { status: 403 }
+            );
+        }
+
         await connection.query(
-            `
-            UPDATE cst_team_players
-            SET
-                is_deleted = 1,
-                status = 0
-            WHERE id = ?
-            `,
+            `UPDATE cst_team_players SET is_deleted = 1 WHERE id = ?`,
             [teamPlayerId]
         );
 
         return NextResponse.json({
             success: true,
-            message: "Team player removed successfully"
+            message: "Team player deleted successfully"
         });
 
     } catch (error) {
         console.error("DELETE TEAM PLAYER ERROR:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to remove team player",
-                error: error.message
-            },
+            { success: false, message: "Failed to delete team player", error: error.message },
             { status: 500 }
         );
     } finally {

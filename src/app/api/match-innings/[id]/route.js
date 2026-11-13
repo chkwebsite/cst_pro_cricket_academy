@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 // GET: Get single innings
 export async function GET(request, { params }) {
@@ -7,16 +8,25 @@ export async function GET(request, { params }) {
 
     try {
         const { id } = await params;
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
             `SELECT
-mi.*,
-    m.match_date,
-    m.match_type,
-    bt.team_name AS batting_team_name,
-        bw.team_name AS bowling_team_name
+                mi.*,
+                m.academy_id,
+                m.branch_id,
+                m.match_no,
+                m.match_date,
+                m.match_type,
+                m.status AS match_status,
+                m.remarks AS match_remarks,
+                bt.team_name AS batting_team_name,
+                bw.team_name AS bowling_team_name
              FROM cst_match_innings mi
              INNER JOIN cst_matches m
                 ON m.id = mi.match_id
@@ -34,6 +44,10 @@ mi.*,
                 { success: false, message: "Match innings not found" },
                 { status: 404 }
             );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json({ success: false, message: "Forbidden. Innings belongs to another academy or branch." }, { status: 403 });
         }
 
         return NextResponse.json({
@@ -54,6 +68,17 @@ mi.*,
 
 // PUT: Update innings
 export async function PUT(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot edit match innings." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -102,7 +127,10 @@ export async function PUT(request, { params }) {
 
         // Check existing innings
         const [existingRows] = await connection.execute(
-            "SELECT * FROM cst_match_innings WHERE id = ?",
+            `SELECT mi.*, m.academy_id, m.branch_id
+             FROM cst_match_innings mi
+             INNER JOIN cst_matches m ON m.id = mi.match_id
+             WHERE mi.id = ?`,
             [id]
         );
 
@@ -114,6 +142,13 @@ export async function PUT(request, { params }) {
         }
 
         const existing = existingRows[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Innings belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         // Validate combined values, including fields not supplied in PUT
         const updated = { ...existing, ...body };
@@ -273,6 +308,17 @@ export async function PUT(request, { params }) {
 
 // DELETE: Delete innings
 export async function DELETE(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot delete match innings." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -281,7 +327,10 @@ export async function DELETE(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            "SELECT id FROM cst_match_innings WHERE id = ?",
+            `SELECT mi.id, m.academy_id, m.branch_id
+             FROM cst_match_innings mi
+             INNER JOIN cst_matches m ON m.id = mi.match_id
+             WHERE mi.id = ?`,
             [id]
         );
 
@@ -289,6 +338,13 @@ export async function DELETE(request, { params }) {
             return NextResponse.json(
                 { success: false, message: "Match innings not found" },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Innings belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

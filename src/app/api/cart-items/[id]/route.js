@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 async function getItemId(context) {
     const params = await context.params;
@@ -11,6 +12,7 @@ async function getItemId(context) {
 // GET: Single cart item
 export async function GET(request, context) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const id = await getItemId(context);
 
         if (!id) {
@@ -22,14 +24,16 @@ export async function GET(request, context) {
 
         const [rows] = await db.execute(
             `SELECT
-ci.*,
-    p.product_name,
-    p.product_code,
-    p.slug AS product_slug
+                ci.*,
+                c.customer_user_id,
+                p.product_name,
+                p.product_code,
+                p.slug AS product_slug
              FROM cst_cart_items ci
+             JOIN cst_cart c ON c.id = ci.cart_id
              LEFT JOIN cst_products p ON p.id = ci.product_id
              WHERE ci.id = ?
-    LIMIT 1`,
+             LIMIT 1`,
             [id]
         );
 
@@ -37,6 +41,13 @@ ci.*,
             return NextResponse.json(
                 { success: false, message: "Cart item not found" },
                 { status: 404 }
+            );
+        }
+
+        if (authUser && authUser.isPlayer && rows[0].customer_user_id !== authUser.id) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You can only access your own cart items." },
+                { status: 403 }
             );
         }
 
@@ -57,6 +68,7 @@ ci.*,
 // PUT: Update cart item quantity or product
 export async function PUT(request, context) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const id = await getItemId(context);
 
         if (!id) {
@@ -69,7 +81,10 @@ export async function PUT(request, context) {
         const body = await request.json();
 
         const [existingRows] = await db.execute(
-            "SELECT * FROM cst_cart_items WHERE id = ? LIMIT 1",
+            `SELECT ci.*, c.customer_user_id 
+             FROM cst_cart_items ci
+             JOIN cst_cart c ON c.id = ci.cart_id
+             WHERE ci.id = ? LIMIT 1`,
             [id]
         );
 
@@ -81,6 +96,13 @@ export async function PUT(request, context) {
         }
 
         const existing = existingRows[0];
+
+        if (authUser && authUser.isPlayer && existing.customer_user_id !== authUser.id) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You can only update items in your own cart." },
+                { status: 403 }
+            );
+        }
 
         const quantity = body.quantity === undefined
             ? existing.quantity
@@ -112,9 +134,9 @@ export async function PUT(request, context) {
             `SELECT id
              FROM cst_cart_items
              WHERE cart_id = ?
-    AND product_id = ?
-        AND id <> ?
-            LIMIT 1`,
+                AND product_id = ?
+                AND id <> ?
+             LIMIT 1`,
             [existing.cart_id, product_id, id]
         );
 
@@ -131,19 +153,19 @@ export async function PUT(request, context) {
         await db.execute(
             `UPDATE cst_cart_items
              SET product_id = ?, quantity = ?
-    WHERE id = ? `,
+             WHERE id = ?`,
             [product_id, quantity, id]
         );
 
         const [updatedRows] = await db.execute(
             `SELECT
-ci.*,
-    p.product_name,
-    p.product_code,
-    p.slug AS product_slug
+                ci.*,
+                p.product_name,
+                p.product_code,
+                p.slug AS product_slug
              FROM cst_cart_items ci
              LEFT JOIN cst_products p ON p.id = ci.product_id
-             WHERE ci.id = ? `,
+             WHERE ci.id = ?`,
             [id]
         );
 
@@ -182,12 +204,35 @@ ci.*,
 // DELETE: Remove product from cart
 export async function DELETE(request, context) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const id = await getItemId(context);
 
         if (!id) {
             return NextResponse.json(
                 { success: false, message: "Invalid cart item ID" },
                 { status: 400 }
+            );
+        }
+
+        const [existingRows] = await db.execute(
+            `SELECT ci.id, c.customer_user_id 
+             FROM cst_cart_items ci
+             JOIN cst_cart c ON c.id = ci.cart_id
+             WHERE ci.id = ? LIMIT 1`,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "Cart item not found" },
+                { status: 404 }
+            );
+        }
+
+        if (authUser && authUser.isPlayer && existingRows[0].customer_user_id !== authUser.id) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You can only remove items from your own cart." },
+                { status: 403 }
             );
         }
 

@@ -3,6 +3,7 @@ import db from "@/app/components/lib/db";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
@@ -92,6 +93,8 @@ function isDuplicateError(error) {
 // GET: List categories
 export async function GET(request) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const { searchParams } = new URL(request.url);
 
         const academyId = searchParams.get("academy_id");
@@ -100,48 +103,68 @@ export async function GET(request) {
 
         let sql = `
 SELECT
-id,
-    academy_id,
-    category_name,
-    slug,
-    description,
-    category_image,
-    sort_order,
-    status,
-    is_deleted,
-    created_at,
-    updated_at
-            FROM cst_product_categories
-            WHERE is_deleted = 0
+    c.id,
+    c.academy_id,
+    COALESCE(ac.academy_name, 'All Academies / CST') AS academy_name,
+    c.category_name,
+    c.slug,
+    c.description,
+    c.category_image,
+    c.sort_order,
+    c.status,
+    c.is_deleted,
+    c.created_at,
+    c.updated_at
+FROM cst_product_categories c
+LEFT JOIN cst_academy ac ON ac.id = c.academy_id
+WHERE c.is_deleted = 0
     `;
 
         const params = [];
 
-        if (academyId !== null && academyId !== "") {
-            if (academyId === "null") {
-                sql += " AND academy_id IS NULL";
-            } else {
-                const parsedId = Number(academyId);
-
-                if (!Number.isInteger(parsedId) || parsedId <= 0) {
-                    return NextResponse.json(
-                        { success: false, message: "Invalid academy_id." },
-                        { status: 400 }
-                    );
+        if (authUser) {
+            if (authUser.isSuperAdmin) {
+                if (academyId !== null && academyId !== "" && academyId !== undefined) {
+                    if (academyId === "null") {
+                        sql += " AND c.academy_id IS NULL";
+                    } else {
+                        const parsedId = Number(academyId);
+                        if (!Number.isInteger(parsedId) || parsedId <= 0) {
+                            return NextResponse.json(
+                                { success: false, message: "Invalid academy_id." },
+                                { status: 400 }
+                            );
+                        }
+                        sql += " AND c.academy_id = ?";
+                        params.push(parsedId);
+                    }
                 }
-
-                sql += " AND academy_id = ?";
-                params.push(parsedId);
+            } else if (authUser.academy_id) {
+                sql += " AND (c.academy_id = ? OR c.academy_id IS NULL)";
+                params.push(authUser.academy_id);
+            }
+        } else {
+            sql += " AND c.status = 1";
+            if (academyId !== null && academyId !== "") {
+                if (academyId === "null") {
+                    sql += " AND c.academy_id IS NULL";
+                } else {
+                    const parsedId = Number(academyId);
+                    if (Number.isInteger(parsedId) && parsedId > 0) {
+                        sql += " AND (c.academy_id = ? OR c.academy_id IS NULL)";
+                        params.push(parsedId);
+                    }
+                }
             }
         }
 
         if (search) {
             sql += `
-AND(
-    category_name LIKE ?
-    OR slug LIKE ?
-    OR description LIKE ?
-                )
+AND (
+    c.category_name LIKE ?
+    OR c.slug LIKE ?
+    OR c.description LIKE ?
+)
     `;
 
             const searchValue = `%${search}%`;
@@ -156,11 +179,11 @@ AND(
                 );
             }
 
-            sql += " AND status = ?";
+            sql += " AND c.status = ?";
             params.push(Number(status));
         }
 
-        sql += " ORDER BY sort_order ASC, id DESC";
+        sql += " ORDER BY c.sort_order ASC, c.id DESC";
 
         const [categories] = await db.query(sql, params);
 
@@ -183,6 +206,21 @@ export async function POST(request) {
     let uploadedImage = null;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can create product categories." },
+                { status: 403 }
+            );
+        }
+
         const contentType = request.headers.get("content-type") || "";
         let academyIdValue, categoryName, slug, description, sortOrderValue, statusValue, image = null;
 
@@ -238,7 +276,9 @@ export async function POST(request) {
 
         let academyId = null;
 
-        if (
+        if (!authUser.isSuperAdmin) {
+            academyId = authUser.academy_id;
+        } else if (
             academyIdValue !== null &&
             academyIdValue !== undefined &&
             academyIdValue !== "" &&

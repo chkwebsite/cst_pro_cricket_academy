@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
 // GET: Product list with filters
 export async function GET(request) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const { searchParams } = new URL(request.url);
 
         const academyId = searchParams.get("academy_id");
@@ -22,6 +25,7 @@ export async function GET(request) {
 SELECT
     p.id,
     p.academy_id,
+    COALESCE(ac.academy_name, 'CST Pro Cricket Academy') AS academy_name,
     p.category_id,
     p.product_name,
     p.slug,
@@ -49,6 +53,8 @@ SELECT
         WHERE s.product_id = p.id AND (s.quantity - s.reserved_quantity) > 0 AND b.status = 1 AND b.is_deleted = 0
     ) AS available_branches
 FROM cst_products p
+LEFT JOIN cst_academy ac
+    ON ac.id = p.academy_id
 LEFT JOIN cst_product_categories c
     ON c.id = p.category_id
 WHERE p.is_deleted = 0
@@ -56,29 +62,53 @@ WHERE p.is_deleted = 0
 
         const params = [];
 
+        // Tenant scope check: strict academy-wise isolation
+        if (authUser) {
+            if (authUser.isSuperAdmin) {
+                // Super Admin can filter by academy if requested, otherwise sees all
+                if (academyId !== null && academyId !== "" && academyId !== undefined) {
+                    if (academyId === "null") {
+                        sql += " AND p.academy_id IS NULL";
+                    } else {
+                        const value = Number(academyId);
+                        if (!Number.isInteger(value) || value <= 0) {
+                            return NextResponse.json(
+                                { success: false, message: "Invalid academy_id." },
+                                { status: 400 }
+                            );
+                        }
+                        sql += " AND p.academy_id = ?";
+                        params.push(value);
+                    }
+                }
+            } else if (authUser.academy_id) {
+                // Non-super admins strictly see ONLY their own academy's products!
+                sql += " AND p.academy_id = ?";
+                params.push(authUser.academy_id);
+            }
+        } else {
+            // Public viewing - only show active products
+            sql += " AND p.status = 1";
+            if (academyId !== null && academyId !== "" && academyId !== undefined) {
+                if (academyId === "null") {
+                    sql += " AND p.academy_id IS NULL";
+                } else {
+                    const value = Number(academyId);
+                    if (Number.isInteger(value) && value > 0) {
+                        sql += " AND p.academy_id = ?";
+                        params.push(value);
+                    }
+                }
+            } else {
+                // Default public storefront to main academy or unassigned
+                sql += " AND (p.academy_id = 1 OR p.academy_id IS NULL)";
+            }
+        }
+
         // Exact slug filter
         if (slug) {
             sql += " AND p.slug = ?";
             params.push(slug);
-        }
-
-        // Academy filter: academy_id=null means global products only
-        if (academyId !== null && academyId !== "") {
-            if (academyId === "null") {
-                sql += " AND p.academy_id IS NULL";
-            } else {
-                const value = Number(academyId);
-
-                if (!Number.isInteger(value) || value <= 0) {
-                    return NextResponse.json(
-                        { success: false, message: "Invalid academy_id." },
-                        { status: 400 }
-                    );
-                }
-
-                sql += " AND p.academy_id = ?";
-                params.push(value);
-            }
         }
 
         // Category filter: category_id=null means uncategorized products
@@ -208,6 +238,22 @@ AND (
 // POST: Create product
 export async function POST(request) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can create products." },
+                { status: 403 }
+            );
+        }
+
         const body = await request.json();
 
         const {
@@ -279,7 +325,18 @@ export async function POST(request) {
         let categoryId;
 
         try {
-            academyId = parseNullableId(academy_id, "academy_id");
+            if (!authUser.isSuperAdmin) {
+                // Strictly enforce the user's own academy
+                academyId = authUser.academy_id;
+                if (!academyId) {
+                    return NextResponse.json(
+                        { success: false, message: "User is not assigned to an academy." },
+                        { status: 400 }
+                    );
+                }
+            } else {
+                academyId = parseNullableId(academy_id, "academy_id") || authUser.academy_id || 1;
+            }
             categoryId = parseNullableId(category_id, "category_id");
         } catch (error) {
             return NextResponse.json(

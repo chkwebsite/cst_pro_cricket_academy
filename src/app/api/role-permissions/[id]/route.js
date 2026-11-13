@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // ==========================================
 // GET SINGLE ROLE PERMISSION
 // ==========================================
 export async function GET(req, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(req);
+    if (errorResponse) return errorResponse;
+
     const connection = await pool.getConnection();
 
     try {
@@ -25,6 +29,7 @@ export async function GET(req, { params }) {
                 rp.id,
                 rp.role_id,
                 r.role_name,
+                r.academy_id,
                 rp.permission_id,
                 p.module_name,
                 p.permission_name,
@@ -51,10 +56,17 @@ export async function GET(req, { params }) {
             }, { status: 404 });
         }
 
+        const record = rows[0];
+        if (!authUser.isSuperAdmin && record.academy_id && Number(record.academy_id) !== Number(authUser.academy_id)) {
+            return NextResponse.json({
+                success: false,
+                message: "Access denied"
+            }, { status: 403 });
+        }
 
         return NextResponse.json({
             success: true,
-            data: rows[0]
+            data: record
         });
 
     } catch (error) {
@@ -76,6 +88,13 @@ export async function GET(req, { params }) {
 // UPDATE ROLE PERMISSION
 // ==========================================
 export async function PUT(req, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(req);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Only Super Admin can modify role permissions" }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -267,6 +286,13 @@ export async function PUT(req, { params }) {
 // DELETE ROLE PERMISSION
 // ==========================================
 export async function DELETE(req, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(req);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Only Super Admin can delete role permissions" }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {

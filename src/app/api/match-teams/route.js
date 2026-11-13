@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 const isPositiveInt = (value) =>
     Number.isInteger(Number(value)) && Number(value) > 0;
@@ -53,6 +54,27 @@ export async function GET(request) {
 
         const conditions = [];
         const values = [];
+
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser) {
+                if (authUser.isPlayer) {
+                    conditions.push("(m.academy_id = ? AND (m.branch_id = ? OR m.branch_id IS NULL))");
+                    values.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                    conditions.push("(m.academy_id = ? AND m.branch_id = ?)");
+                    values.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                    conditions.push("m.academy_id = ?");
+                    values.push(authUser.academy_id);
+                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                    conditions.push(`m.academy_id = ? AND m.branch_id IN (${allowed.map(() => "?").join(",")})`);
+                    values.push(authUser.academy_id, ...allowed);
+                }
+            }
+        }
 
         if (id && isPositiveInt(id)) {
             conditions.push("mt.id = ?");

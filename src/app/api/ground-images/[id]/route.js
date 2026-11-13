@@ -2,11 +2,26 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
+async function verifyGroundOwnership(connection, groundId, authUser) {
+    const [rows] = await connection.query(
+        `SELECT id, academy_id, branch_id FROM cst_ground WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+        [groundId]
+    );
+    if (rows.length === 0) return { allowed: false, notFound: true };
+    const g = rows[0];
+    if (authUser.isSuperAdmin) return { allowed: true, ground: g };
+    if (authUser.isPlayer) return { allowed: false, ground: g };
+    if (Number(g.academy_id) !== Number(authUser.academy_id)) return { allowed: false, ground: g };
+    if (authUser.isAcademyAdmin) return { allowed: true, ground: g };
+    if (authUser.isBranchAdmin) return { allowed: Number(g.branch_id) === Number(authUser.branch_id), ground: g };
+    const allowedBranches = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return { allowed: allowedBranches.includes(Number(g.branch_id)), ground: g };
+}
 
 // =====================================================
 // GET SINGLE IMAGE
-// GET /api/ground-images/1
 // =====================================================
 export async function GET(request, { params }) {
     const connection = await pool.getConnection();
@@ -26,15 +41,19 @@ export async function GET(request, { params }) {
 
         const [rows] = await connection.query(
             `SELECT
-                id,
-                ground_id,
-                ground_image,
-                is_primary,
-                status,
-                created_at
-             FROM cst_ground_images
-             WHERE id = ?
-             AND status = 1
+                gi.id,
+                gi.ground_id,
+                gi.ground_image,
+                gi.is_primary,
+                gi.status,
+                gi.created_at,
+                g.academy_id,
+                g.branch_id
+             FROM cst_ground_images gi
+             INNER JOIN cst_ground g ON g.id = gi.ground_id
+             WHERE gi.id = ?
+             AND gi.status = 1
+             AND g.is_deleted = 0
              LIMIT 1`,
             [id]
         );
@@ -77,14 +96,18 @@ export async function GET(request, { params }) {
 
 // =====================================================
 // UPDATE IMAGE
-// PUT /api/ground-images/1
-// FormData
-// ground_id
-// ground_image
-// is_primary
-// status
 // =====================================================
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot update ground images." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -108,17 +131,20 @@ export async function PUT(request, { params }) {
         const file = formData.get("ground_image");
 
         // ------------------------------------------
-        // CHECK EXISTING IMAGE
+        // CHECK EXISTING IMAGE & PERMISSION
         // ------------------------------------------
         const [existingRows] = await connection.query(
             `SELECT
-                id,
-                ground_id,
-                ground_image,
-                is_primary,
-                status
-             FROM cst_ground_images
-             WHERE id = ?
+                gi.id,
+                gi.ground_id,
+                gi.ground_image,
+                gi.is_primary,
+                gi.status,
+                g.academy_id,
+                g.branch_id
+             FROM cst_ground_images gi
+             INNER JOIN cst_ground g ON g.id = gi.ground_id
+             WHERE gi.id = ?
              LIMIT 1`,
             [id]
         );
@@ -134,39 +160,27 @@ export async function PUT(request, { params }) {
         }
 
         const existingImage = existingRows[0];
-
-        // ------------------------------------------
-        // GROUND ID
-        // ------------------------------------------
-        const finalGroundId =
-            ground_id || existingImage.ground_id;
-
-        // ------------------------------------------
-        // CHECK GROUND
-        // ------------------------------------------
-        const [groundRows] = await connection.query(
-            `SELECT id
-             FROM cst_ground
-             WHERE id = ?
-             AND status = 1
-             AND is_deleted = 0
-             LIMIT 1`,
-            [finalGroundId]
-        );
-
-        if (groundRows.length === 0) {
+        const ownership = await verifyGroundOwnership(connection, existingImage.ground_id, authUser);
+        if (!ownership.allowed) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground not found",
-                },
-                { status: 404 }
+                { success: false, message: "Access denied for this ground image" },
+                { status: 403 }
             );
         }
 
-        // ------------------------------------------
-        // VALUES
-        // ------------------------------------------
+        const finalGroundId = ground_id || existingImage.ground_id;
+
+        // If target ground is different, check permission
+        if (Number(finalGroundId) !== Number(existingImage.ground_id)) {
+            const targetOwnership = await verifyGroundOwnership(connection, finalGroundId, authUser);
+            if (!targetOwnership.allowed) {
+                return NextResponse.json(
+                    { success: false, message: "Target ground does not belong to authorized academy/branch" },
+                    { status: 403 }
+                );
+            }
+        }
+
         const finalPrimary =
             is_primary !== null
                 ? Number(is_primary)
@@ -177,9 +191,6 @@ export async function PUT(request, { params }) {
                 ? Number(status)
                 : existingImage.status;
 
-        // ------------------------------------------
-        // VALIDATE PRIMARY
-        // ------------------------------------------
         if (![0, 1].includes(finalPrimary)) {
             return NextResponse.json(
                 {
@@ -190,9 +201,6 @@ export async function PUT(request, { params }) {
             );
         }
 
-        // ------------------------------------------
-        // VALIDATE STATUS
-        // ------------------------------------------
         if (![0, 1].includes(finalStatus)) {
             return NextResponse.json(
                 {
@@ -207,9 +215,6 @@ export async function PUT(request, { params }) {
 
         let finalImagePath = existingImage.ground_image;
 
-        // =================================================
-        // IF NEW IMAGE UPLOADED
-        // =================================================
         if (
             file &&
             typeof file.arrayBuffer === "function" &&
@@ -224,21 +229,17 @@ export async function PUT(request, { params }) {
 
             if (!allowedTypes.includes(file.type)) {
                 await connection.rollback();
-
                 return NextResponse.json(
                     {
                         success: false,
-                        message:
-                            "Only JPG, JPEG, PNG and WEBP images are allowed",
+                        message: "Only JPG, JPEG, PNG and WEBP images are allowed",
                     },
                     { status: 400 }
                 );
             }
 
-            // 2 MB
             if (file.size > 2 * 1024 * 1024) {
                 await connection.rollback();
-
                 return NextResponse.json(
                     {
                         success: false,
@@ -264,71 +265,40 @@ export async function PUT(request, { params }) {
                 path.extname(file.name).toLowerCase() || ".jpg";
 
             const fileName =
-                `${Date.now()}-${Math.floor(
-                    Math.random() * 1000000
-                )}${extension}`;
+                `${Date.now()}-${Math.floor(Math.random() * 1000000)}${extension}`;
 
-            const filePath = path.join(
-                uploadDir,
-                fileName
-            );
+            const filePath = path.join(uploadDir, fileName);
 
-            const buffer = Buffer.from(
-                await file.arrayBuffer()
-            );
+            const buffer = Buffer.from(await file.arrayBuffer());
+            await fs.writeFile(filePath, buffer);
 
-            await fs.writeFile(
-                filePath,
-                buffer
-            );
+            finalImagePath = `/images/uploads/grounds/${fileName}`;
 
-            finalImagePath =
-                `/images/uploads/grounds/${fileName}`;
-
-            // ------------------------------------------
-            // DELETE OLD IMAGE FILE
-            // ------------------------------------------
             if (existingImage.ground_image) {
                 const oldImagePath = path.join(
                     process.cwd(),
                     "public",
-                    existingImage.ground_image.replace(
-                        /^\/+/,
-                        ""
-                    )
+                    existingImage.ground_image.replace(/^\/+/, "")
                 );
 
                 try {
                     await fs.unlink(oldImagePath);
                 } catch (error) {
-                    console.log(
-                        "Old image not found:",
-                        error.message
-                    );
+                    console.log("Old image not found:", error.message);
                 }
             }
         }
 
-        // =================================================
-        // IF SETTING THIS IMAGE AS PRIMARY
-        // REMOVE PRIMARY FROM OTHER IMAGES
-        // =================================================
         if (finalPrimary === 1) {
             await connection.query(
                 `UPDATE cst_ground_images
                  SET is_primary = 0
                  WHERE ground_id = ?
                  AND id != ?`,
-                [
-                    finalGroundId,
-                    id,
-                ]
+                [finalGroundId, id]
             );
         }
 
-        // =================================================
-        // UPDATE DATABASE
-        // =================================================
         await connection.query(
             `UPDATE cst_ground_images
              SET
@@ -348,9 +318,6 @@ export async function PUT(request, { params }) {
 
         await connection.commit();
 
-        // ------------------------------------------
-        // GET UPDATED RECORD
-        // ------------------------------------------
         const [updatedRows] = await connection.query(
             `SELECT
                 id,
@@ -376,11 +343,7 @@ export async function PUT(request, { params }) {
 
     } catch (error) {
         await connection.rollback();
-
-        console.error(
-            "UPDATE GROUND IMAGE ERROR:",
-            error
-        );
+        console.error("UPDATE GROUND IMAGE ERROR:", error);
 
         return NextResponse.json(
             {
@@ -399,9 +362,18 @@ export async function PUT(request, { params }) {
 
 // =====================================================
 // DELETE IMAGE
-// DELETE /api/ground-images/1
 // =====================================================
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot delete ground images." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -417,18 +389,18 @@ export async function DELETE(request, { params }) {
             );
         }
 
-        // ------------------------------------------
-        // FIND IMAGE
-        // ------------------------------------------
         const [rows] = await connection.query(
             `SELECT
-                id,
-                ground_id,
-                ground_image,
-                is_primary
-             FROM cst_ground_images
-             WHERE id = ?
-             AND status = 1
+                gi.id,
+                gi.ground_id,
+                gi.ground_image,
+                gi.is_primary,
+                g.academy_id,
+                g.branch_id
+             FROM cst_ground_images gi
+             INNER JOIN cst_ground g ON g.id = gi.ground_id
+             WHERE gi.id = ?
+             AND gi.status = 1
              LIMIT 1`,
             [id]
         );
@@ -444,12 +416,16 @@ export async function DELETE(request, { params }) {
         }
 
         const image = rows[0];
+        const ownership = await verifyGroundOwnership(connection, image.ground_id, authUser);
+        if (!ownership.allowed) {
+            return NextResponse.json(
+                { success: false, message: "Access denied: Unauthorized to delete this ground image" },
+                { status: 403 }
+            );
+        }
 
         await connection.beginTransaction();
 
-        // ------------------------------------------
-        // SOFT DELETE
-        // ------------------------------------------
         await connection.query(
             `UPDATE cst_ground_images
              SET status = 0,
@@ -458,9 +434,6 @@ export async function DELETE(request, { params }) {
             [id]
         );
 
-        // ------------------------------------------
-        // DELETE PHYSICAL FILE
-        // ------------------------------------------
         if (image.ground_image) {
             const imagePath = path.join(
                 process.cwd(),
@@ -471,17 +444,10 @@ export async function DELETE(request, { params }) {
             try {
                 await fs.unlink(imagePath);
             } catch (error) {
-                console.log(
-                    "Image file not found:",
-                    error.message
-                );
+                console.log("Image file not found:", error.message);
             }
         }
 
-        // ------------------------------------------
-        // IF PRIMARY IMAGE WAS DELETED
-        // MAKE ANOTHER IMAGE PRIMARY
-        // ------------------------------------------
         if (image.is_primary === 1) {
             const [nextImage] = await connection.query(
                 `SELECT id
@@ -515,11 +481,7 @@ export async function DELETE(request, { params }) {
 
     } catch (error) {
         await connection.rollback();
-
-        console.error(
-            "DELETE GROUND IMAGE ERROR:",
-            error
-        );
+        console.error("DELETE GROUND IMAGE ERROR:", error);
 
         return NextResponse.json(
             {

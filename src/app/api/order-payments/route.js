@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 const PAYMENT_METHODS = [
     "Cash",
@@ -34,6 +35,8 @@ function validAmount(value) {
 // GET: All order payments with filters
 export async function GET(request) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const { searchParams } = new URL(request.url);
 
         const order_id = searchParams.get("order_id");
@@ -52,20 +55,58 @@ export async function GET(request) {
 
         let sql = `
 SELECT
-op.*,
+    op.*,
     COALESCE(op.payment_date, op.created_at) AS payment_date,
     o.order_no,
     o.customer_name,
     o.customer_phone,
     o.order_status,
-    o.payment_status AS order_payment_status
-            FROM cst_order_payments op
-            INNER JOIN cst_orders o
-                ON o.id = op.order_id
-            WHERE 1 = 1
+    o.payment_status AS order_payment_status,
+    COALESCE(ac.academy_name, ba.academy_name, 'CST Academy') AS academy_name
+FROM cst_order_payments op
+INNER JOIN cst_orders o
+    ON o.id = op.order_id
+LEFT JOIN cst_academy ac
+    ON ac.id = o.academy_id
+LEFT JOIN cst_branch b
+    ON b.id = o.fulfillment_branch_id
+LEFT JOIN cst_academy ba
+    ON ba.id = b.academy_id
+WHERE 1 = 1
     `;
 
         const values = [];
+
+        if (authUser) {
+            if (authUser.isPlayer) {
+                sql += " AND (o.customer_user_id = ? OR LOWER(o.customer_email) = LOWER(?))";
+                values.push(authUser.id, authUser.email || "");
+            } else if (authUser.isSuperAdmin) {
+                const academy_id = searchParams.get("academy_id");
+                if (academy_id) {
+                    sql += " AND o.academy_id = ?";
+                    values.push(Number(academy_id));
+                }
+            } else if (authUser.isAcademyAdmin) {
+                sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
+                values.push(authUser.academy_id, authUser.academy_id);
+            } else if (authUser.isBranchAdmin) {
+                sql += " AND o.fulfillment_branch_id = ?";
+                values.push(authUser.branch_id);
+            } else {
+                if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                    const placeholders = authUser.accessibleBranchIds.map(() => "?").join(", ");
+                    sql += ` AND o.fulfillment_branch_id IN (${placeholders})`;
+                    values.push(...authUser.accessibleBranchIds);
+                } else if (authUser.branch_id) {
+                    sql += " AND o.fulfillment_branch_id = ?";
+                    values.push(authUser.branch_id);
+                } else if (authUser.academy_id) {
+                    sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
+                    values.push(authUser.academy_id, authUser.academy_id);
+                }
+            }
+        }
 
         if (order_id !== null) {
             if (!validId(order_id)) {
@@ -255,7 +296,7 @@ export async function POST(request) {
         await connection.beginTransaction();
 
         const [orders] = await connection.execute(
-            "SELECT id, grand_total FROM cst_orders WHERE id = ? FOR UPDATE",
+            "SELECT id, grand_total, academy_id, fulfillment_branch_id, customer_user_id FROM cst_orders WHERE id = ? FOR UPDATE",
             [Number(order_id)]
         );
 
@@ -266,6 +307,24 @@ export async function POST(request) {
                 { success: false, message: "Order not found." },
                 { status: 404 }
             );
+        }
+
+        if (authUser) {
+            if (authUser.isPlayer) {
+                if (Number(orders[0].customer_user_id) !== Number(authUser.id)) {
+                    await connection.rollback();
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. You can only make payments for your own orders." },
+                        { status: 403 }
+                    );
+                }
+            } else if (!verifyRecordAccess(authUser, { academy_id: orders[0].academy_id, branch_id: orders[0].fulfillment_branch_id })) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Order belongs to another academy or branch." },
+                    { status: 403 }
+                );
+            }
         }
 
         // Do not accept a second successful payment beyond the order balance.

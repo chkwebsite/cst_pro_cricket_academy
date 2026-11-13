@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 // =====================================================
@@ -7,6 +8,13 @@ import pool from "@/app/components/lib/db";
 // PUT /api/ground-slots/1
 // =====================================================
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Insufficient permissions to update slots" }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -24,7 +32,7 @@ export async function PUT(request, { params }) {
 
         const body = await request.json();
 
-        const {
+        let {
             academy_id,
             branch_id,
             ground_id,
@@ -34,6 +42,14 @@ export async function PUT(request, { params }) {
             price,
             status,
         } = body;
+
+        // Force tenant values
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         // =================================================
         // VALIDATION
@@ -366,6 +382,13 @@ export async function PUT(request, { params }) {
 // DELETE /api/ground-slots/1
 // =====================================================
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Insufficient permissions to delete slots" }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -381,12 +404,21 @@ export async function DELETE(request, { params }) {
             );
         }
 
-        const body = await request.json();
+        let academy_id;
+        let branch_id;
 
-        const {
-            academy_id,
-            branch_id,
-        } = body;
+        try {
+            const body = await request.json();
+            academy_id = body.academy_id;
+            branch_id = body.branch_id;
+        } catch (_) {}
+
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         // =================================================
         // VALIDATION

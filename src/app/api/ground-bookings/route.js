@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 // =====================================================
@@ -27,6 +27,9 @@ import { getAuthUser } from "@/app/components/lib/rbac";
 // GET - ALL BOOKINGS
 // =====================================================
 export async function GET(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     const connection = await pool.getConnection();
 
     try {
@@ -58,16 +61,36 @@ export async function GET(request) {
 
         const params = [];
 
-        // Academy filter
-        if (academy_id) {
-            where += ` AND g.academy_id = ?`;
-            params.push(academy_id);
-        }
-
-        // Branch filter
-        if (branch_id) {
-            where += ` AND g.branch_id = ?`;
-            params.push(branch_id);
+        // Role-based Tenant Scoping
+        if (authUser.isPlayer) {
+            where += " AND (gb.user_id = ? OR gb.customer_phone = ?)";
+            params.push(authUser.id, authUser.phone || "");
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            where += " AND g.branch_id = ? AND g.academy_id = ?";
+            params.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            where += " AND g.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (branch_id) {
+                where += " AND g.branch_id = ?";
+                params.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            where += " AND g.academy_id = ?";
+            params.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds || [authUser.branch_id];
+            where += ` AND g.branch_id IN (${allowed.map(() => "?").join(",")})`;
+            params.push(...allowed);
+        } else {
+            // Super Admin
+            if (academy_id) {
+                where += ` AND g.academy_id = ?`;
+                params.push(academy_id);
+            }
+            if (branch_id) {
+                where += ` AND g.branch_id = ?`;
+                params.push(branch_id);
+            }
         }
 
         // Ground filter
@@ -229,8 +252,10 @@ export async function GET(request) {
 // POST - CREATE BOOKING
 // =====================================================
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player"))) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json(
             { success: false, message: "Forbidden. Players have view-only access to ground bookings." },
             { status: 403 }
@@ -242,7 +267,7 @@ export async function POST(request) {
     try {
         const body = await request.json();
 
-        const {
+        let {
             academy_id,
             branch_id,
 
@@ -268,6 +293,14 @@ export async function POST(request) {
 
             remarks = null
         } = body;
+
+        // Force tenant scoping
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         // ==========================================
         // VALIDATION

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 import {
     applyGroundBookingPaymentDelta,
     getOutstandingCents,
@@ -7,11 +8,34 @@ import {
     toCents,
 } from "./paymentHelpers";
 
+async function checkBookingAccess(connection, bookingId, authUser) {
+    const [rows] = await connection.query(
+        `SELECT gb.id, gb.user_id, gb.customer_phone, g.academy_id, g.branch_id
+         FROM cst_ground_bookings gb
+         INNER JOIN cst_ground g ON g.id = gb.ground_id
+         WHERE gb.id = ? AND g.is_deleted = 0 LIMIT 1`,
+        [bookingId]
+    );
+    if (rows.length === 0) return { allowed: false, notFound: true };
+    const b = rows[0];
+    if (authUser.isSuperAdmin) return { allowed: true, booking: b };
+    if (authUser.isPlayer) {
+        const isOwner = Number(b.user_id) === Number(authUser.id) || (b.customer_phone && b.customer_phone === authUser.phone);
+        return { allowed: isOwner, booking: b };
+    }
+    if (Number(b.academy_id) !== Number(authUser.academy_id)) return { allowed: false, booking: b };
+    if (authUser.isAcademyAdmin) return { allowed: true, booking: b };
+    if (authUser.isBranchAdmin) return { allowed: Number(b.branch_id) === Number(authUser.branch_id), booking: b };
+    const allowedBranches = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return { allowed: allowedBranches.includes(Number(b.branch_id)), booking: b };
+}
 
 // GET: Get all ground payments with filters
 export async function GET(request) {
-    let connection;
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
 
+    let connection;
 
     try {
         connection = await pool.getConnection();
@@ -25,24 +49,61 @@ export async function GET(request) {
         const transaction_no = searchParams.get("transaction_no");
 
         let sql = `
-    SELECT
-    gp.id,
-        gp.booking_id,
-        gp.payment_date,
-        gp.amount,
-        gp.payment_mode,
-        gp.transaction_no,
-        gp.remarks,
-        gp.created_at,
-        gb.booking_no, 
-        gb.customer_name
-        FROM cst_ground_payments gp
-        LEFT JOIN cst_ground_bookings gb 
-        ON gb.id = gp.booking_id
-        WHERE 1 = 1
+            SELECT
+                gp.id,
+                gp.booking_id,
+                gp.payment_date,
+                gp.amount,
+                gp.payment_mode,
+                gp.transaction_no,
+                gp.remarks,
+                gp.created_at,
+                gb.booking_no, 
+                gb.customer_name,
+                g.academy_id,
+                g.branch_id
+            FROM cst_ground_payments gp
+            INNER JOIN cst_ground_bookings gb ON gb.id = gp.booking_id
+            INNER JOIN cst_ground g ON g.id = gb.ground_id
+            WHERE g.is_deleted = 0
         `;
 
         const values = [];
+
+        // Tenant Scoping
+        if (authUser.isPlayer) {
+            sql += " AND (gb.user_id = ? OR (gb.customer_phone IS NOT NULL AND gb.customer_phone = ?))";
+            values.push(authUser.id, authUser.phone || "");
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND g.academy_id = ? AND g.branch_id = ?";
+            values.push(authUser.academy_id, authUser.branch_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND g.academy_id = ?";
+            values.push(authUser.academy_id);
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam) {
+                sql += " AND g.branch_id = ?";
+                values.push(branchIdParam);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND g.academy_id = ?";
+            values.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds || [authUser.branch_id];
+            sql += ` AND g.branch_id IN (${allowed.map(() => "?").join(",")})`;
+            values.push(...allowed);
+        } else {
+            // Super Admin
+            const academyIdParam = searchParams.get("academy_id");
+            const branchIdParam = searchParams.get("branch_id");
+            if (academyIdParam) {
+                sql += " AND g.academy_id = ?";
+                values.push(academyIdParam);
+            }
+            if (branchIdParam) {
+                sql += " AND g.branch_id = ?";
+                values.push(branchIdParam);
+            }
+        }
 
         if (booking_id) {
             sql += " AND gp.booking_id = ?";
@@ -66,7 +127,7 @@ export async function GET(request) {
 
         if (transaction_no) {
             sql += " AND gp.transaction_no LIKE ?";
-            values.push(`% ${transaction_no}% `);
+            values.push(`%${transaction_no}%`);
         }
 
         sql += " ORDER BY gp.id DESC";
@@ -94,15 +155,22 @@ export async function GET(request) {
     } finally {
         if (connection) connection.release();
     }
-
-
 }
 
 // POST: Add new ground payment
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot record payments." },
+            { status: 403 }
+        );
+    }
+
     let connection;
     let transactionStarted = false;
-
 
     try {
         const body = await request.json();
@@ -189,6 +257,19 @@ export async function POST(request) {
         }
 
         connection = await pool.getConnection();
+
+        // Verify booking access
+        const access = await checkBookingAccess(connection, bookingId, authUser);
+        if (!access.allowed) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: access.notFound ? "Ground booking not found" : "Access denied for this booking",
+                },
+                { status: access.notFound ? 404 : 403 }
+            );
+        }
+
         await connection.beginTransaction();
         transactionStarted = true;
 
@@ -221,15 +302,15 @@ export async function POST(request) {
 
         const [result] = await connection.execute(
             `INSERT INTO cst_ground_payments
-        (
-            booking_id,
-            payment_date,
-            amount,
-            payment_mode,
-            transaction_no,
-            remarks
-        )
-    VALUES(?, ?, ?, ?, ?, ?)`,
+            (
+                booking_id,
+                payment_date,
+                amount,
+                payment_mode,
+                transaction_no,
+                remarks
+            )
+            VALUES(?, ?, ?, ?, ?, ?)`,
             [
                 bookingId,
                 payment_date,
@@ -243,9 +324,7 @@ export async function POST(request) {
         await applyGroundBookingPaymentDelta(connection, booking, toCents(paymentAmount));
 
         const [newPayment] = await connection.execute(
-            `SELECT *
-        FROM cst_ground_payments
-         WHERE id = ? `,
+            `SELECT * FROM cst_ground_payments WHERE id = ?`,
             [result.insertId]
         );
 

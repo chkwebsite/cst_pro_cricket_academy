@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
@@ -87,6 +88,17 @@ export async function GET(request, context) {
 
         const product = rows[0];
 
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (product.academy_id && authUser.academy_id && Number(product.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Product belongs to another academy." },
+                    { status: 403 }
+                );
+            }
+        }
+
         // Fetch all active images for this product
         const [images] = await db.execute(
             `SELECT id, product_id, image_path, image_alt, is_primary, sort_order, status
@@ -140,6 +152,22 @@ export async function GET(request, context) {
 // PUT: Update product
 export async function PUT(request, context) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can update products." },
+                { status: 403 }
+            );
+        }
+
         const id = await getProductId(context);
 
         if (!id) {
@@ -150,7 +178,7 @@ export async function PUT(request, context) {
         }
 
         const [existingRows] = await db.execute(
-            `SELECT id
+            `SELECT id, academy_id
              FROM cst_products
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
@@ -162,6 +190,16 @@ export async function PUT(request, context) {
                 { success: false, message: "Product not found." },
                 { status: 404 }
             );
+        }
+
+        const existing = existingRows[0];
+        if (!authUser.isSuperAdmin) {
+            if (existing.academy_id && Number(existing.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. You can only update products belonging to your academy." },
+                    { status: 403 }
+                );
+            }
         }
 
         const body = await request.json();
@@ -221,7 +259,11 @@ export async function PUT(request, context) {
         let categoryId;
 
         try {
-            academyId = parseNullableId(academy_id, "academy_id");
+            if (!authUser.isSuperAdmin) {
+                academyId = existing.academy_id || authUser.academy_id;
+            } else {
+                academyId = academy_id !== undefined ? parseNullableId(academy_id, "academy_id") : existing.academy_id;
+            }
             categoryId = parseNullableId(category_id, "category_id");
         } catch (error) {
             return NextResponse.json(
@@ -380,6 +422,22 @@ academy_id = ?,
 // DELETE: Soft delete product
 export async function DELETE(request, context) {
     try {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Only administrators can delete products." },
+                { status: 403 }
+            );
+        }
+
         const id = await getProductId(context);
 
         if (!id) {
@@ -387,6 +445,27 @@ export async function DELETE(request, context) {
                 { success: false, message: "Invalid product ID." },
                 { status: 400 }
             );
+        }
+
+        const [existingRows] = await db.execute(
+            `SELECT id, academy_id FROM cst_products WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "Product not found." },
+                { status: 404 }
+            );
+        }
+
+        if (!authUser.isSuperAdmin) {
+            if (existingRows[0].academy_id && Number(existingRows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. You can only delete products belonging to your academy." },
+                    { status: 403 }
+                );
+            }
         }
 
         const [result] = await db.execute(

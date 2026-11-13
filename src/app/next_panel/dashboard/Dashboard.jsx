@@ -34,8 +34,8 @@ export default function Dashboard() {
     // Auto-redirect players to their dedicated Player Dashboard
     useEffect(() => {
         if (user) {
-            const userTypeStr = String(user.user_type || "").trim().toLowerCase();
-            if (userTypeStr === "player" || userTypeStr === "7") {
+            const userTypeStr = String(user.user_type || user.role || "").trim().toLowerCase();
+            if (userTypeStr.includes("player") || userTypeStr === "7") {
                 window.location.replace("/next_panel/player-dashboard");
             }
         }

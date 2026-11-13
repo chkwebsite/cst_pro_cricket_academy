@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 function isValidDate(date) {
     if (typeof date !== "string") return false;
@@ -123,26 +123,23 @@ export async function GET(request, context) {
         }
 
         const feeRecord = rows[0];
-        const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isPlayer && Number(feeRecord.user_id) !== Number(authUser.id)) {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
+
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            if (Number(feeRecord.user_id) !== Number(authUser.id)) {
                 return NextResponse.json(
                     { success: false, message: "Forbidden. You can only view your own fee invoice." },
                     { status: 403 }
                 );
             }
-            if (authUser.isBranchAdmin && (Number(feeRecord.branch_id) !== Number(authUser.branch_id) || (authUser.academy_id && Number(feeRecord.academy_id) !== Number(authUser.academy_id)))) {
-                return NextResponse.json(
-                    { success: false, message: "Forbidden. Fee invoice belongs to another branch." },
-                    { status: 403 }
-                );
-            }
-            if (authUser.isAcademyAdmin && authUser.academy_id && Number(feeRecord.academy_id) !== Number(authUser.academy_id)) {
-                return NextResponse.json(
-                    { success: false, message: "Forbidden. Fee invoice belongs to another academy." },
-                    { status: 403 }
-                );
-            }
+        } else if (!verifyRecordAccess(authUser, { academy_id: feeRecord.academy_id, branch_id: feeRecord.branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Fee invoice belongs to another branch or academy." },
+                { status: 403 }
+            );
         }
 
         return NextResponse.json({
@@ -164,11 +161,11 @@ export async function GET(request, context) {
 // PUT: Update Monthly Fee
 // ============================================
 export async function PUT(request, context) {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthenticatedUser(request);
     if (!authUser) {
         return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
     }
-    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin && !authUser.isAccountant) {
+    if (authUser.isPlayer || authUser.isCoach || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json({ success: false, message: "Forbidden. Insufficient permissions to update fee invoices." }, { status: 403 });
     }
 
@@ -283,6 +280,14 @@ export async function PUT(request, context) {
         }
 
         const current = fees[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: current.academy_id, branch_id: current.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Fee invoice belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         const calculated = calculateFeeAmounts({
             fee_amount: fee_amount ?? current.fee_amount,
@@ -408,11 +413,11 @@ export async function PUT(request, context) {
 // DELETE: Delete Fee (only if no payment exists)
 // ============================================
 export async function DELETE(request, context) {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthenticatedUser(request);
     if (!authUser) {
         return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
     }
-    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin && !authUser.isAccountant) {
+    if (authUser.isPlayer || authUser.isCoach || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json({ success: false, message: "Forbidden. Insufficient permissions to delete fee invoices." }, { status: 403 });
     }
 
@@ -461,13 +466,9 @@ export async function DELETE(request, context) {
         }
 
         // Multi-Tenant Isolation
-        if (authUser.isBranchAdmin && (Number(fees[0].branch_id) !== Number(authUser.branch_id) || (authUser.academy_id && Number(fees[0].academy_id) !== Number(authUser.academy_id)))) {
+        if (!verifyRecordAccess(authUser, { academy_id: fees[0].academy_id, branch_id: fees[0].branch_id })) {
             await connection.rollback();
-            return NextResponse.json({ success: false, message: "Forbidden. Fee invoice belongs to another branch." }, { status: 403 });
-        }
-        if (authUser.isAcademyAdmin && authUser.academy_id && Number(fees[0].academy_id) !== Number(authUser.academy_id)) {
-            await connection.rollback();
-            return NextResponse.json({ success: false, message: "Forbidden. Fee invoice belongs to another academy." }, { status: 403 });
+            return NextResponse.json({ success: false, message: "Forbidden. Fee invoice belongs to another academy or branch." }, { status: 403 });
         }
 
         if (Number(fees[0].paid_amount) > 0) {

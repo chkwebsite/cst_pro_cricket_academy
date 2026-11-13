@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // =====================================================
@@ -72,6 +73,15 @@ id,
 // UPDATE AGE GROUP
 // =====================================================
 export async function PUT(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    const roleId = Number(authUser.role_id);
+    if (roleId !== 1 && roleId !== 2) {
+        return NextResponse.json({ success: false, message: "Forbidden. Only administrators can update age groups." }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -278,6 +288,15 @@ id,
 // DELETE AGE GROUP - SOFT DELETE
 // =====================================================
 export async function DELETE(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    const roleId = Number(authUser.role_id);
+    if (roleId !== 1 && roleId !== 2) {
+        return NextResponse.json({ success: false, message: "Forbidden. Only administrators can delete age groups." }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 const MAX_VIDEO_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_THUMBNAIL_SIZE = 2 * 1024 * 1024; // 2 MB
@@ -29,21 +30,44 @@ async function saveFile(file, folder, fallbackExtension) {
 export async function GET(request) {
   let connection;
   try {
+    const authUser = await getAuthenticatedUser(request);
     const { searchParams } = new URL(request.url);
-    const albumId = searchParams.get("album_id");
+    const albumId = searchParams.get("albumId");
     const status = searchParams.get("status");
     const videoType = searchParams.get("video_type");
     const search = (searchParams.get("search") || "").trim();
 
     connection = await pool.getConnection();
     let sql = `
-      SELECT gv.*, ga.album_title, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
+      SELECT gv.*, ga.album_title, ga.academy_id, ga.branch_id, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
       FROM cst_gallery_videos gv
       LEFT JOIN cst_gallery_albums ga ON ga.id = gv.album_id AND ga.is_deleted = 0
       LEFT JOIN cst_users u ON u.id = gv.uploaded_by
       WHERE gv.is_deleted = 0
     `;
     const values = [];
+
+    if (authUser) {
+      const roleId = Number(authUser.role_id);
+      if (roleId === 2) {
+        sql += " AND (ga.academy_id = ? OR ga.academy_id IS NULL)";
+        values.push(authUser.academy_id);
+      } else if (roleId === 3) {
+        sql += " AND (ga.branch_id = ? OR (ga.academy_id = ? AND ga.branch_id IS NULL))";
+        values.push(authUser.branch_id, authUser.academy_id);
+      } else if (roleId !== 1) {
+        if (authUser.branchIds && authUser.branchIds.length > 0) {
+          const placeholders = authUser.branchIds.map(() => "?").join(", ");
+          sql += ` AND (ga.branch_id IN (${placeholders}) OR (ga.academy_id = ? AND ga.branch_id IS NULL))`;
+          values.push(...authUser.branchIds, authUser.academy_id);
+        } else if (authUser.branch_id) {
+          sql += " AND (ga.branch_id = ? OR (ga.academy_id = ? AND ga.branch_id IS NULL))";
+          values.push(authUser.branch_id, authUser.academy_id);
+        }
+      }
+    } else {
+      sql += " AND gv.status = 1";
+    }
 
     if (albumId !== null && albumId !== "") {
       sql += " AND gv.album_id = ?";
@@ -136,11 +160,17 @@ export async function POST(request) {
 
     connection = await pool.getConnection();
 
+    const authUser = await getAuthenticatedUser(request);
+
     if (album_id !== null) {
       const [albumRows] = await connection.execute(
-        "SELECT id FROM cst_gallery_albums WHERE id = ? AND is_deleted = 0 LIMIT 1", [album_id]
+        "SELECT id, academy_id, branch_id FROM cst_gallery_albums WHERE id = ? AND is_deleted = 0 LIMIT 1", [album_id]
       );
       if (!albumRows.length) return jsonError("Invalid album_id or album is deleted.");
+
+      if (authUser && !verifyRecordAccess(authUser, { academy_id: albumRows[0].academy_id, branch_id: albumRows[0].branch_id })) {
+        return jsonError("Forbidden. Gallery album belongs to another academy or branch.", 403);
+      }
     }
     if (uploaded_by !== null) {
       const [userRows] = await connection.execute("SELECT id FROM cst_users WHERE id = ? LIMIT 1", [uploaded_by]);

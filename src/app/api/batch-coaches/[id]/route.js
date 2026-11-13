@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET: Single coach assignment by id
 export async function GET(request, context) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     let connection;
 
     try {
@@ -52,9 +56,23 @@ export async function GET(request, context) {
             );
         }
 
+        const record = rows[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (record.academy_id && Number(record.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 });
+            }
+            if (authUser.isBranchAdmin && Number(record.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 });
+            }
+            if (authUser.isCoach && Number(record.coach_user_id) !== Number(authUser.id)) {
+                return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 });
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
     } catch (error) {
         console.error("GET batch coach [id] error:", error);

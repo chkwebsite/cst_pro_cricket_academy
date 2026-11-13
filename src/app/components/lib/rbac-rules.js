@@ -21,6 +21,14 @@ export const ROLES = {
  */
 export function getUserRole(user) {
     if (!user) return null;
+
+    const roleId = Number(user.role_id || user.role);
+    if (roleId === 1) return ROLES.SUPER_ADMIN;
+    if (roleId === 2) return ROLES.ACADEMY_ADMIN;
+    if (roleId === 3) return ROLES.BRANCH_ADMIN;
+    if (roleId === 4) return ROLES.COACH;
+    if (roleId === 7) return ROLES.PLAYER;
+
     const raw = String(user.user_type || user.role_name || "")
         .trim()
         .toLowerCase()
@@ -36,6 +44,12 @@ export function getUserRole(user) {
     if (raw.includes("staff")) return ROLES.STAFF;
     if (raw.includes("player") || raw === "7" || String(user.user_type) === "7") return ROLES.PLAYER;
     if (raw.includes("public")) return ROLES.PUBLIC_USER;
+
+    // If an academy is assigned, user belongs to that academy (not Super Admin)
+    if (user.academy_id) {
+        if (user.branch_id) return ROLES.BRANCH_ADMIN;
+        return ROLES.ACADEMY_ADMIN;
+    }
 
     return ROLES.SUPER_ADMIN;
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 
 // GET: Single Gallery Album
@@ -41,6 +42,14 @@ ga.*,
                 success: false,
                 message: "Gallery album not found"
             }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Gallery album belongs to another academy or branch."
+            }, { status: 403 });
         }
 
         return NextResponse.json({
@@ -161,6 +170,14 @@ export async function PUT(request, { params }) {
         }
 
         const oldAlbum = existingRows[0];
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: oldAlbum.academy_id, branch_id: oldAlbum.branch_id })) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Gallery album belongs to another academy or branch."
+            }, { status: 403 });
+        }
 
         // Validate academy
         if (academy_id !== null) {
@@ -343,7 +360,7 @@ export async function DELETE(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            `SELECT id
+            `SELECT id, academy_id, branch_id
              FROM cst_gallery_albums
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
@@ -355,6 +372,14 @@ export async function DELETE(request, { params }) {
                 success: false,
                 message: "Gallery album not found"
             }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Gallery album belongs to another academy or branch."
+            }, { status: 403 });
         }
 
         await connection.execute(

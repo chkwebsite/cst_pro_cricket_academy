@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 // GET: All coaches
 // Example: /api/coaches?search=Rahul&academy_id=1&branch_id=2&status=1
@@ -8,6 +8,9 @@ export async function GET(request) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
         const { searchParams } = new URL(request.url);
 
         const search = searchParams.get("search");
@@ -63,30 +66,33 @@ export async function GET(request) {
             );
         }
 
-        const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
-                sql += " AND c.branch_id = ? AND c.academy_id = ?";
-                values.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                sql += " AND c.academy_id = ?";
-                values.push(authUser.academy_id);
-                if (branch_id) {
+        // Role-based Tenant Scoping
+        if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND c.branch_id = ? AND c.academy_id = ?";
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND c.academy_id = ?";
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND c.branch_id = ?";
+                values.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND c.academy_id = ?";
+            values.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+            if (branch_id) {
+                if (allowed.includes(Number(branch_id))) {
                     sql += " AND c.branch_id = ?";
                     values.push(branch_id);
+                } else {
+                    sql += " AND c.branch_id = -1";
                 }
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                sql += " AND c.academy_id = ?";
-                values.push(authUser.academy_id);
             } else {
-                if (academy_id) {
-                    sql += " AND c.academy_id = ?";
-                    values.push(academy_id);
-                }
-                if (branch_id) {
-                    sql += " AND c.branch_id = ?";
-                    values.push(branch_id);
-                }
+                sql += ` AND c.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                values.push(...allowed);
             }
         } else {
             if (academy_id) {
@@ -140,9 +146,19 @@ export async function POST(request) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Insufficient permissions to create coach profile." },
+                { status: 403 }
+            );
+        }
+
         const body = await request.json();
 
-        const {
+        let {
             user_id = null,
             academy_id = null,
             branch_id = null,
@@ -162,6 +178,14 @@ export async function POST(request) {
             bio = null,
             status = 1,
         } = body;
+
+        // Force tenant isolation
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         const validGenders = ["Male", "Female", "Other"];
         const validEmploymentTypes = [

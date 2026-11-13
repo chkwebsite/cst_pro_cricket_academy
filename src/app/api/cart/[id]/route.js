@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 function validateOwner(public_user_id, customer_user_id) {
     const hasPublicUser =
@@ -33,6 +34,7 @@ async function getId(context) {
 // GET: Single cart
 export async function GET(request, context) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const id = await getId(context);
 
         if (!id) {
@@ -66,6 +68,13 @@ c.*,
             );
         }
 
+        if (authUser && authUser.isPlayer && rows[0].customer_user_id !== authUser.id) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You can only access your own cart." },
+                { status: 403 }
+            );
+        }
+
         return NextResponse.json({
             success: true,
             data: rows[0],
@@ -83,6 +92,7 @@ c.*,
 // PUT: Update cart owner
 export async function PUT(request, context) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const id = await getId(context);
 
         if (!id) {
@@ -108,15 +118,27 @@ export async function PUT(request, context) {
 
         const existing = existingRows[0];
 
-        const public_user_id =
+        if (authUser && authUser.isPlayer && existing.customer_user_id !== authUser.id) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You can only update your own cart." },
+                { status: 403 }
+            );
+        }
+
+        let public_user_id =
             Object.prototype.hasOwnProperty.call(body, "public_user_id")
                 ? body.public_user_id
                 : existing.public_user_id;
 
-        const customer_user_id =
+        let customer_user_id =
             Object.prototype.hasOwnProperty.call(body, "customer_user_id")
                 ? body.customer_user_id
                 : existing.customer_user_id;
+
+        if (authUser && authUser.isPlayer) {
+            customer_user_id = authUser.id;
+            public_user_id = null;
+        }
 
         const normalizedPublicId =
             public_user_id === "" ? null : public_user_id;
@@ -195,12 +217,32 @@ export async function PUT(request, context) {
 // DELETE: Delete cart
 export async function DELETE(request, context) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const id = await getId(context);
 
         if (!id) {
             return NextResponse.json(
                 { success: false, message: "Invalid cart ID" },
                 { status: 400 }
+            );
+        }
+
+        const [existingRows] = await db.execute(
+            "SELECT * FROM cst_cart WHERE id = ?",
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "Cart not found" },
+                { status: 404 }
+            );
+        }
+
+        if (authUser && authUser.isPlayer && existingRows[0].customer_user_id !== authUser.id) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You can only delete your own cart." },
+                { status: 403 }
             );
         }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 // GET: All student enquiries
@@ -50,14 +50,13 @@ e.*,
             values.push(searchValue, searchValue, searchValue);
         }
 
-        const authUser = await getAuthUser(request);
-        if (!authUser) {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (authUser.isPlayer) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Unauthorized. Authentication required to view student enquiries.",
-                },
-                { status: 401 }
+                { success: false, message: "Forbidden: Players cannot view student enquiries." },
+                { status: 403 }
             );
         }
 
@@ -74,9 +73,19 @@ e.*,
         } else if (!authUser.isSuperAdmin && authUser.academy_id) {
             sql += " AND e.academy_id = ?";
             values.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
             if (branch_id) {
-                sql += " AND e.branch_id = ?";
-                values.push(branch_id);
+                if (allowed.includes(Number(branch_id))) {
+                    sql += " AND e.branch_id = ?";
+                    values.push(branch_id);
+                } else {
+                    sql += " AND e.branch_id = -1";
+                }
+            } else {
+                sql += ` AND e.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                values.push(...allowed);
             }
         } else {
             if (academy_id) {
@@ -134,6 +143,14 @@ export async function POST(request) {
     let connection;
 
     try {
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser && authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Players cannot create student enquiries." },
+                { status: 403 }
+            );
+        }
+
         const body = await request.json();
 
         let {
@@ -149,6 +166,15 @@ export async function POST(request) {
             enquiry_status = "New",
             assigned_to = null,
         } = body;
+
+        if (authUser) {
+            if (authUser.isBranchAdmin) {
+                academy_id = Number(authUser.academy_id);
+                branch_id = Number(authUser.branch_id);
+            } else if (authUser.isAcademyAdmin) {
+                academy_id = Number(authUser.academy_id);
+            }
+        }
 
         if (!academy_id) {
             academy_id = 1;

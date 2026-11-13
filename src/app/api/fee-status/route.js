@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, resolveTenantScope, validateBranchBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 export const dynamic = "force-dynamic";
 
@@ -262,54 +262,80 @@ export async function GET(request) {
 
         const batchId = searchParams.get("batch_id");
 
-        const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isCoach) {
-                if (authUser.academy_id) {
-                    conditions.push("fs.academy_id = ?");
-                    values.push(authUser.academy_id);
-                }
-                // Coach: MUST only see players enrolled in their assigned batch(es)
-                conditions.push(`COALESCE(fs.user_id, ttp.user_id, mp.user_id) IN (
-                    SELECT DISTINCT COALESCE(up.user_id, ap.user_id)
-                    FROM cst_batch_coaches bc
-                    JOIN cst_batch_players bp ON bp.batch_id = bc.batch_id AND (bp.status = 'Active' OR bp.status = 1)
-                    JOIN cst_user_programs up ON up.id = bp.user_program_id AND up.is_deleted = 0
-                    LEFT JOIN cst_admission_players ap ON ap.id = up.admission_players_id AND ap.is_deleted = 0
-                    WHERE bc.coach_user_id = ?
-                      AND bc.status = 1
-                      AND bc.is_deleted = 0
-                      ${batchId && isPositiveInt(batchId) ? "AND bc.batch_id = ?" : ""}
-                      AND COALESCE(up.user_id, ap.user_id) IS NOT NULL
-                )`);
-                values.push(authUser.id);
-                if (batchId && isPositiveInt(batchId)) {
-                    values.push(Number(batchId));
-                }
-            } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                conditions.push("fs.branch_id = ? AND fs.academy_id = ?");
-                values.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user || (authResult?.id ? authResult : null);
+        if (!authUser || authResult?.errorResponse) {
+            return authResult?.errorResponse || NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
+
+        if (authUser.isCoach) {
+            if (authUser.academy_id) {
                 conditions.push("fs.academy_id = ?");
                 values.push(authUser.academy_id);
-            } else if (authUser.isAccountant && authUser.academy_id) {
+            }
+            // Coach: MUST only see players enrolled in their assigned batch(es)
+            conditions.push(`COALESCE(fs.user_id, ttp.user_id, mp.user_id) IN (
+                SELECT DISTINCT COALESCE(up.user_id, ap.user_id)
+                FROM cst_batch_coaches bc
+                JOIN cst_batch_players bp ON bp.batch_id = bc.batch_id AND (bp.status = 'Active' OR bp.status = 1)
+                JOIN cst_user_programs up ON up.id = bp.user_program_id AND up.is_deleted = 0
+                LEFT JOIN cst_admission_players ap ON ap.id = up.admission_players_id AND ap.is_deleted = 0
+                WHERE bc.coach_user_id = ?
+                  AND bc.status = 1
+                  AND bc.is_deleted = 0
+                  ${batchId && isPositiveInt(batchId) ? "AND bc.batch_id = ?" : ""}
+                  AND COALESCE(up.user_id, ap.user_id) IS NOT NULL
+            )`);
+            values.push(authUser.id);
+            if (batchId && isPositiveInt(batchId)) {
+                values.push(Number(batchId));
+            }
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            conditions.push("fs.branch_id = ? AND fs.academy_id = ?");
+            values.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            conditions.push("fs.academy_id = ?");
+            values.push(authUser.academy_id);
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam && isPositiveInt(branchIdParam)) {
+                conditions.push("fs.branch_id = ?");
+                values.push(Number(branchIdParam));
+            }
+        } else if (authUser.isAccountant && authUser.academy_id) {
+            conditions.push("fs.academy_id = ?");
+            values.push(authUser.academy_id);
+            if (authUser.branch_id) {
+                conditions.push("fs.branch_id = ?");
+                values.push(authUser.branch_id);
+            } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                conditions.push(`fs.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`);
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            if (authUser.academy_id) {
                 conditions.push("fs.academy_id = ?");
                 values.push(authUser.academy_id);
-                if (authUser.branch_id) {
-                    conditions.push("fs.branch_id = ?");
-                    values.push(authUser.branch_id);
-                }
-            } else if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
-                if (authUser.academy_id) {
-                    conditions.push("fs.academy_id = ?");
-                    values.push(authUser.academy_id);
-                }
-                // Strictly enforce player self-isolation: Player can only view their own fees
-                conditions.push("(fs.user_id = ? OR ttp.user_id = ? OR mp.user_id = ?)");
-                values.push(authUser.id, authUser.id, authUser.id);
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            }
+            // Strictly enforce player self-isolation: Player can only view their own fees
+            conditions.push("(fs.user_id = ? OR ttp.user_id = ? OR mp.user_id = ?)");
+            values.push(authUser.id, authUser.id, authUser.id);
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            conditions.push("fs.academy_id = ?");
+            values.push(authUser.academy_id);
+            if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                conditions.push(`(fs.branch_id IS NULL OR fs.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`);
+                values.push(...authUser.accessibleBranchIds);
+            }
+        } else if (authUser.isSuperAdmin) {
+            const academyIdParam = searchParams.get("academy_id");
+            if (academyIdParam && isPositiveInt(academyIdParam)) {
                 conditions.push("fs.academy_id = ?");
-                values.push(authUser.academy_id);
+                values.push(Number(academyIdParam));
+            }
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam && isPositiveInt(branchIdParam)) {
+                conditions.push("fs.branch_id = ?");
+                values.push(Number(branchIdParam));
             }
         }
 
@@ -322,8 +348,8 @@ export async function GET(request) {
         for (const field of filterFields) {
             // If academy_id or branch_id was already enforced by role, skip query override
             if (authUser && !authUser.isSuperAdmin) {
-                if (field === "academy_id" && authUser.academy_id) continue;
-                if (field === "branch_id" && authUser.isBranchAdmin && authUser.branch_id) continue;
+                if (field === "academy_id") continue;
+                if (field === "branch_id" && authUser.isBranchAdmin) continue;
                 if (isAuthPlayer && field === "user_id") continue;
             }
 
@@ -343,6 +369,8 @@ export async function GET(request) {
                 if (field === "user_id") {
                     conditions.push("(fs.user_id = ? OR ttp.user_id = ? OR mp.user_id = ?)");
                     values.push(Number(value), Number(value), Number(value));
+                } else if (field === "academy_id" || field === "branch_id") {
+                    // Already handled above
                 } else {
                     conditions.push(`fs.${field} = ?`);
                     values.push(Number(value));
@@ -515,12 +543,20 @@ export async function GET(request) {
                 } else if (authUser.isAcademyAdmin && authUser.academy_id) {
                     ppfConditions.push("f.academy_id = ?");
                     ppfValues.push(authUser.academy_id);
+                    const branchIdParam = searchParams.get("branch_id");
+                    if (branchIdParam && isPositiveInt(branchIdParam)) {
+                        ppfConditions.push("f.branch_id = ?");
+                        ppfValues.push(Number(branchIdParam));
+                    }
                 } else if (authUser.isAccountant && authUser.academy_id) {
                     ppfConditions.push("f.academy_id = ?");
                     ppfValues.push(authUser.academy_id);
                     if (authUser.branch_id) {
                         ppfConditions.push("f.branch_id = ?");
                         ppfValues.push(authUser.branch_id);
+                    } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                        ppfConditions.push(`f.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`);
+                        ppfValues.push(...authUser.accessibleBranchIds);
                     }
                 } else if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
                     if (authUser.academy_id) {
@@ -532,19 +568,22 @@ export async function GET(request) {
                 } else if (!authUser.isSuperAdmin && authUser.academy_id) {
                     ppfConditions.push("f.academy_id = ?");
                     ppfValues.push(authUser.academy_id);
+                    if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                        ppfConditions.push(`(f.branch_id IS NULL OR f.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`);
+                        ppfValues.push(...authUser.accessibleBranchIds);
+                    }
+                } else if (authUser.isSuperAdmin) {
+                    const targetAcademyId = searchParams.get("academy_id");
+                    if (targetAcademyId && isPositiveInt(targetAcademyId)) {
+                        ppfConditions.push("f.academy_id = ?");
+                        ppfValues.push(Number(targetAcademyId));
+                    }
+                    const targetBranchId = searchParams.get("branch_id");
+                    if (targetBranchId && isPositiveInt(targetBranchId)) {
+                        ppfConditions.push("f.branch_id = ?");
+                        ppfValues.push(Number(targetBranchId));
+                    }
                 }
-            }
-
-            const targetAcademyId = searchParams.get("academy_id");
-            if (targetAcademyId && isPositiveInt(targetAcademyId) && (!authUser || authUser.isSuperAdmin)) {
-                ppfConditions.push("f.academy_id = ?");
-                ppfValues.push(Number(targetAcademyId));
-            }
-
-            const targetBranchId = searchParams.get("branch_id");
-            if (targetBranchId && isPositiveInt(targetBranchId) && (!authUser || !authUser.isBranchAdmin)) {
-                ppfConditions.push("f.branch_id = ?");
-                ppfValues.push(Number(targetBranchId));
             }
 
             const targetUserId = searchParams.get("user_id");
@@ -657,8 +696,12 @@ export async function GET(request) {
 
 // POST /api/fee-status
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isCoach || authUser.isPlayer)) {
+    const authResult = await getAuthenticatedUser(request);
+    const authUser = authResult?.user || (authResult?.id ? authResult : null);
+    if (!authUser || authResult?.errorResponse) {
+        return authResult?.errorResponse || NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json(
             { success: false, message: "Coaches and Players do not have permission to manage fee status" },
             { status: 403 }
@@ -712,6 +755,28 @@ export async function POST(request) {
             remarks: getNullableText(body.remarks),
             created_by: getNullableId(body.created_by) || (authUser?.id ? Number(authUser.id) : null),
         };
+
+        if (!authUser.isSuperAdmin) {
+            data.academy_id = authUser.academy_id;
+            if (authUser.isBranchAdmin) {
+                data.branch_id = authUser.branch_id;
+            } else if (data.branch_id && authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                if (!authUser.accessibleBranchIds.includes(data.branch_id)) {
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. You are not assigned to this branch." },
+                        { status: 403 }
+                    );
+                }
+            }
+        } else if (data.academy_id && data.branch_id) {
+            const isBelong = await validateBranchBelongsToAcademy(data.branch_id, data.academy_id);
+            if (!isBelong) {
+                return NextResponse.json(
+                    { success: false, message: "Branch does not belong to selected academy." },
+                    { status: 400 }
+                );
+            }
+        }
 
         if (
             Object.values(data).some(

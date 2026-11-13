@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { ensureEcommerceTables } from "@/app/components/lib/ecommerce-init";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET - List menus
@@ -62,6 +63,33 @@ export async function GET(request) {
                         [ins.insertId]
                     );
                 }
+            }
+        } catch (_) {}
+
+        // Auto-ensure "Player Dashboard" menu exists and is active for sidebar
+        try {
+            const [existingPlayerDash] = await connection.query(
+                "SELECT id, is_sidebar, is_active, status, is_deleted FROM cst_menu WHERE (menu_url = '/next_panel/player-dashboard' OR menu_key = 'player-dashboard') LIMIT 1"
+            );
+            if (!existingPlayerDash || existingPlayerDash.length === 0) {
+                const [insPlayerDash] = await connection.query(
+                    `INSERT INTO cst_menu (
+                        parent_id, menu_key, menu_name, menu_title, menu_icon, menu_url,
+                        menu_type, menu_order, is_sidebar, is_active, status, is_deleted
+                    ) VALUES (NULL, 'player-dashboard', 'Player Dashboard', 'Player Dashboard', 'player-dashboard', '/next_panel/player-dashboard', 'link', 0, 1, 1, 1, 0)`
+                );
+                if (insPlayerDash?.insertId) {
+                    await connection.query(
+                        `INSERT IGNORE INTO cst_menu_permissions (menu_id, permission_id)
+                         SELECT ?, id FROM cst_permissions WHERE permission_name = 'view_player_dashboard' OR status = 1 LIMIT 1`,
+                        [insPlayerDash.insertId]
+                    );
+                }
+            } else if (existingPlayerDash[0].is_deleted === 1 || existingPlayerDash[0].is_sidebar === 0) {
+                await connection.query(
+                    "UPDATE cst_menu SET is_sidebar = 1, is_active = 1, status = 1, is_deleted = 0 WHERE id = ?",
+                    [existingPlayerDash[0].id]
+                );
             }
         } catch (_) {}
 
@@ -251,6 +279,14 @@ export async function POST(request) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser || !authUser.isSuperAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Only super admin can manage system menus." },
+                { status: 403 }
+            );
+        }
+
         connection = await pool.getConnection();
 
         const body = await request.json();

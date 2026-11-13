@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 const PAYMENT_METHODS = [
     "Cash",
@@ -104,6 +105,10 @@ op.*,
     o.order_no,
     o.customer_name,
     o.customer_phone,
+    o.customer_user_id,
+    o.customer_email,
+    o.academy_id,
+    o.fulfillment_branch_id,
     o.order_status,
     o.payment_status AS order_payment_status
             FROM cst_order_payments op
@@ -119,6 +124,23 @@ op.*,
                 { success: false, message: "Payment not found." },
                 { status: 404 }
             );
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                if (Number(rows[0].customer_user_id) !== Number(authUser.id) && String(rows[0].customer_email || "").toLowerCase() !== String(authUser.email || "").toLowerCase()) {
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. You can only view your own order payments." },
+                        { status: 403 }
+                    );
+                }
+            } else if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].fulfillment_branch_id })) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Order payment belongs to another academy or branch." },
+                    { status: 403 }
+                );
+            }
         }
 
         return NextResponse.json({
@@ -169,7 +191,7 @@ export async function PUT(request, { params }) {
 
         const [rows] = await connection.execute(
             `
-            SELECT op.*, o.grand_total
+            SELECT op.*, o.grand_total, o.academy_id, o.fulfillment_branch_id
             FROM cst_order_payments op
             INNER JOIN cst_orders o ON o.id = op.order_id
             WHERE op.id = ?
@@ -188,6 +210,15 @@ export async function PUT(request, { params }) {
         }
 
         const existing = rows[0];
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order payment belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
         const payment = {};
 
         for (const field of allowedFields) {
@@ -365,7 +396,10 @@ export async function DELETE(request, { params }) {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            "SELECT * FROM cst_order_payments WHERE id = ? FOR UPDATE",
+            `SELECT op.*, o.academy_id, o.fulfillment_branch_id 
+             FROM cst_order_payments op 
+             INNER JOIN cst_orders o ON o.id = op.order_id 
+             WHERE op.id = ? FOR UPDATE`,
             [Number(id)]
         );
 
@@ -379,6 +413,15 @@ export async function DELETE(request, { params }) {
         }
 
         const payment = rows[0];
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: payment.academy_id, branch_id: payment.fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order payment belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         // Avoid deleting successful or refunded financial records.
         if (

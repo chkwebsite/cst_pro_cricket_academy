@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 function jsonError(message, status = 400) {
   return NextResponse.json({ success: false, message }, { status });
@@ -22,13 +23,18 @@ export async function GET(request, context) {
   try {
     connection = await pool.getConnection();
     const [rows] = await connection.execute(
-      `SELECT gv.*, ga.album_title, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
+      `SELECT gv.*, ga.album_title, ga.academy_id, ga.branch_id, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
        FROM cst_gallery_videos gv
        LEFT JOIN cst_gallery_albums ga ON ga.id = gv.album_id AND ga.is_deleted = 0
        LEFT JOIN cst_users u ON u.id = gv.uploaded_by
        WHERE gv.id = ? AND gv.is_deleted = 0 LIMIT 1`, [id]
     );
     if (!rows.length) return jsonError("Gallery video not found.", 404);
+
+    const authUser = await getAuthenticatedUser(request);
+    if (authUser && rows[0].academy_id && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+      return jsonError("Forbidden. Gallery video belongs to another academy or branch.", 403);
+    }
     return NextResponse.json({ success: true, data: rows[0] });
   } catch (error) {
     console.error("GET Single Gallery Video Error:", error);
@@ -68,11 +74,19 @@ export async function PUT(request, context) {
 
     connection = await pool.getConnection();
     const [existing] = await connection.execute(
-      "SELECT * FROM cst_gallery_videos WHERE id = ? AND is_deleted = 0 LIMIT 1",
+      `SELECT gv.*, ga.academy_id, ga.branch_id 
+       FROM cst_gallery_videos gv 
+       LEFT JOIN cst_gallery_albums ga ON ga.id = gv.album_id 
+       WHERE gv.id = ? AND gv.is_deleted = 0 LIMIT 1`,
       [id]
     );
     if (!existing.length) return jsonError("Gallery video not found.", 404);
     const current = existing[0];
+
+    const authUser = await getAuthenticatedUser(request);
+    if (authUser && current.academy_id && !verifyRecordAccess(authUser, { academy_id: current.academy_id, branch_id: current.branch_id })) {
+      return jsonError("Forbidden. Gallery video belongs to another academy or branch.", 403);
+    }
 
     if (album_id !== null) {
       const [albumRows] = await connection.execute(
@@ -155,9 +169,17 @@ export async function DELETE(request, context) {
   try {
     connection = await pool.getConnection();
     const [rows] = await connection.execute(
-      "SELECT id, video_type, video_url, thumbnail_image FROM cst_gallery_videos WHERE id = ? AND is_deleted = 0 LIMIT 1", [id]
+      `SELECT gv.id, gv.video_type, gv.video_url, gv.thumbnail_image, ga.academy_id, ga.branch_id 
+       FROM cst_gallery_videos gv 
+       LEFT JOIN cst_gallery_albums ga ON ga.id = gv.album_id 
+       WHERE gv.id = ? AND gv.is_deleted = 0 LIMIT 1`, [id]
     );
     if (!rows.length) return jsonError("Gallery video not found.", 404);
+
+    const authUser = await getAuthenticatedUser(request);
+    if (authUser && rows[0].academy_id && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+      return jsonError("Forbidden. Gallery video belongs to another academy or branch.", 403);
+    }
 
     const video = rows[0];
     await connection.execute("UPDATE cst_gallery_videos SET is_deleted = 1 WHERE id = ?", [id]);

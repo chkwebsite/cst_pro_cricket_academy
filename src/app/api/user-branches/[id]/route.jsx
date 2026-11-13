@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET - Single user branch
 export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     let connection;
 
     try {
@@ -27,7 +31,8 @@ export async function GET(request, { params }) {
                 u.email,
                 u.phone,
 
-                b.branch_name
+                b.branch_name,
+                b.academy_id
 
             FROM cst_user_branches ub
 
@@ -54,9 +59,33 @@ export async function GET(request, { params }) {
             );
         }
 
+        const record = rows[0];
+
+        // Tenant access checks
+        if (!authUser.isSuperAdmin) {
+            if (record.academy_id && Number(record.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(record.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isPlayer && Number(record.user_id) !== Number(authUser.id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: You cannot view other user records" },
+                    { status: 403 }
+                );
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
 
     } catch (error) {
@@ -81,6 +110,16 @@ export async function GET(request, { params }) {
 
 // PUT - Update user branch
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to update branch assignments" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -90,12 +129,16 @@ export async function PUT(request, { params }) {
 
         const body = await request.json();
 
-        const {
+        let {
             user_id,
             branch_id,
             is_primary = 0,
             status = 1,
         } = body;
+
+        if (authUser.isBranchAdmin) {
+            branch_id = authUser.branch_id;
+        }
 
         if (!branch_id) {
             return NextResponse.json(
@@ -110,9 +153,10 @@ export async function PUT(request, { params }) {
         // Check existing record
         const [existingRows] = await connection.query(
             `
-            SELECT id
-            FROM cst_user_branches
-            WHERE id = ?
+            SELECT ub.id, ub.branch_id, b.academy_id
+            FROM cst_user_branches ub
+            LEFT JOIN cst_branch b ON b.id = ub.branch_id
+            WHERE ub.id = ?
             LIMIT 1
             `,
             [id]
@@ -126,6 +170,22 @@ export async function PUT(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        const existingRecord = existingRows[0];
+        if (!authUser.isSuperAdmin) {
+            if (existingRecord.academy_id && Number(existingRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existingRecord.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
         }
 
         // Check user
@@ -245,12 +305,59 @@ export async function PUT(request, { params }) {
 
 // DELETE - Delete user branch
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to delete branch assignments" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
         connection = await pool.getConnection();
 
         const { id } = await params;
+
+        const [existingRows] = await connection.query(
+            `
+            SELECT ub.id, ub.branch_id, b.academy_id
+            FROM cst_user_branches ub
+            LEFT JOIN cst_branch b ON b.id = ub.branch_id
+            WHERE ub.id = ?
+            LIMIT 1
+            `,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "User branch not found",
+                },
+                { status: 404 }
+            );
+        }
+
+        const existingRecord = existingRows[0];
+        if (!authUser.isSuperAdmin) {
+            if (existingRecord.academy_id && Number(existingRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(existingRecord.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Record belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
 
         const [result] = await connection.query(
             `

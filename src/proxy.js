@@ -437,8 +437,13 @@ export function proxy(request) {
 
         // Player
         if (isPlayerUser) {
-            // Auto redirect /next_panel/dashboard to /next_panel/player-dashboard
-            if (pathname === `${PANEL_PREFIX}/dashboard` || pathname === `${PANEL_PREFIX}/dashboard/`) {
+            // Auto redirect /next_panel/dashboard or /next_panel to /next_panel/player-dashboard
+            if (
+                pathname === `${PANEL_PREFIX}/dashboard` ||
+                pathname === `${PANEL_PREFIX}/dashboard/` ||
+                pathname === PANEL_PREFIX ||
+                pathname === `${PANEL_PREFIX}/`
+            ) {
                 return applySecurityHeaders(NextResponse.redirect(new URL(`${PANEL_PREFIX}/player-dashboard`, request.url)));
             }
 

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 import {
     applyGroundBookingPaymentDelta,
     getOutstandingCents,
     lockGroundBookings,
     toCents,
 } from "../paymentHelpers";
-
 
 const validPaymentModes = [
     "Cash",
@@ -16,10 +16,34 @@ const validPaymentModes = [
     "Cheque",
 ];
 
+async function checkBookingAccess(connection, bookingId, authUser) {
+    const [rows] = await connection.query(
+        `SELECT gb.id, gb.user_id, gb.customer_phone, g.academy_id, g.branch_id
+         FROM cst_ground_bookings gb
+         INNER JOIN cst_ground g ON g.id = gb.ground_id
+         WHERE gb.id = ? AND g.is_deleted = 0 LIMIT 1`,
+        [bookingId]
+    );
+    if (rows.length === 0) return { allowed: false, notFound: true };
+    const b = rows[0];
+    if (authUser.isSuperAdmin) return { allowed: true, booking: b };
+    if (authUser.isPlayer) {
+        const isOwner = Number(b.user_id) === Number(authUser.id) || (b.customer_phone && b.customer_phone === authUser.phone);
+        return { allowed: isOwner, booking: b };
+    }
+    if (Number(b.academy_id) !== Number(authUser.academy_id)) return { allowed: false, booking: b };
+    if (authUser.isAcademyAdmin) return { allowed: true, booking: b };
+    if (authUser.isBranchAdmin) return { allowed: Number(b.branch_id) === Number(authUser.branch_id), booking: b };
+    const allowedBranches = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return { allowed: allowedBranches.includes(Number(b.branch_id)), booking: b };
+}
+
 // GET: Get single ground payment
 export async function GET(request, { params }) {
-    let connection;
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
 
+    let connection;
 
     try {
         const { id } = await params;
@@ -38,10 +62,12 @@ export async function GET(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            `SELECT *
-        FROM cst_ground_payments
-         WHERE id = ?
-        LIMIT 1`,
+            `SELECT gp.*, gb.user_id, gb.customer_phone, g.academy_id, g.branch_id
+             FROM cst_ground_payments gp
+             INNER JOIN cst_ground_bookings gb ON gb.id = gp.booking_id
+             INNER JOIN cst_ground g ON g.id = gb.ground_id
+             WHERE gp.id = ? AND g.is_deleted = 0
+             LIMIT 1`,
             [paymentId]
         );
 
@@ -55,10 +81,20 @@ export async function GET(request, { params }) {
             );
         }
 
+        const payment = rows[0];
+        // Tenant authorization check
+        const access = await checkBookingAccess(connection, payment.booking_id, authUser);
+        if (!access.allowed) {
+            return NextResponse.json(
+                { success: false, message: "Ground payment not found or access denied" },
+                { status: 404 }
+            );
+        }
+
         return NextResponse.json({
             success: true,
             message: "Ground payment fetched successfully",
-            data: rows[0],
+            data: payment,
         });
 
     } catch (error) {
@@ -76,15 +112,22 @@ export async function GET(request, { params }) {
     } finally {
         if (connection) connection.release();
     }
-
-
 }
 
 // PUT: Update ground payment
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot update payments." },
+            { status: 403 }
+        );
+    }
+
     let connection;
     let transactionStarted = false;
-
 
     try {
         const { id } = await params;
@@ -174,15 +217,25 @@ export async function PUT(request, { params }) {
         }
 
         connection = await pool.getConnection();
+
+        // Check target booking authorization
+        const targetAccess = await checkBookingAccess(connection, bookingId, authUser);
+        if (!targetAccess.allowed) {
+            return NextResponse.json(
+                { success: false, message: "Target booking does not belong to authorized academy/branch" },
+                { status: 403 }
+            );
+        }
+
         await connection.beginTransaction();
         transactionStarted = true;
 
         const [existingPayments] = await connection.execute(
             `SELECT id, booking_id, amount
-         FROM cst_ground_payments
-         WHERE id = ?
-        LIMIT 1
-        FOR UPDATE`,
+             FROM cst_ground_payments
+             WHERE id = ?
+             LIMIT 1
+             FOR UPDATE`,
             [paymentId]
         );
 
@@ -200,6 +253,18 @@ export async function PUT(request, { params }) {
 
         const existingPayment = existingPayments[0];
         const previousBookingId = Number(existingPayment.booking_id);
+
+        // Check existing booking authorization
+        const prevAccess = await checkBookingAccess(connection, previousBookingId, authUser);
+        if (!prevAccess.allowed) {
+            await connection.rollback();
+            transactionStarted = false;
+            return NextResponse.json(
+                { success: false, message: "Unauthorized to edit this payment" },
+                { status: 403 }
+            );
+        }
+
         const bookings = await lockGroundBookings(connection, [previousBookingId, bookingId]);
         const previousBooking = bookings.get(previousBookingId);
         const targetBooking = bookings.get(bookingId);
@@ -234,14 +299,14 @@ export async function PUT(request, { params }) {
 
         await connection.execute(
             `UPDATE cst_ground_payments
-    SET
-    booking_id = ?,
-        payment_date = ?,
-        amount = ?,
-        payment_mode = ?,
-        transaction_no = ?,
-        remarks = ?
-            WHERE id = ? `,
+            SET
+                booking_id = ?,
+                payment_date = ?,
+                amount = ?,
+                payment_mode = ?,
+                transaction_no = ?,
+                remarks = ?
+            WHERE id = ?`,
             [
                 bookingId,
                 payment_date,
@@ -265,9 +330,7 @@ export async function PUT(request, { params }) {
         }
 
         const [updatedPayments] = await connection.execute(
-            `SELECT *
-        FROM cst_ground_payments
-         WHERE id = ? `,
+            `SELECT * FROM cst_ground_payments WHERE id = ?`,
             [paymentId]
         );
 
@@ -303,15 +366,22 @@ export async function PUT(request, { params }) {
     } finally {
         if (connection) connection.release();
     }
-
-
 }
 
 // DELETE: Delete ground payment
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot delete payments." },
+            { status: 403 }
+        );
+    }
+
     let connection;
     let transactionStarted = false;
-
 
     try {
         const { id } = await params;
@@ -334,10 +404,10 @@ export async function DELETE(request, { params }) {
 
         const [existingPayments] = await connection.execute(
             `SELECT id, booking_id, amount
-         FROM cst_ground_payments
-         WHERE id = ?
-        LIMIT 1
-        FOR UPDATE`,
+             FROM cst_ground_payments
+             WHERE id = ?
+             LIMIT 1
+             FOR UPDATE`,
             [paymentId]
         );
 
@@ -355,6 +425,18 @@ export async function DELETE(request, { params }) {
 
         const payment = existingPayments[0];
         const bookingId = Number(payment.booking_id);
+
+        // Verify booking access
+        const access = await checkBookingAccess(connection, bookingId, authUser);
+        if (!access.allowed) {
+            await connection.rollback();
+            transactionStarted = false;
+            return NextResponse.json(
+                { success: false, message: "Unauthorized to delete this payment" },
+                { status: 403 }
+            );
+        }
+
         const bookings = await lockGroundBookings(connection, [bookingId]);
         const booking = bookings.get(bookingId);
 
@@ -371,8 +453,7 @@ export async function DELETE(request, { params }) {
         }
 
         await connection.execute(
-            `DELETE FROM cst_ground_payments
-         WHERE id = ? `,
+            `DELETE FROM cst_ground_payments WHERE id = ?`,
             [paymentId]
         );
 
@@ -408,6 +489,4 @@ export async function DELETE(request, { params }) {
     } finally {
         if (connection) connection.release();
     }
-
-
 }

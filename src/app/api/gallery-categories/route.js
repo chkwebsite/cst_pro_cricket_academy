@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET: All Gallery Categories
 export async function GET(request) {
@@ -29,7 +30,16 @@ gc.*,
 
         const values = [];
 
-        if (academy_id !== null && academy_id !== "") {
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser) {
+            const roleId = Number(authUser.role_id);
+            if (roleId !== 1 && authUser.academy_id) {
+                sql += ` AND (gc.academy_id = ? OR gc.academy_id IS NULL) `;
+                values.push(authUser.academy_id);
+            }
+        }
+
+        if (academy_id !== null && academy_id !== "" && (!authUser || Number(authUser.role_id) === 1)) {
             sql += ` AND gc.academy_id = ? `;
             values.push(academy_id);
         }
@@ -81,9 +91,28 @@ export async function POST(request) {
     let imagePath = null;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({
+                success: false,
+                message: "Unauthorized. Authentication required."
+            }, { status: 401 });
+        }
+
+        const roleId = Number(authUser.role_id);
+        if (roleId !== 1 && roleId !== 2) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Only administrators can create gallery categories."
+            }, { status: 403 });
+        }
+
         const formData = await request.formData();
 
-        const academy_id = formData.get("academy_id") || null;
+        let academy_id = formData.get("academy_id") || null;
+        if (roleId === 2) {
+            academy_id = authUser.academy_id;
+        }
         const category_name = formData.get("category_name")?.trim();
         const slug = formData.get("slug")?.trim();
         const description = formData.get("description")?.trim() || null;

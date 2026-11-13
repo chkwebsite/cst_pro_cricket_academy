@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 const validStatuses = [
     "Pending",
@@ -8,8 +9,33 @@ const validStatuses = [
     "Cancelled",
 ];
 
+// Helper to check tenant permission for a ground booking request
+function isBookingRequestAuthorized(ground, authUser, bookingRequest = null) {
+    if (authUser.isSuperAdmin) return true;
+
+    if (authUser.isPlayer) {
+        if (!bookingRequest) return false;
+        return (
+            (authUser.phone && bookingRequest.mobile === authUser.phone) ||
+            (authUser.email && bookingRequest.email === authUser.email)
+        );
+    }
+
+    if (Number(ground.academy_id) !== Number(authUser.academy_id)) return false;
+    if (authUser.isAcademyAdmin) return true;
+    if (authUser.isBranchAdmin) {
+        return Number(ground.branch_id) === Number(authUser.branch_id);
+    }
+
+    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return allowed.includes(Number(ground.branch_id));
+}
+
 // GET: Fetch a single booking request
 export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     try {
         const { id } = await params;
 
@@ -18,14 +44,16 @@ export async function GET(request, { params }) {
                 r.*,
                 g.ground_name,
                 g.ground_code,
+                g.academy_id,
+                g.branch_id,
                 g.address AS ground_address,
                 g.contact_person AS ground_contact_person,
                 g.phone AS ground_contact_phone,
                 g.email AS ground_contact_email,
                 g.ground_facility
              FROM cst_ground_booking_requests r
-             LEFT JOIN cst_ground g ON g.id = r.ground_id
-             WHERE r.id = ? AND r.is_deleted = 0
+             INNER JOIN cst_ground g ON g.id = r.ground_id
+             WHERE r.id = ? AND r.is_deleted = 0 AND g.is_deleted = 0
              LIMIT 1`,
             [id]
         );
@@ -40,9 +68,17 @@ export async function GET(request, { params }) {
             );
         }
 
+        const item = rows[0];
+        if (!isBookingRequestAuthorized(item, authUser, item)) {
+            return NextResponse.json(
+                { success: false, message: "Booking request not found or access denied" },
+                { status: 404 }
+            );
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: item,
         });
     } catch (error) {
         console.error("GET booking request error:", error);
@@ -60,14 +96,25 @@ export async function GET(request, { params }) {
 
 // PUT: Update booking request or admin status
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot update booking requests." },
+            { status: 403 }
+        );
+    }
+
     try {
         const { id } = await params;
         const body = await request.json();
 
         const [existingRows] = await pool.execute(
-            `SELECT *
-             FROM cst_ground_booking_requests
-             WHERE id = ? AND is_deleted = 0
+            `SELECT r.*, g.academy_id, g.branch_id
+             FROM cst_ground_booking_requests r
+             INNER JOIN cst_ground g ON g.id = r.ground_id
+             WHERE r.id = ? AND r.is_deleted = 0 AND g.is_deleted = 0
              LIMIT 1`,
             [id]
         );
@@ -83,6 +130,12 @@ export async function PUT(request, { params }) {
         }
 
         const existing = existingRows[0];
+        if (!isBookingRequestAuthorized(existing, authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied for this booking request" },
+                { status: 403 }
+            );
+        }
 
         const customerName =
             body.customer_name ?? existing.customer_name;
@@ -152,6 +205,20 @@ export async function PUT(request, { params }) {
                 },
                 { status: 400 }
             );
+        }
+
+        // Verify target ground if changed
+        if (Number(groundId) !== Number(existing.ground_id)) {
+            const [targetGroundRows] = await pool.execute(
+                `SELECT id, academy_id, branch_id FROM cst_ground WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+                [groundId]
+            );
+            if (targetGroundRows.length === 0 || !isBookingRequestAuthorized(targetGroundRows[0], authUser)) {
+                return NextResponse.json(
+                    { success: false, message: "Target ground does not belong to authorized academy/branch" },
+                    { status: 400 }
+                );
+            }
         }
 
         const validPurposes = [
@@ -282,8 +349,45 @@ export async function PUT(request, { params }) {
 
 // DELETE: Soft delete a booking request
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot delete booking requests." },
+            { status: 403 }
+        );
+    }
+
     try {
         const { id } = await params;
+
+        // Verify request belongs to caller's tenant
+        const [existingRows] = await pool.execute(
+            `SELECT r.id, g.academy_id, g.branch_id
+             FROM cst_ground_booking_requests r
+             INNER JOIN cst_ground g ON g.id = r.ground_id
+             WHERE r.id = ? AND r.is_deleted = 0 AND g.is_deleted = 0
+             LIMIT 1`,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Booking request not found",
+                },
+                { status: 404 }
+            );
+        }
+
+        if (!isBookingRequestAuthorized(existingRows[0], authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied for this booking request" },
+                { status: 403 }
+            );
+        }
 
         const [result] = await pool.execute(
             `UPDATE cst_ground_booking_requests

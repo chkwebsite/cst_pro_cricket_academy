@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
 import pool from "@/app/components/lib/db";
 import { syncTournamentStatuses } from "./syncStatuses";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 // =====================================================
 // GET - ALL TOURNAMENTS
@@ -40,13 +38,14 @@ export async function GET(request) {
 
         const params = [];
 
-        // ==========================================
-        // ACADEMY FILTER
-        // ==========================================
-
-        const authUser = await getAuthUser(request);
+        // Check authentication
+        const authHeader = request.headers.get("authorization");
+        const { user: authUser } = await getAuthenticatedUser(request);
         if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
+            if (authUser.isPlayer) {
+                where += ` AND (t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL))`;
+                params.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
                 where += ` AND t.branch_id = ? AND t.academy_id = ?`;
                 params.push(authUser.branch_id, authUser.academy_id);
             } else if (authUser.isAcademyAdmin && authUser.academy_id) {
@@ -59,6 +58,9 @@ export async function GET(request) {
             } else if (!authUser.isSuperAdmin && authUser.academy_id) {
                 where += ` AND t.academy_id = ?`;
                 params.push(authUser.academy_id);
+                const allowed = authUser.assignedBranchIds || [authUser.branch_id];
+                where += ` AND t.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                params.push(...allowed);
             } else {
                 if (academy_id) { where += ` AND t.academy_id = ?`; params.push(academy_id); }
                 if (branch_id) { where += ` AND t.branch_id = ?`; params.push(branch_id); }
@@ -249,45 +251,19 @@ export async function GET(request) {
 // POST - CREATE TOURNAMENT
 // =====================================================
 export async function POST(request) {
+    const { user: authenticatedUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authenticatedUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot create tournaments" },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
-        const token = (await cookies()).get("auth_token")?.value;
-        if (!token) {
-            return NextResponse.json(
-                { success: false, message: "Authentication required" },
-                { status: 401 }
-            );
-        }
-
-        if (!process.env.JWT_SECRET) {
-            return NextResponse.json(
-                { success: false, message: "Server authentication is not configured" },
-                { status: 500 }
-            );
-        }
-
-        let authenticatedUser;
-        try {
-            authenticatedUser = jwt.verify(token, process.env.JWT_SECRET);
-        } catch {
-            return NextResponse.json(
-                { success: false, message: "Invalid or expired authentication" },
-                { status: 401 }
-            );
-        }
-
-        const userRole = String(authenticatedUser.user_type || "")
-            .trim()
-            .toLowerCase()
-            .replace(/[_-]+/g, " ");
-        if (!["academy admin", "super admin", "superadmin", "admin"].includes(userRole)) {
-            return NextResponse.json(
-                { success: false, message: "Only Academy Admins and Super Admins can create tournaments" },
-                { status: 403 }
-            );
-        }
-
         const body = await request.json();
 
         const {
@@ -381,8 +357,21 @@ export async function POST(request) {
         }
 
         // ==========================================
-        // CHECK BRANCH
+        // CHECK BRANCH & TENANT AUTHORIZATION
         // ==========================================
+
+        let targetAcademyId = authenticatedUser.isSuperAdmin
+            ? (academy_id ? Number(academy_id) : null)
+            : authenticatedUser.academy_id;
+
+        const targetBranchId = Number(branch_id);
+
+        if (authenticatedUser.isBranchAdmin && targetBranchId !== Number(authenticatedUser.branch_id)) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. You can only create tournaments for your branch" },
+                { status: 403 }
+            );
+        }
 
         let branchQuery = `
             SELECT
@@ -392,11 +381,11 @@ export async function POST(request) {
             WHERE id = ?
         `;
 
-        const branchParams = [branch_id];
+        const branchParams = [targetBranchId];
 
-        if (academy_id !== null && academy_id !== "") {
+        if (targetAcademyId) {
             branchQuery += ` AND academy_id = ?`;
-            branchParams.push(academy_id);
+            branchParams.push(targetAcademyId);
         }
 
         branchQuery += ` LIMIT 1`;
@@ -410,20 +399,13 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Invalid branch or branch does not belong to selected academy"
+                    message: "Invalid branch or branch does not belong to authorized academy"
                 },
                 { status: 400 }
             );
         }
 
-        // ==========================================
-        // GET ACTUAL ACADEMY ID FROM BRANCH
-        // ==========================================
-
-        const actualAcademyId =
-            academy_id !== null && academy_id !== ""
-                ? Number(academy_id)
-                : branchRows[0].academy_id;
+        const actualAcademyId = targetAcademyId || branchRows[0].academy_id;
 
         // ==========================================
         // CHECK DUPLICATE TOURNAMENT CODE

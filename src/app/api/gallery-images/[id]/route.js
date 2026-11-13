@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 // GET /api/gallery-images/:id
 export async function GET(request, { params }) {
@@ -10,7 +11,7 @@ export async function GET(request, { params }) {
         const { id } = await params;
         connection = await pool.getConnection();
         const [rows] = await connection.execute(
-            `SELECT gi.*, ga.album_title, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
+            `SELECT gi.*, ga.album_title, ga.academy_id, ga.branch_id, CONCAT_WS(' ', u.first_name, u.last_name) AS uploaded_by_name
              FROM cst_gallery_images gi
              INNER JOIN cst_gallery_albums ga ON ga.id = gi.album_id AND ga.is_deleted = 0
              LEFT JOIN cst_users u ON u.id = gi.uploaded_by
@@ -21,6 +22,14 @@ export async function GET(request, { params }) {
 
         if (!rows.length) {
             return NextResponse.json({ success: false, message: "Gallery image not found" }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Gallery image belongs to another academy or branch."
+            }, { status: 403 });
         }
         return NextResponse.json({ success: true, data: rows[0] });
     } catch (error) {
@@ -47,13 +56,24 @@ export async function PUT(request, { params }) {
 
         connection = await pool.getConnection();
         const [existing] = await connection.execute(
-            "SELECT * FROM cst_gallery_images WHERE id = ? AND is_deleted = 0 LIMIT 1",
+            `SELECT gi.*, ga.academy_id, ga.branch_id 
+             FROM cst_gallery_images gi 
+             INNER JOIN cst_gallery_albums ga ON ga.id = gi.album_id 
+             WHERE gi.id = ? AND gi.is_deleted = 0 LIMIT 1`,
             [id]
         );
         if (!existing.length) {
             return NextResponse.json({ success: false, message: "Gallery image not found" }, { status: 404 });
         }
         const currentRecord = existing[0];
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: currentRecord.academy_id, branch_id: currentRecord.branch_id })) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Gallery image belongs to another academy or branch."
+            }, { status: 403 });
+        }
         const targetAlbumId = album_id || currentRecord.album_id;
 
         if (album_id) {
@@ -133,11 +153,22 @@ export async function DELETE(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            "SELECT id, image_path FROM cst_gallery_images WHERE id = ? AND is_deleted = 0 LIMIT 1",
+            `SELECT gi.id, gi.image_path, ga.academy_id, ga.branch_id 
+             FROM cst_gallery_images gi 
+             INNER JOIN cst_gallery_albums ga ON ga.id = gi.album_id 
+             WHERE gi.id = ? AND gi.is_deleted = 0 LIMIT 1`,
             [id]
         );
         if (!rows.length) {
             return NextResponse.json({ success: false, message: "Gallery image not found" }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. Gallery image belongs to another academy or branch."
+            }, { status: 403 });
         }
 
         await connection.execute(

@@ -2,15 +2,16 @@ import pool from "@/app/components/lib/db";
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET SINGLE ACADEMY LIST
 
 export async function GET(req, { params }) {
-    const authUser = await getAuthUser(req);
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(req);
+    if (errorResponse) return errorResponse;
     const { id } = await params;
 
-    if (authUser && !authUser.isSuperAdmin && Number(authUser.academy_id) !== Number(id)) {
+    if (!authUser.isSuperAdmin && Number(authUser.academy_id) !== Number(id)) {
         return NextResponse.json({
             success: false,
             message: "Access denied: You can only access your own academy records"
@@ -53,10 +54,11 @@ export async function GET(req, { params }) {
 // UPDATE SINGLE ACADEMY LIST
 
 export async function PUT(req, { params }) {
-    const authUser = await getAuthUser(req);
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(req);
+    if (errorResponse) return errorResponse;
     const { id } = await params;
 
-    if (authUser && !authUser.isSuperAdmin && Number(authUser.academy_id) !== Number(id)) {
+    if (!authUser.isSuperAdmin && (!authUser.isAcademyAdmin || Number(authUser.academy_id) !== Number(id))) {
         return NextResponse.json({
             success: false,
             message: "Access denied: You can only edit your own academy records"
@@ -208,8 +210,9 @@ export async function PUT(req, { params }) {
 // DELETE - Soft Delete
 // =========================
 export async function DELETE(request, { params }) {
-    const authUser = await getAuthUser(request);
-    if (!authUser || !authUser.isSuperAdmin) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+    if (!authUser.isSuperAdmin) {
         return NextResponse.json({
             success: false,
             message: "Only Super Admin can delete academies"

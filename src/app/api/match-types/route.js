@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // =====================================================
 // GET - ALL MATCH TYPES
 // =====================================================
 export async function GET(request) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -84,6 +90,14 @@ export async function GET(request) {
 // POST - CREATE MATCH TYPE
 // =====================================================
 export async function POST(request) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (Number(authUser.role_id) !== 1 && Number(authUser.role_id) !== 2) {
+        return NextResponse.json({ success: false, message: "Forbidden. Only administrators can manage match types." }, { status: 403 });
+    }
+
     const connection = await pool.getConnection();
 
     try {

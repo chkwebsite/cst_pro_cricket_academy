@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
-// GET: Fetch all booking requests
+// GET: Fetch all booking requests (Tenant Scoped)
 export async function GET(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     try {
         const { searchParams } = new URL(request.url);
 
@@ -21,6 +25,8 @@ export async function GET(request) {
                 r.ground_id,
                 g.ground_name,
                 g.ground_code,
+                g.academy_id,
+                g.branch_id,
                 r.booking_date,
                 r.start_time,
                 r.end_time,
@@ -32,11 +38,46 @@ export async function GET(request) {
                 r.created_at,
                 r.updated_at
             FROM cst_ground_booking_requests r
-            LEFT JOIN cst_ground g ON g.id = r.ground_id
-            WHERE r.is_deleted = 0
+            INNER JOIN cst_ground g ON g.id = r.ground_id
+            WHERE r.is_deleted = 0 AND g.is_deleted = 0
         `;
 
         const values = [];
+
+        // Role-based Tenant Scoping
+        if (authUser.isPlayer) {
+            sql += ` AND (r.mobile = ? OR r.email = ?)`;
+            values.push(authUser.phone || "---", authUser.email || "---");
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += ` AND g.academy_id = ? AND g.branch_id = ?`;
+            values.push(authUser.academy_id, authUser.branch_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += ` AND g.academy_id = ?`;
+            values.push(authUser.academy_id);
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam) {
+                sql += ` AND g.branch_id = ?`;
+                values.push(branchIdParam);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += ` AND g.academy_id = ?`;
+            values.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds || [authUser.branch_id];
+            sql += ` AND g.branch_id IN (${allowed.map(() => "?").join(",")})`;
+            values.push(...allowed);
+        } else {
+            // Super Admin
+            const academyIdParam = searchParams.get("academy_id");
+            const branchIdParam = searchParams.get("branch_id");
+            if (academyIdParam) {
+                sql += ` AND g.academy_id = ?`;
+                values.push(academyIdParam);
+            }
+            if (branchIdParam) {
+                sql += ` AND g.branch_id = ?`;
+                values.push(branchIdParam);
+            }
+        }
 
         if (status) {
             sql += " AND r.request_status = ?";
@@ -62,7 +103,6 @@ export async function GET(request) {
             )`;
 
             const searchValue = `%${search}%`;
-
             values.push(searchValue, searchValue, searchValue, searchValue);
         }
 
@@ -89,7 +129,7 @@ export async function GET(request) {
 }
 
 
-// POST: Create a new booking request
+// POST: Create a new booking request (Public website or logged-in user)
 export async function POST(request) {
     try {
         const body = await request.json();
@@ -167,6 +207,42 @@ export async function POST(request) {
                 },
                 { status: 400 }
             );
+        }
+
+        // Validate ground exists and is active
+        const [groundRows] = await pool.execute(
+            `SELECT id, academy_id, branch_id, status FROM cst_ground WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+            [ground_id]
+        );
+
+        if (groundRows.length === 0 || groundRows[0].status !== 1) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Invalid or inactive ground selected",
+                },
+                { status: 400 }
+            );
+        }
+
+        // Check if requester is logged in to validate tenant authorization
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser && !authUser.isSuperAdmin && !authUser.isPlayer) {
+                if (Number(groundRows[0].academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json(
+                        { success: false, message: "Unauthorized ground for user's academy" },
+                        { status: 403 }
+                    );
+                }
+                if (authUser.isBranchAdmin && Number(groundRows[0].branch_id) !== Number(authUser.branch_id)) {
+                    return NextResponse.json(
+                        { success: false, message: "Unauthorized ground for user's branch" },
+                        { status: 403 }
+                    );
+                }
+            }
         }
 
         // Check overlapping booking requests

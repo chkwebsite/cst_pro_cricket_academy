@@ -2,6 +2,7 @@
 
 import {
     AlertTriangle,
+    Building2,
     CheckCircle2,
     Edit,
     Layers,
@@ -14,14 +15,23 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useUser } from "../components/UserContext";
 import Pagination from "../components/Pagination";
 
 export default function ProductStockPage() {
+    const { user } = useUser();
+    const isSuperAdmin = Boolean(
+        Number(user?.role_id) === 1 ||
+        String(user?.user_type || "").toLowerCase().includes("super")
+    );
+    const userAcademyId = user?.academy_id;
+
     const [stockList, setStockList] = useState([]);
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
     const [branches, setBranches] = useState([]);
     const [products, setProducts] = useState([]);
+    const [academies, setAcademies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -29,6 +39,7 @@ export default function ProductStockPage() {
     // Filters
     const [search, setSearch] = useState("");
     const [branchFilter, setBranchFilter] = useState("");
+    const [academyFilter, setAcademyFilter] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     const [reloadCount, setReloadCount] = useState(0);
 
@@ -40,29 +51,49 @@ export default function ProductStockPage() {
 
     // Add Stock Modal state
     const [showAddModal, setShowAddModal] = useState(false);
+    const [modalAcademyId, setModalAcademyId] = useState("");
     const [newProductId, setNewProductId] = useState("");
     const [newBranchId, setNewBranchId] = useState("");
     const [newQuantity, setNewQuantity] = useState(20);
     const [newLowStock, setNewLowStock] = useState(5);
     const [adding, setAdding] = useState(false);
 
-    // Load options (branches & products)
+    // Load options (branches, products, academies)
     useEffect(() => {
         (async () => {
             try {
-                const [brRes, prRes] = await Promise.all([
-                    fetch("/api/branch"),
-                    fetch("/api/products"),
-                ]);
-                const brJson = await brRes.json();
-                const prJson = await prRes.json();
-                if (brRes.ok && brJson.success) setBranches(brJson.data || []);
-                if (prRes.ok && prJson.success) setProducts(prJson.data || []);
+                const branchUrl = (!isSuperAdmin && userAcademyId)
+                    ? `/api/branch?academy_id=${userAcademyId}`
+                    : "/api/branch";
+                const productUrl = (!isSuperAdmin && userAcademyId)
+                    ? `/api/products?academy_id=${userAcademyId}`
+                    : "/api/products";
+
+                const requests = [
+                    fetch(branchUrl),
+                    fetch(productUrl),
+                ];
+
+                if (isSuperAdmin) {
+                    requests.push(fetch("/api/academies"));
+                }
+
+                const responses = await Promise.all(requests);
+                const brJson = await responses[0].json();
+                const prJson = await responses[1].json();
+
+                if (responses[0].ok && brJson.success) setBranches(brJson.data || []);
+                if (responses[1].ok && prJson.success) setProducts(prJson.data || []);
+
+                if (isSuperAdmin && responses[2]) {
+                    const acJson = await responses[2].json();
+                    if (responses[2].ok && acJson.success) setAcademies(acJson.data || []);
+                }
             } catch {
                 /* non-fatal */
             }
         })();
-    }, []);
+    }, [isSuperAdmin, userAcademyId]);
 
     // Load Stock
     useEffect(() => {
@@ -76,6 +107,7 @@ export default function ProductStockPage() {
                 if (search.trim()) params.set("search", search.trim());
                 if (branchFilter) params.set("branch_id", branchFilter);
                 if (statusFilter) params.set("stock_status", statusFilter);
+                if (isSuperAdmin && academyFilter) params.set("academy_id", academyFilter);
 
                 const res = await fetch(`/api/product-stock?${params.toString()}`);
                 const json = await res.json();
@@ -92,11 +124,11 @@ export default function ProductStockPage() {
 
         fetchStock();
         return () => { cancelled = true; };
-    }, [search, branchFilter, statusFilter, reloadCount]);
+    }, [search, branchFilter, academyFilter, statusFilter, reloadCount, isSuperAdmin]);
 
     useEffect(() => {
         setPage(1);
-    }, [search, branchFilter, statusFilter]);
+    }, [search, branchFilter, academyFilter, statusFilter]);
 
     const totalPages = Math.ceil(stockList.length / PAGE_SIZE) || 1;
     const pagedStock = stockList.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -278,7 +310,7 @@ export default function ProductStockPage() {
             <div className="bg-white rounded-4 shadow-sm p-3 mb-3 border">
                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <div className="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
-                        <div className="input-group" style={{ maxWidth: "320px" }}>
+                        <div className="input-group" style={{ maxWidth: "280px" }}>
                             <span className="input-group-text bg-light border-end-0">
                                 <Search size={16} className="text-muted" />
                             </span>
@@ -290,6 +322,20 @@ export default function ProductStockPage() {
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
+
+                        {isSuperAdmin && (
+                            <select
+                                className="form-select"
+                                value={academyFilter}
+                                onChange={(e) => setAcademyFilter(e.target.value)}
+                                style={{ maxWidth: "200px" }}
+                            >
+                                <option value="">All Academies</option>
+                                {academies.map((ac) => (
+                                    <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
+                                ))}
+                            </select>
+                        )}
 
                         <select
                             className="form-select"
@@ -315,11 +361,11 @@ export default function ProductStockPage() {
                             <option value="Out of Stock">Out of Stock</option>
                         </select>
 
-                        {(search || branchFilter || statusFilter) && (
+                        {(search || branchFilter || academyFilter || statusFilter) && (
                             <button
                                 type="button"
                                 className="btn btn-outline-secondary d-flex align-items-center gap-1"
-                                onClick={() => { setSearch(""); setBranchFilter(""); setStatusFilter(""); }}
+                                onClick={() => { setSearch(""); setBranchFilter(""); setAcademyFilter(""); setStatusFilter(""); }}
                             >
                                 <SearchSlash size={16} />
                                 <span>Reset</span>
@@ -355,6 +401,7 @@ export default function ProductStockPage() {
                                 <tr>
                                     <th style={{ width: "50px" }} className="text-center">#</th>
                                     <th>Product</th>
+                                    <th>Academy</th>
                                     <th>Branch</th>
                                     <th className="text-center">Total Qty</th>
                                     <th className="text-center">Reserved</th>
@@ -382,6 +429,12 @@ export default function ProductStockPage() {
                                                     <span>Code: <code>{item.product_code || "—"}</code></span>
                                                     <span className="ms-2">₹{Number(item.sale_price ?? item.price).toLocaleString("en-IN")}</span>
                                                 </div>
+                                            </td>
+                                            <td>
+                                                <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 d-inline-flex align-items-center gap-1">
+                                                    <Building2 size={12} />
+                                                    <span>{item.academy_name || "Academy"}</span>
+                                                </span>
                                             </td>
                                             <td>
                                                 <span className="badge bg-light text-dark border px-2 py-1">
@@ -520,6 +573,27 @@ export default function ProductStockPage() {
 
                             <form onSubmit={handleCreateStock}>
                                 <div className="modal-body p-4">
+                                    {isSuperAdmin && (
+                                        <div className="mb-3">
+                                            <label className="form-label small fw-semibold text-secondary">Academy Filter</label>
+                                            <select
+                                                className="form-select"
+                                                value={modalAcademyId}
+                                                onChange={(e) => {
+                                                    setModalAcademyId(e.target.value);
+                                                    setNewProductId("");
+                                                    setNewBranchId("");
+                                                }}
+                                                disabled={adding}
+                                            >
+                                                <option value="">-- All Academies --</option>
+                                                {academies.map((ac) => (
+                                                    <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
                                     <div className="mb-3">
                                         <label className="form-label small fw-semibold text-secondary">Product *</label>
                                         <select
@@ -530,11 +604,13 @@ export default function ProductStockPage() {
                                             disabled={adding}
                                         >
                                             <option value="">-- Select Product --</option>
-                                            {products.map((p) => (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.product_name} ({p.product_code || `ID: ${p.id}`})
-                                                </option>
-                                            ))}
+                                            {products
+                                                .filter((p) => !modalAcademyId || Number(p.academy_id) === Number(modalAcademyId))
+                                                .map((p) => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.product_name} ({p.product_code || `ID: ${p.id}`})
+                                                    </option>
+                                                ))}
                                         </select>
                                     </div>
 
@@ -548,11 +624,13 @@ export default function ProductStockPage() {
                                             disabled={adding}
                                         >
                                             <option value="">-- Select Branch --</option>
-                                            {branches.map((b) => (
-                                                <option key={b.id} value={b.id}>
-                                                    {b.branch_name} {b.city ? `(${b.city})` : ""}
-                                                </option>
-                                            ))}
+                                            {branches
+                                                .filter((b) => !modalAcademyId || Number(b.academy_id) === Number(modalAcademyId))
+                                                .map((b) => (
+                                                    <option key={b.id} value={b.id}>
+                                                        {b.branch_name} {b.city ? `(${b.city})` : ""}
+                                                    </option>
+                                                ))}
                                         </select>
                                     </div>
 

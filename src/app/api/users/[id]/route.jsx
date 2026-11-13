@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import fs from "fs/promises";
 import path from "path";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, validateBranchBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 // =====================================================
 // GET SINGLE USER
@@ -13,13 +13,8 @@ export async function GET(
     request,
     { params }
 ) {
-    const authUser = await getAuthUser(request);
-    if (!authUser) {
-        return NextResponse.json(
-            { success: false, message: "Unauthorized. Authentication required." },
-            { status: 401 }
-        );
-    }
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
 
     let connection;
 
@@ -70,6 +65,39 @@ export async function GET(
                     status: 404
                 }
             );
+        }
+
+        const targetUser = rows[0];
+
+        // Strict Tenant Isolation Check
+        if (!authUser.isSuperAdmin) {
+            if (authUser.isPlayer && Number(authUser.id) !== Number(targetUser.id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: You can only view your own user profile" },
+                    { status: 403 }
+                );
+            }
+            if (targetUser.academy_id && Number(targetUser.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: User belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(targetUser.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: User belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+            if (!authUser.isAcademyAdmin && !authUser.isBranchAdmin && !authUser.isPlayer) {
+                const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+                if (targetUser.branch_id && !allowedBranches.includes(Number(targetUser.branch_id))) {
+                    return NextResponse.json(
+                        { success: false, message: "Access denied: User belongs to an unauthorized branch" },
+                        { status: 403 }
+                    );
+                }
+            }
         }
 
         return NextResponse.json(
@@ -124,13 +152,8 @@ export async function GET(
 
 export async function PUT(request, { params }) {
 
-    const authUser = await getAuthUser(request);
-    if (!authUser) {
-        return NextResponse.json(
-            { success: false, message: "Unauthorized. Authentication required." },
-            { status: 401 }
-        );
-    }
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
 
     const { id } = await params;
     const userId = Number(id);
@@ -185,11 +208,11 @@ export async function PUT(request, { params }) {
                 .trim();
 
 
-        const academy_id =
+        let academy_id =
             formData.get("academy_id") || null;
 
 
-        const branch_id =
+        let branch_id =
             formData.get("branch_id") || null;
 
 
@@ -227,7 +250,7 @@ export async function PUT(request, { params }) {
                 : null;
 
 
-        const user_type =
+        let user_type =
             formData.get("user_type")
                 ?.toString()
                 .trim();
@@ -348,6 +371,47 @@ export async function PUT(request, { params }) {
 
 
         const existingUser = existingRows[0];
+
+        // Strict Tenant Isolation Check on existing user
+        if (!authUser.isSuperAdmin) {
+            if (isSelf) {
+                // If user updates self, prevent non-admin from changing academy_id, branch_id, or user_type
+                if (!authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+                    academy_id = existingUser.academy_id;
+                    branch_id = existingUser.branch_id;
+                    user_type = existingUser.user_type;
+                }
+            } else {
+                if (existingUser.academy_id && Number(existingUser.academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json(
+                        { success: false, message: "Access denied: User belongs to another academy" },
+                        { status: 403 }
+                    );
+                }
+                if (authUser.isBranchAdmin && Number(existingUser.branch_id) !== Number(authUser.branch_id)) {
+                    return NextResponse.json(
+                        { success: false, message: "Access denied: User belongs to another branch" },
+                        { status: 403 }
+                    );
+                }
+            }
+
+            if (authUser.isAcademyAdmin) {
+                academy_id = authUser.academy_id;
+                if (branch_id) {
+                    const isValidBranch = await validateBranchBelongsToAcademy(connection, branch_id, authUser.academy_id);
+                    if (!isValidBranch) {
+                        return NextResponse.json(
+                            { success: false, message: "Branch does not belong to your academy" },
+                            { status: 400 }
+                        );
+                    }
+                }
+            } else if (authUser.isBranchAdmin) {
+                academy_id = authUser.academy_id;
+                branch_id = authUser.branch_id;
+            }
+        }
 
 
         // =====================================================
@@ -1189,4 +1253,82 @@ export async function PUT(request, { params }) {
 
     }
 
+}
+
+// =====================================================
+// DELETE - SOFT DELETE USER
+// =====================================================
+export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    const isAdmin = authUser.isSuperAdmin || authUser.isAcademyAdmin || authUser.isBranchAdmin;
+    if (!isAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Access denied. Administrator authorization required to delete users." },
+            { status: 403 }
+        );
+    }
+
+    let connection;
+    try {
+        const { id } = await params;
+        const userId = Number(id);
+
+        if (!userId || Number.isNaN(userId)) {
+            return NextResponse.json(
+                { success: false, message: "Valid user id is required" },
+                { status: 400 }
+            );
+        }
+
+        connection = await pool.getConnection();
+
+        const [rows] = await connection.query(
+            `SELECT id, academy_id, branch_id FROM cst_users WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+            [userId]
+        );
+
+        if (rows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "User not found" },
+                { status: 404 }
+            );
+        }
+
+        const targetUser = rows[0];
+
+        if (!authUser.isSuperAdmin) {
+            if (targetUser.academy_id && Number(targetUser.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: User belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(targetUser.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: User belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
+
+        await connection.query(
+            `UPDATE cst_users SET is_deleted = 1, status = 0, updated_at = NOW() WHERE id = ?`,
+            [userId]
+        );
+
+        return NextResponse.json({
+            success: true,
+            message: "User deleted successfully",
+        });
+    } catch (error) {
+        console.error("Delete User Error:", error);
+        return NextResponse.json(
+            { success: false, message: error.message || "Failed to delete user" },
+            { status: 500 }
+        );
+    } finally {
+        if (connection) connection.release();
+    }
 }

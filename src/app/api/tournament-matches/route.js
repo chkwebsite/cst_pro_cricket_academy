@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 const ROUND_TYPES = [
@@ -65,6 +66,8 @@ const MATCH_SELECT = `
 
         t.tournament_name,
         t.tournament_code,
+        t.academy_id,
+        t.branch_id,
 
         ma.match_no AS actual_match_no,
         ma.match_type,
@@ -149,6 +152,32 @@ export async function GET(request) {
 
         const conditions = ["1 = 1"];
         const params = [];
+
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser) {
+                if (authUser.isPlayer) {
+                    conditions.push("t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)");
+                    params.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                    conditions.push("t.academy_id = ? AND t.branch_id = ?");
+                    params.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                    conditions.push("t.academy_id = ?");
+                    params.push(authUser.academy_id);
+                    const branchIdParam = searchParams.get("branch_id");
+                    if (branchIdParam) {
+                        conditions.push("t.branch_id = ?");
+                        params.push(Number(branchIdParam));
+                    }
+                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                    conditions.push(`t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`);
+                    params.push(authUser.academy_id, ...allowed);
+                }
+            }
+        }
 
         const filters = [
             ["tm.id", id],
@@ -255,6 +284,16 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot schedule tournament matches." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -399,7 +438,7 @@ export async function POST(request) {
 
         // Validate tournament
         const [tournaments] = await connection.query(
-            `SELECT id FROM cst_tournaments WHERE id = ? LIMIT 1`,
+            `SELECT id, academy_id, branch_id FROM cst_tournaments WHERE id = ? AND is_deleted = 0 LIMIT 1`,
             [tournamentId]
         );
 
@@ -413,6 +452,23 @@ export async function POST(request) {
                 },
                 { status: 404 }
             );
+        }
+
+        if (!authUser.isSuperAdmin) {
+            if (Number(tournaments[0].academy_id) !== Number(authUser.academy_id)) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Tournament belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(tournaments[0].branch_id) !== Number(authUser.branch_id)) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Tournament belongs to another branch" },
+                    { status: 403 }
+                );
+            }
         }
 
         // Validate actual match, if supplied

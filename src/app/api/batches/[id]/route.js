@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET: Single batch by id with coaches and players count
 export async function GET(request, context) {
@@ -48,13 +48,35 @@ export async function GET(request, context) {
             );
         }
 
-        const authUser = await getAuthUser(request);
-        if (authUser && !authUser.isSuperAdmin) {
-            if (authUser.isAcademyAdmin && authUser.academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin) {
+            if (authUser.isAcademyAdmin && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
                 return NextResponse.json({ success: false, message: "Batch not found or access denied" }, { status: 403 });
             }
-            if (authUser.isBranchAdmin && authUser.branch_id && Number(rows[0].branch_id) !== Number(authUser.branch_id)) {
+            if (authUser.isBranchAdmin && Number(rows[0].branch_id) !== Number(authUser.branch_id)) {
                 return NextResponse.json({ success: false, message: "Access denied: Batch belongs to another branch" }, { status: 403 });
+            }
+            if (authUser.isCoach) {
+                const [isCoachAssigned] = await connection.query(
+                    `SELECT id FROM cst_batch_coaches WHERE batch_id = ? AND coach_user_id = ? AND status = 1 AND is_deleted = 0 LIMIT 1`,
+                    [id, authUser.id]
+                );
+                if (isCoachAssigned.length === 0) {
+                    return NextResponse.json({ success: false, message: "Access denied: You are not assigned to this batch" }, { status: 403 });
+                }
+            }
+            if (authUser.isPlayer) {
+                const [isPlayerEnrolled] = await connection.query(
+                    `SELECT bp.id FROM cst_batch_players bp
+                     INNER JOIN cst_user_programs up ON up.id = bp.user_program_id
+                     WHERE bp.batch_id = ? AND up.user_id = ? AND bp.status = 'Active' AND up.is_deleted = 0 LIMIT 1`,
+                    [id, authUser.id]
+                );
+                if (isPlayerEnrolled.length === 0) {
+                    return NextResponse.json({ success: false, message: "Access denied: You are not enrolled in this batch" }, { status: 403 });
+                }
             }
         }
 

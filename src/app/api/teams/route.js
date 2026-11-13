@@ -1,20 +1,46 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
+let schemaEnsured = false;
+async function ensureTeamsSchema(connection) {
+    if (schemaEnsured) return;
+    try {
+        const [academyCols] = await connection.query(
+            "SHOW COLUMNS FROM cst_teams LIKE 'academy_id'"
+        );
+        if (academyCols.length === 0) {
+            await connection.query(
+                "ALTER TABLE cst_teams ADD COLUMN academy_id INT NULL AFTER id"
+            );
+        }
+
+        const [branchCols] = await connection.query(
+            "SHOW COLUMNS FROM cst_teams LIKE 'branch_id'"
+        );
+        if (branchCols.length === 0) {
+            await connection.query(
+                "ALTER TABLE cst_teams ADD COLUMN branch_id INT NULL AFTER academy_id"
+            );
+        }
+
+        await connection.query(`
+            UPDATE cst_teams
+            SET
+                academy_id = COALESCE(NULLIF(academy_id, 0), 1),
+                branch_id = COALESCE(NULLIF(branch_id, 0), 1)
+            WHERE academy_id IS NULL OR academy_id = 0 OR branch_id IS NULL OR branch_id = 0
+        `);
+
+        schemaEnsured = true;
+    } catch (err) {
+        console.error("ensureTeamsSchema error:", err.message);
+    }
+}
 
 /*
 |--------------------------------------------------------------------------
-| GET ALL TEAMS
-|--------------------------------------------------------------------------
-| Examples:
-| /api/teams
-| /api/teams?academy_id=1
-| /api/teams?academy_id=1&branch_id=2
-| /api/teams?team_name=Warriors
-| /api/teams?team_type=Academy
-| /api/teams?category=Senior
-| /api/teams?age_group=U-19
-| /api/teams?status=1
+| GET ALL TEAMS (Tenant Isolated)
 |--------------------------------------------------------------------------
 */
 
@@ -22,6 +48,10 @@ export async function GET(request) {
     const connection = await pool.getConnection();
 
     try {
+        await ensureTeamsSchema(connection);
+
+        const { user: authUser } = await getAuthenticatedUser(request);
+
         const { searchParams } = new URL(request.url);
 
         const academy_id = searchParams.get("academy_id");
@@ -73,115 +103,101 @@ export async function GET(request) {
 
         const params = [];
 
-        /*
-        |--------------------------------------------------------------------------
-        | ACADEMY FILTER
-        |--------------------------------------------------------------------------
-        */
-
-        if (academy_id !== null && academy_id !== "") {
-            sql += ` AND (
-                t.academy_id = ?
-                OR (t.academy_id IS NULL AND t.branch_id IS NULL)
-            )`;
-            params.push(Number(academy_id));
+        // Tenant Isolation
+        if (authUser) {
+            if (authUser.isPlayer) {
+                sql += ` AND (
+                    (t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL))
+                    OR t.id IN (SELECT team_id FROM cst_team_players WHERE user_id = ? AND is_deleted = 0)
+                )`;
+                params.push(Number(authUser.academy_id), Number(authUser.branch_id), Number(authUser.id));
+            } else if (authUser.isBranchAdmin) {
+                sql += ` AND t.academy_id = ? AND t.branch_id = ?`;
+                params.push(Number(authUser.academy_id), Number(authUser.branch_id));
+            } else if (authUser.isAcademyAdmin) {
+                sql += ` AND t.academy_id = ?`;
+                params.push(Number(authUser.academy_id));
+                if (branch_id) {
+                    sql += ` AND t.branch_id = ?`;
+                    params.push(Number(branch_id));
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += ` AND t.academy_id = ?`;
+                params.push(Number(authUser.academy_id));
+                if (Array.isArray(authUser.assignedBranchIds) && authUser.assignedBranchIds.length > 0) {
+                    const placeholders = authUser.assignedBranchIds.map(() => "?").join(",");
+                    sql += ` AND t.branch_id IN (${placeholders})`;
+                    params.push(...authUser.assignedBranchIds.map(Number));
+                } else if (authUser.branch_id) {
+                    sql += ` AND t.branch_id = ?`;
+                    params.push(Number(authUser.branch_id));
+                }
+            } else {
+                // Super Admin
+                if (academy_id !== null && academy_id !== "") {
+                    sql += ` AND t.academy_id = ?`;
+                    params.push(Number(academy_id));
+                }
+                if (branch_id !== null && branch_id !== "") {
+                    sql += ` AND t.branch_id = ?`;
+                    params.push(Number(branch_id));
+                }
+            }
+        } else {
+            // Unauthenticated (public website lookup)
+            if (academy_id !== null && academy_id !== "") {
+                sql += ` AND t.academy_id = ?`;
+                params.push(Number(academy_id));
+            }
+            if (branch_id !== null && branch_id !== "") {
+                sql += ` AND t.branch_id = ?`;
+                params.push(Number(branch_id));
+            }
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | BRANCH FILTER
-        |--------------------------------------------------------------------------
-        */
-
-        if (branch_id !== null && branch_id !== "") {
-            sql += ` AND (
-                t.branch_id = ?
-                OR (t.academy_id IS NULL AND t.branch_id IS NULL)
-            )`;
-            params.push(Number(branch_id));
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | TEAM NAME
-        |--------------------------------------------------------------------------
-        */
 
         if (team_name) {
             sql += ` AND t.team_name LIKE ?`;
             params.push(`%${team_name}%`);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | TEAM CODE
-        |--------------------------------------------------------------------------
-        */
-
         if (team_code) {
             sql += ` AND t.team_code LIKE ?`;
             params.push(`%${team_code}%`);
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | TEAM TYPE
-        |--------------------------------------------------------------------------
-        */
 
         if (team_type) {
             sql += ` AND t.team_type = ?`;
             params.push(team_type);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | CATEGORY
-        |--------------------------------------------------------------------------
-        */
-
         if (category) {
             sql += ` AND t.category LIKE ?`;
             params.push(`%${category}%`);
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | AGE GROUP
-        |--------------------------------------------------------------------------
-        */
 
         if (age_group) {
             sql += ` AND t.age_group LIKE ?`;
             params.push(`%${age_group}%`);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | STATUS
-        |--------------------------------------------------------------------------
-        */
-
-        if (status !== null && status !== "") {
+        if (status !== null && status !== "" && status !== undefined) {
             sql += ` AND t.status = ?`;
             params.push(Number(status));
         }
 
-        sql += `
-            ORDER BY t.id DESC
-        `;
+        sql += ` ORDER BY t.id DESC`;
 
         const [rows] = await connection.query(sql, params);
 
         return NextResponse.json({
             success: true,
             message: "Teams fetched successfully",
+            total: rows.length,
             data: rows
         });
 
     } catch (error) {
         console.error("GET TEAMS ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
@@ -203,9 +219,21 @@ export async function GET(request) {
 */
 
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot create teams." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
+        await ensureTeamsSchema(connection);
+
         const body = await request.json();
 
         const {
@@ -216,15 +244,8 @@ export async function POST(request) {
             team_type,
             category,
             age_group,
-            status,
-            created_by
+            status
         } = body;
-
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATION
-        |--------------------------------------------------------------------------
-        */
 
         if (!team_name || !team_name.toString().trim()) {
             return NextResponse.json(
@@ -235,12 +256,6 @@ export async function POST(request) {
                 { status: 400 }
             );
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | VALID TEAM TYPE
-        |--------------------------------------------------------------------------
-        */
 
         const allowedTeamTypes = [
             "Academy",
@@ -266,185 +281,82 @@ export async function POST(request) {
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE ACADEMY
-        |--------------------------------------------------------------------------
-        */
+        // Enforce tenant boundary
+        let finalAcademyId = null;
+        let finalBranchId = null;
 
-        if (
-            academy_id !== null &&
-            academy_id !== undefined &&
-            academy_id !== ""
-        ) {
-            const [academyRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_academy
-                WHERE id = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [Number(academy_id)]
-            );
-
-            if (academyRows.length === 0) {
+        if (authUser.isSuperAdmin) {
+            finalAcademyId = academy_id ? Number(academy_id) : 1;
+            finalBranchId = branch_id ? Number(branch_id) : null;
+        } else if (authUser.isAcademyAdmin) {
+            finalAcademyId = Number(authUser.academy_id);
+            finalBranchId = branch_id ? Number(branch_id) : (authUser.branch_id ? Number(authUser.branch_id) : null);
+        } else if (authUser.isBranchAdmin) {
+            finalAcademyId = Number(authUser.academy_id);
+            finalBranchId = Number(authUser.branch_id);
+        } else {
+            // Staff / Coach
+            finalAcademyId = Number(authUser.academy_id);
+            finalBranchId = authUser.branch_id ? Number(authUser.branch_id) : (branch_id ? Number(branch_id) : null);
+            const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+            if (finalBranchId && !allowed.includes(finalBranchId)) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Academy not found"
-                    },
-                    { status: 404 }
+                    { success: false, message: "Unauthorized branch selection" },
+                    { status: 403 }
                 );
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE BRANCH
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            branch_id !== null &&
-            branch_id !== undefined &&
-            branch_id !== ""
-        ) {
-            const [branchRows] = await connection.query(
-                `
-                SELECT id, academy_id
-                FROM cst_branch
-                WHERE id = ?
-                LIMIT 1
-                `,
-                [Number(branch_id)]
+        if (!finalAcademyId) {
+            return NextResponse.json(
+                { success: false, message: "Academy is required to create a team" },
+                { status: 400 }
             );
-
-            if (branchRows.length === 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Branch not found"
-                    },
-                    { status: 404 }
-                );
-            }
-
-            /*
-            | If both academy and branch are provided,
-            | branch must belong to that academy.
-            */
-
-            if (
-                academy_id !== null &&
-                academy_id !== undefined &&
-                academy_id !== ""
-            ) {
-                if (
-                    Number(branchRows[0].academy_id) !==
-                    Number(academy_id)
-                ) {
-                    return NextResponse.json(
-                        {
-                            success: false,
-                            message:
-                                "Selected branch does not belong to selected academy"
-                        },
-                        { status: 400 }
-                    );
-                }
-            }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE CREATED BY
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            created_by !== null &&
-            created_by !== undefined &&
-            created_by !== ""
-        ) {
-            const [userRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_users
-                WHERE id = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [Number(created_by)]
+        // Verify branch belongs to academy if provided
+        if (finalBranchId) {
+            const [bRows] = await connection.query(
+                `SELECT id FROM cst_branch WHERE id = ? AND academy_id = ? AND is_deleted = 0 LIMIT 1`,
+                [finalBranchId, finalAcademyId]
             );
-
-            if (userRows.length === 0) {
+            if (bRows.length === 0) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Created by user not found"
-                    },
-                    { status: 404 }
+                    { success: false, message: "Branch does not belong to authorized academy" },
+                    { status: 400 }
                 );
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | DUPLICATE TEAM CODE
-        |--------------------------------------------------------------------------
-        */
-
+        // Check duplicate code within academy
         const finalTeamCode =
             team_code && team_code.toString().trim()
                 ? team_code.toString().trim().toUpperCase()
                 : null;
 
         if (finalTeamCode) {
-            let duplicateSql = `
+            const [duplicateRows] = await connection.query(
+                `
                 SELECT id
                 FROM cst_teams
                 WHERE team_code = ?
+                AND academy_id = ?
                 AND is_deleted = 0
-            `;
-
-            const duplicateParams = [finalTeamCode];
-
-            if (
-                academy_id !== null &&
-                academy_id !== undefined &&
-                academy_id !== ""
-            ) {
-                duplicateSql += ` AND academy_id = ?`;
-                duplicateParams.push(Number(academy_id));
-            } else {
-                duplicateSql += ` AND academy_id IS NULL`;
-            }
-
-            duplicateSql += ` LIMIT 1`;
-
-            const [duplicateRows] = await connection.query(
-                duplicateSql,
-                duplicateParams
+                LIMIT 1
+                `,
+                [finalTeamCode, finalAcademyId]
             );
 
             if (duplicateRows.length > 0) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message:
-                            "Team code already exists in this academy"
+                        message: "Team code already exists in this academy"
                     },
                     { status: 409 }
                 );
             }
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | INSERT TEAM
-        |--------------------------------------------------------------------------
-        */
 
         const [result] = await connection.query(
             `
@@ -462,41 +374,15 @@ export async function POST(request) {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             [
-                academy_id !== null &&
-                    academy_id !== undefined &&
-                    academy_id !== ""
-                    ? Number(academy_id)
-                    : null,
-
-                branch_id !== null &&
-                    branch_id !== undefined &&
-                    branch_id !== ""
-                    ? Number(branch_id)
-                    : null,
-
+                finalAcademyId,
+                finalBranchId || null,
                 team_name.toString().trim(),
                 finalTeamCode,
                 finalTeamType,
-
-                category
-                    ? category.toString().trim()
-                    : null,
-
-                age_group
-                    ? age_group.toString().trim()
-                    : null,
-
-                status !== null &&
-                    status !== undefined &&
-                    status !== ""
-                    ? Number(status)
-                    : 1,
-
-                created_by !== null &&
-                    created_by !== undefined &&
-                    created_by !== ""
-                    ? Number(created_by)
-                    : null
+                category ? category.toString().trim() : null,
+                age_group ? age_group.toString().trim() : null,
+                status !== null && status !== undefined && status !== "" ? Number(status) : 1,
+                authUser.id
             ]
         );
 
@@ -505,7 +391,9 @@ export async function POST(request) {
                 success: true,
                 message: "Team created successfully",
                 data: {
-                    id: result.insertId
+                    id: result.insertId,
+                    academy_id: finalAcademyId,
+                    branch_id: finalBranchId
                 }
             },
             { status: 201 }
@@ -513,7 +401,6 @@ export async function POST(request) {
 
     } catch (error) {
         console.error("CREATE TEAM ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,

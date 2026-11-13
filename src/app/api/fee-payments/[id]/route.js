@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 
 const PAYMENT_MODES = [
@@ -137,6 +137,10 @@ export async function GET(request, context) {
 
     try {
         const { id } = await context.params;
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         if (!isPositiveInt(id)) {
             return NextResponse.json(
@@ -160,6 +164,9 @@ export async function GET(request, context) {
                 fs.paid_amount,
                 fs.balance_amount,
                 fs.status AS fee_status,
+                fs.user_id,
+                ttp.user_id AS ttp_user_id,
+                mp.user_id AS mp_user_id,
                 u.first_name AS created_by_first_name,
                 u.last_name AS created_by_last_name,
                 u.user_type AS created_by_role,
@@ -197,9 +204,23 @@ export async function GET(request, context) {
             );
         }
 
+        const record = rows[0];
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            const matchesPlayer = (
+                Number(record.user_id) === Number(authUser.id) ||
+                Number(record.ttp_user_id) === Number(authUser.id) ||
+                Number(record.mp_user_id) === Number(authUser.id)
+            );
+            if (!matchesPlayer) {
+                return NextResponse.json({ success: false, message: "Forbidden. You can only view your own payment records." }, { status: 403 });
+            }
+        } else if (!verifyRecordAccess(authUser, { academy_id: record.academy_id, branch_id: record.branch_id })) {
+            return NextResponse.json({ success: false, message: "Forbidden. You do not have access to this payment record." }, { status: 403 });
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
     } catch (error) {
         console.error("GET single fee payment error:", error);
@@ -222,7 +243,16 @@ export async function PUT(request, context) {
 
     try {
         const { id } = await context.params;
-        const authUser = await getAuthUser(request);
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
+        if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Players and coaches cannot edit payment records." },
+                { status: 403 }
+            );
+        }
 
         if (!isPositiveInt(id)) {
             return NextResponse.json(
@@ -240,9 +270,10 @@ export async function PUT(request, context) {
         await connection.beginTransaction();
 
         const [paymentRows] = await connection.execute(
-            `SELECT *
-             FROM cst_fee_payments
-             WHERE id = ?
+            `SELECT fp.*, fs.academy_id, fs.branch_id
+             FROM cst_fee_payments fp
+             INNER JOIN cst_fee_status fs ON fs.id = fp.fee_status_id
+             WHERE fp.id = ?
              FOR UPDATE`,
             [Number(id)]
         );
@@ -260,6 +291,14 @@ export async function PUT(request, context) {
         }
 
         const old = paymentRows[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: old.academy_id, branch_id: old.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Payment belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         if (
             old.status !== "Paid" &&
@@ -514,6 +553,17 @@ export async function PUT(request, context) {
 // DELETE /api/fee-payments/10
 // Only non-Paid payments can be physically deleted.
 export async function DELETE(request, context) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot delete payment records." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -533,9 +583,10 @@ export async function DELETE(request, context) {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            `SELECT *
-             FROM cst_fee_payments
-             WHERE id = ?
+            `SELECT fp.*, fs.academy_id, fs.branch_id
+             FROM cst_fee_payments fp
+             INNER JOIN cst_fee_status fs ON fs.id = fp.fee_status_id
+             WHERE fp.id = ?
              FOR UPDATE`,
             [Number(id)]
         );
@@ -549,6 +600,14 @@ export async function DELETE(request, context) {
                     message: "Payment record not found.",
                 },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Payment belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

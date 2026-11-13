@@ -2,6 +2,7 @@
 
 import {
     AlertCircle,
+    Building2,
     CheckCircle2,
     DollarSign,
     Edit,
@@ -21,14 +22,23 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useUser } from "../components/UserContext";
 import Pagination from "../components/Pagination";
 
 export default function ProductsPage() {
+    const { user } = useUser();
+    const isSuperAdmin = Boolean(
+        Number(user?.role_id) === 1 ||
+        String(user?.user_type || "").toLowerCase().includes("super")
+    );
+    const userAcademyId = user?.academy_id;
+
     const [products, setProducts] = useState([]);
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
     const [categories, setCategories] = useState([]);
     const [branches, setBranches] = useState([]);
+    const [academies, setAcademies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -36,6 +46,7 @@ export default function ProductsPage() {
     // Filters
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("");
+    const [academyFilter, setAcademyFilter] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     const [reloadCount, setReloadCount] = useState(0);
 
@@ -51,6 +62,7 @@ export default function ProductsPage() {
 
     // Product Form
     const [formData, setFormData] = useState({
+        academy_id: "",
         category_id: "",
         product_name: "",
         slug: "",
@@ -64,23 +76,42 @@ export default function ProductsPage() {
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState("");
 
-    // Load filter options (categories & branches)
+    // Load filter options (categories, branches & academies)
     useEffect(() => {
         (async () => {
             try {
-                const [catRes, brRes] = await Promise.all([
-                    fetch("/api/product-categories"),
-                    fetch("/api/branch"),
-                ]);
-                const catJson = await catRes.json();
-                const brJson = await brRes.json();
-                if (catRes.ok && catJson.success) setCategories(catJson.data || []);
-                if (brRes.ok && brJson.success) setBranches(brJson.data || []);
+                const branchUrl = (!isSuperAdmin && userAcademyId)
+                    ? `/api/branch?academy_id=${userAcademyId}`
+                    : "/api/branch";
+                const catUrl = (!isSuperAdmin && userAcademyId)
+                    ? `/api/product-categories?academy_id=${userAcademyId}`
+                    : "/api/product-categories";
+
+                const requests = [
+                    fetch(catUrl),
+                    fetch(branchUrl),
+                ];
+
+                if (isSuperAdmin) {
+                    requests.push(fetch("/api/academies"));
+                }
+
+                const responses = await Promise.all(requests);
+                const catJson = await responses[0].json();
+                const brJson = await responses[1].json();
+
+                if (responses[0].ok && catJson.success) setCategories(catJson.data || []);
+                if (responses[1].ok && brJson.success) setBranches(brJson.data || []);
+
+                if (isSuperAdmin && responses[2]) {
+                    const acJson = await responses[2].json();
+                    if (responses[2].ok && acJson.success) setAcademies(acJson.data || []);
+                }
             } catch {
                 /* non-fatal */
             }
         })();
-    }, []);
+    }, [isSuperAdmin, userAcademyId]);
 
     // Load products
     useEffect(() => {
@@ -94,6 +125,7 @@ export default function ProductsPage() {
                 if (search.trim()) params.set("search", search.trim());
                 if (categoryFilter) params.set("category_id", categoryFilter);
                 if (statusFilter !== "") params.set("status", statusFilter);
+                if (isSuperAdmin && academyFilter) params.set("academy_id", academyFilter);
 
                 const res = await fetch(`/api/products?${params.toString()}`);
                 const json = await res.json();
@@ -110,11 +142,11 @@ export default function ProductsPage() {
 
         fetchProducts();
         return () => { cancelled = true; };
-    }, [search, categoryFilter, statusFilter, reloadCount]);
+    }, [search, categoryFilter, academyFilter, statusFilter, reloadCount, isSuperAdmin]);
 
     useEffect(() => {
         setPage(1);
-    }, [search, categoryFilter, statusFilter]);
+    }, [search, categoryFilter, academyFilter, statusFilter]);
 
     const totalPages = Math.ceil(products.length / PAGE_SIZE) || 1;
     const pagedProducts = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -133,6 +165,7 @@ export default function ProductsPage() {
     const handleOpenCreate = () => {
         setEditingProduct(null);
         setFormData({
+            academy_id: isSuperAdmin ? (academies[0]?.id ? String(academies[0].id) : "") : (userAcademyId ? String(userAcademyId) : ""),
             category_id: categories[0]?.id ? String(categories[0].id) : "",
             product_name: "",
             slug: "",
@@ -151,6 +184,7 @@ export default function ProductsPage() {
     const handleOpenEdit = (p) => {
         setEditingProduct(p);
         setFormData({
+            academy_id: p.academy_id ? String(p.academy_id) : (userAcademyId ? String(userAcademyId) : ""),
             category_id: p.category_id ? String(p.category_id) : "",
             product_name: p.product_name || "",
             slug: p.slug || "",
@@ -218,7 +252,12 @@ export default function ProductsPage() {
             const url = isEdit ? `/api/products/${editingProduct.id}` : "/api/products";
             const method = isEdit ? "PUT" : "POST";
 
+            const targetAcademyId = isSuperAdmin
+                ? (formData.academy_id ? Number(formData.academy_id) : null)
+                : (userAcademyId ? Number(userAcademyId) : null);
+
             const payload = {
+                academy_id: targetAcademyId,
                 category_id: formData.category_id ? Number(formData.category_id) : null,
                 product_name: formData.product_name.trim(),
                 slug: formData.slug.trim().toLowerCase(),
@@ -426,7 +465,7 @@ export default function ProductsPage() {
             <div className="bg-white rounded-4 shadow-sm p-3 mb-3 border">
                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <div className="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
-                        <div className="input-group" style={{ maxWidth: "320px" }}>
+                        <div className="input-group" style={{ maxWidth: "280px" }}>
                             <span className="input-group-text bg-light border-end-0">
                                 <Search size={16} className="text-muted" />
                             </span>
@@ -438,6 +477,20 @@ export default function ProductsPage() {
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
+
+                        {isSuperAdmin && (
+                            <select
+                                className="form-select"
+                                value={academyFilter}
+                                onChange={(e) => setAcademyFilter(e.target.value)}
+                                style={{ maxWidth: "200px" }}
+                            >
+                                <option value="">All Academies</option>
+                                {academies.map((ac) => (
+                                    <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
+                                ))}
+                            </select>
+                        )}
 
                         <select
                             className="form-select"
@@ -462,11 +515,11 @@ export default function ProductsPage() {
                             <option value="0">Inactive</option>
                         </select>
 
-                        {(search || categoryFilter || statusFilter !== "") && (
+                        {(search || categoryFilter || academyFilter || statusFilter !== "") && (
                             <button
                                 type="button"
                                 className="btn btn-outline-secondary d-flex align-items-center gap-1"
-                                onClick={() => { setSearch(""); setCategoryFilter(""); setStatusFilter(""); }}
+                                onClick={() => { setSearch(""); setCategoryFilter(""); setAcademyFilter(""); setStatusFilter(""); }}
                             >
                                 <SearchSlash size={16} />
                                 <span>Reset</span>
@@ -503,6 +556,7 @@ export default function ProductsPage() {
                                 <tr>
                                     <th style={{ width: "50px" }} className="text-center">#</th>
                                     <th>Product Details</th>
+                                    <th>Academy</th>
                                     <th>Category</th>
                                     <th>Pricing</th>
                                     <th>Tax Rate</th>
@@ -523,9 +577,9 @@ export default function ProductsPage() {
                                                 >
                                                     {item.primary_image ? (
                                                         <img
-                                                            src={item.primary_image}
-                                                            alt={item.product_name}
-                                                            className="w-100 h-100 object-fit-contain p-0.5"
+                                                             src={item.primary_image}
+                                                             alt={item.product_name}
+                                                             className="w-100 h-100 object-fit-contain p-0.5"
                                                         />
                                                     ) : (
                                                         <Package size={22} className="text-success opacity-75" />
@@ -540,6 +594,12 @@ export default function ProductsPage() {
                                                     </div>
                                                 </div>
                                             </div>
+                                        </td>
+                                        <td>
+                                            <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 d-inline-flex align-items-center gap-1">
+                                                <Building2 size={12} />
+                                                <span>{item.academy_name || "Unassigned"}</span>
+                                            </span>
                                         </td>
                                         <td>
                                             <span className="badge bg-secondary-subtle text-secondary border px-2 py-1">
@@ -676,6 +736,31 @@ export default function ProductsPage() {
                                     )}
 
                                     <div className="row g-3">
+                                        {isSuperAdmin ? (
+                                            <div className="col-12">
+                                                <label className="form-label small fw-semibold text-secondary">Academy *</label>
+                                                <select
+                                                    className="form-select"
+                                                    required
+                                                    value={formData.academy_id}
+                                                    onChange={(e) => setFormData({ ...formData, academy_id: e.target.value })}
+                                                >
+                                                    <option value="">Select Academy</option>
+                                                    {academies.map((ac) => (
+                                                        <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="form-text small">This product will be strictly scoped to the selected academy.</div>
+                                            </div>
+                                        ) : (
+                                            <div className="col-12">
+                                                <div className="p-2 px-3 rounded-3 bg-light border d-flex align-items-center gap-2 small text-muted">
+                                                    <Building2 size={16} className="text-success" />
+                                                    <span>Academy: <strong>{user?.academy_name || "Current Academy"}</strong> (Scoped to your academy)</span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="col-md-8">
                                             <label className="form-label small fw-semibold text-secondary">Product Name *</label>
                                             <input
@@ -936,36 +1021,51 @@ export default function ProductsPage() {
                                     Set the stock quantity available at each academy branch for in-person pickup or branch fulfillment.
                                 </p>
 
-                                {branches.length === 0 ? (
-                                    <div className="alert alert-warning small">No academy branches registered yet.</div>
-                                ) : (
-                                    <div className="table-responsive">
-                                        <table className="table table-bordered align-middle">
-                                            <thead className="table-light small text-uppercase">
-                                                <tr>
-                                                    <th>Branch</th>
-                                                    <th style={{ width: "130px" }}>Quantity</th>
-                                                    <th style={{ width: "130px" }}>Low Stock Alert</th>
-                                                    <th style={{ width: "120px" }}>Status</th>
-                                                    <th style={{ width: "100px" }} className="text-end">Save</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {branches.map((b) => {
-                                                    const stockRow = productStockList.find((s) => Number(s.branch_id) === Number(b.id));
-                                                    return (
-                                                        <BranchStockRow
-                                                            key={b.id}
-                                                            branch={b}
-                                                            currentStock={stockRow}
-                                                            onSave={handleUpdateStock}
-                                                        />
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
+                                {(() => {
+                                    const modalBranches = branches.filter((b) => {
+                                        if (stockModalProduct?.academy_id) {
+                                            return Number(b.academy_id) === Number(stockModalProduct.academy_id);
+                                        }
+                                        return true;
+                                    });
+
+                                    if (modalBranches.length === 0) {
+                                        return (
+                                            <div className="alert alert-warning small">
+                                                No branches registered for this academy yet.
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="table-responsive">
+                                            <table className="table table-bordered align-middle">
+                                                <thead className="table-light small text-uppercase">
+                                                    <tr>
+                                                        <th>Branch</th>
+                                                        <th style={{ width: "130px" }}>Quantity</th>
+                                                        <th style={{ width: "130px" }}>Low Stock Alert</th>
+                                                        <th style={{ width: "120px" }}>Status</th>
+                                                        <th style={{ width: "100px" }} className="text-end">Save</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {modalBranches.map((b) => {
+                                                        const stockRow = productStockList.find((s) => Number(s.branch_id) === Number(b.id));
+                                                        return (
+                                                            <BranchStockRow
+                                                                key={b.id}
+                                                                branch={b}
+                                                                currentStock={stockRow}
+                                                                onSave={handleUpdateStock}
+                                                            />
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             <div className="modal-footer bg-light border-top">

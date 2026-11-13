@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 /*
 |--------------------------------------------------------------------------
 | GET ALL TOURNAMENT TEAMS
-|--------------------------------------------------------------------------
-| GET /api/tournament-teams
-| GET /api/tournament-teams?tournament_id=1
-| GET /api/tournament-teams&team_id=2
-| GET /api/tournament-teams?tournament_id=1&status=Registered
-| GET /api/tournament-teams?academy_id=1&branch_id=2
 |--------------------------------------------------------------------------
 */
 
@@ -85,6 +79,38 @@ export async function GET(request) {
 
         const params = [];
 
+        // Check authentication
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser) {
+                if (authUser.isPlayer) {
+                    sql += ` AND t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)`;
+                    params.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                    sql += ` AND t.academy_id = ? AND t.branch_id = ?`;
+                    params.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                    sql += ` AND t.academy_id = ?`;
+                    params.push(authUser.academy_id);
+                    if (branch_id) {
+                        sql += ` AND t.branch_id = ?`;
+                        params.push(Number(branch_id));
+                    }
+                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                    sql += ` AND t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                    params.push(authUser.academy_id, ...allowed);
+                } else {
+                    if (academy_id) { sql += ` AND t.academy_id = ?`; params.push(Number(academy_id)); }
+                    if (branch_id) { sql += ` AND t.branch_id = ?`; params.push(Number(branch_id)); }
+                }
+            }
+        } else {
+            if (academy_id) { sql += ` AND t.academy_id = ?`; params.push(Number(academy_id)); }
+            if (branch_id) { sql += ` AND t.branch_id = ?`; params.push(Number(branch_id)); }
+        }
+
         if (tournament_id) {
             sql += ` AND tt.tournament_id = ?`;
             params.push(Number(tournament_id));
@@ -108,16 +134,6 @@ export async function GET(request) {
         if (status) {
             sql += ` AND tt.status = ?`;
             params.push(status);
-        }
-
-        if (academy_id) {
-            sql += ` AND t.academy_id = ?`;
-            params.push(Number(academy_id));
-        }
-
-        if (branch_id) {
-            sql += ` AND t.branch_id = ?`;
-            params.push(Number(branch_id));
         }
 
         sql += ` ORDER BY tt.id DESC`;
@@ -155,6 +171,16 @@ export async function GET(request) {
 */
 
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot register tournament teams." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
     let transactionStarted = false;
 
@@ -168,15 +194,8 @@ export async function POST(request) {
             registered_date,
             team_fee,
             payment_status,
-            status,
-            created_by
+            status
         } = body;
-
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATION
-        |--------------------------------------------------------------------------
-        */
 
         if (
             tournament_id === undefined ||
@@ -186,10 +205,7 @@ export async function POST(request) {
             Number(tournament_id) <= 0
         ) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Valid tournament_id is required"
-                },
+                { success: false, message: "Valid tournament_id is required" },
                 { status: 400 }
             );
         }
@@ -202,10 +218,7 @@ export async function POST(request) {
             Number(team_id) <= 0
         ) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Valid team_id is required"
-                },
+                { success: false, message: "Valid team_id is required" },
                 { status: 400 }
             );
         }
@@ -213,26 +226,12 @@ export async function POST(request) {
         const tournamentId = Number(tournament_id);
         const teamId = Number(team_id);
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE TOURNAMENT
-        |--------------------------------------------------------------------------
-        */
-
+        // Validate tournament & tenant authorization
         const [tournamentRows] = await connection.query(
             `
-            SELECT
-                id,
-                academy_id,
-                branch_id,
-                tournament_name,
-                tournament_code,
-                team_fee,
-                max_teams,
-                status
+            SELECT id, academy_id, branch_id, tournament_name, tournament_code, team_fee, max_teams, status
             FROM cst_tournaments
-            WHERE id = ?
-            AND is_deleted = 0
+            WHERE id = ? AND is_deleted = 0
             LIMIT 1
             `,
             [tournamentId]
@@ -240,72 +239,51 @@ export async function POST(request) {
 
         if (tournamentRows.length === 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Tournament not found"
-                },
+                { success: false, message: "Tournament not found" },
                 { status: 404 }
             );
         }
 
         const tournament = tournamentRows[0];
-
-        if (
-            tournament.status !== "Registration Open"
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "Team registration is allowed only when tournament status is Registration Open"
-                },
-                { status: 400 }
-            );
+        if (!authUser.isSuperAdmin) {
+            if (Number(tournament.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Tournament belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(tournament.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Tournament belongs to another branch" },
+                    { status: 403 }
+                );
+            }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE TEAM
-        |--------------------------------------------------------------------------
-        */
-
+        // Validate target team
         const [teamRows] = await connection.query(
-            `
-            SELECT
-                id,
-                academy_id,
-                branch_id,
-                team_name,
-                team_code,
-                status
-            FROM cst_teams
-            WHERE id = ?
-            AND is_deleted = 0
-            AND status = 1
-            LIMIT 1
-            `,
+            `SELECT id, academy_id, branch_id FROM cst_teams WHERE id = ? AND is_deleted = 0 LIMIT 1`,
             [teamId]
         );
 
         if (teamRows.length === 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Active team not found"
-                },
+                { success: false, message: "Team not found" },
                 { status: 404 }
             );
         }
 
-        const team = teamRows[0];
+        if (!authUser.isSuperAdmin) {
+            if (teamRows[0].academy_id && Number(teamRows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Team belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+        }
 
-        /*
-        |--------------------------------------------------------------------------
-        | DUPLICATE REGISTRATION CHECK
-        |--------------------------------------------------------------------------
-        */
-
-        const [existingRows] = await connection.query(
+        // Check duplicate registration
+        const [duplicateRows] = await connection.query(
             `
             SELECT id
             FROM cst_tournament_teams
@@ -317,234 +295,41 @@ export async function POST(request) {
             [tournamentId, teamId]
         );
 
-        if (existingRows.length > 0) {
+        if (duplicateRows.length > 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "This team is already registered in this tournament"
-                },
+                { success: false, message: "Team is already registered in this tournament" },
                 { status: 409 }
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | MAX TEAMS VALIDATION
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            tournament.max_teams !== null &&
-            Number(tournament.max_teams) > 0
-        ) {
+        // Max teams check
+        if (tournament.max_teams !== null && Number(tournament.max_teams) > 0) {
             const [countRows] = await connection.query(
                 `
-                SELECT COUNT(*) AS total
+                SELECT COUNT(id) AS total_teams
                 FROM cst_tournament_teams
                 WHERE tournament_id = ?
                 AND is_deleted = 0
-                AND status NOT IN (
-                    'Withdrawn',
-                    'Disqualified'
-                )
                 `,
                 [tournamentId]
             );
 
-            if (
-                Number(countRows[0].total) >=
-                Number(tournament.max_teams)
-            ) {
+            if (Number(countRows[0].total_teams) >= Number(tournament.max_teams)) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message:
-                            "Maximum team registration limit reached"
-                    },
+                    { success: false, message: "Tournament has reached maximum team capacity" },
                     { status: 400 }
                 );
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | TEAM FEE
-        |--------------------------------------------------------------------------
-        | Agar request me team_fee nahi aaya, tournament ki
-        | default team_fee use hogi.
-        |--------------------------------------------------------------------------
-        */
+        const finalTeamFee = team_fee !== undefined && team_fee !== null && team_fee !== ""
+            ? Number(team_fee)
+            : Number(tournament.team_fee || 0);
 
-        const finalTeamFee =
-            team_fee !== undefined &&
-                team_fee !== null &&
-                team_fee !== ""
-                ? Number(team_fee)
-                : Number(tournament.team_fee || 0);
+        const finalRegNo = registration_no && registration_no.trim()
+            ? registration_no.trim().toUpperCase()
+            : `TRN-${tournamentId}-TM-${teamId}`;
 
-        if (
-            !Number.isFinite(finalTeamFee) ||
-            finalTeamFee < 0
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid team fee"
-                },
-                { status: 400 }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | PAYMENT STATUS
-        |--------------------------------------------------------------------------
-        */
-
-        const allowedPaymentStatuses = [
-            "Pending",
-            "Partial",
-            "Paid",
-            "Cancelled"
-        ];
-
-        const finalPaymentStatus =
-            payment_status || "Pending";
-
-        if (
-            !allowedPaymentStatuses.includes(
-                finalPaymentStatus
-            )
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid payment status"
-                },
-                { status: 400 }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | REGISTRATION STATUS
-        |--------------------------------------------------------------------------
-        */
-
-        const allowedStatuses = [
-            "Registered",
-            "Confirmed",
-            "Withdrawn",
-            "Disqualified",
-            "Completed"
-        ];
-
-        const finalStatus = status || "Registered";
-
-        if (!allowedStatuses.includes(finalStatus)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid registration status"
-                },
-                { status: 400 }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | CREATED BY VALIDATION
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            created_by !== undefined &&
-            created_by !== null &&
-            created_by !== ""
-        ) {
-            if (
-                !Number.isInteger(Number(created_by)) ||
-                Number(created_by) <= 0
-            ) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid created_by"
-                    },
-                    { status: 400 }
-                );
-            }
-
-            const [userRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_users
-                WHERE id = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [Number(created_by)]
-            );
-
-            if (userRows.length === 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Created by user not found"
-                    },
-                    { status: 404 }
-                );
-            }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | GENERATE REGISTRATION NUMBER
-        |--------------------------------------------------------------------------
-        */
-
-        let finalRegistrationNo =
-            registration_no &&
-                registration_no.toString().trim()
-                ? registration_no.toString().trim()
-                : `TR-${tournamentId}-${Date.now()}`;
-
-        /*
-        |--------------------------------------------------------------------------
-        | CHECK DUPLICATE REGISTRATION NUMBER
-        |--------------------------------------------------------------------------
-        */
-
-        const [registrationRows] = await connection.query(
-            `
-            SELECT id
-            FROM cst_tournament_teams
-            WHERE tournament_id = ?
-            AND registration_no = ?
-            LIMIT 1
-            `,
-            [tournamentId, finalRegistrationNo]
-        );
-
-        if (registrationRows.length > 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "Registration number already exists in this tournament"
-                },
-                { status: 409 }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | REGISTER TEAM
-        |--------------------------------------------------------------------------
-        */
-
-        // Both inserts must succeed, otherwise rollback both.
         await connection.beginTransaction();
         transactionStarted = true;
 
@@ -565,49 +350,12 @@ export async function POST(request) {
             [
                 tournamentId,
                 teamId,
-                finalRegistrationNo,
-                registered_date || null,
+                finalRegNo,
+                registered_date || new Date().toISOString().slice(0, 10),
                 finalTeamFee,
-                finalPaymentStatus,
-                finalStatus,
-                created_by !== undefined &&
-                    created_by !== null &&
-                    created_by !== ""
-                    ? Number(created_by)
-                    : null
-            ]
-        );
-
-        // Create the fee ledger entry in the same transaction.
-        await connection.query(
-            `
-            INSERT INTO cst_fee_status (
-                academy_id,
-                branch_id,
-                fee_type,
-                tournament_id,
-                tournament_team_id,
-                fee_amount,
-                paid_amount,
-                status,
-                remarks,
-                created_by
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            [
-                tournament.academy_id,
-                tournament.branch_id,
-                "Tournament Team",
-                tournamentId,
-                result.insertId,
-                finalTeamFee,
-                0,
-                finalTeamFee > 0 ? "Pending" : "Paid",
-                `Team registration fee for ${team.team_name} (${finalRegistrationNo})`,
-                created_by !== undefined && created_by !== null && created_by !== ""
-                    ? Number(created_by)
-                    : null
+                payment_status || "Pending",
+                status || "Registered",
+                authUser.id
             ]
         );
 
@@ -617,37 +365,19 @@ export async function POST(request) {
         return NextResponse.json(
             {
                 success: true,
-                message: "Team registered and fee status created successfully",
-                data: {
-                    id: result.insertId,
-                    tournament_id: tournamentId,
-                    tournament_name: tournament.tournament_name,
-                    team_id: teamId,
-                    team_name: team.team_name,
-                    registration_no: finalRegistrationNo,
-                    team_fee: finalTeamFee,
-                    payment_status: finalPaymentStatus,
-                    status: finalStatus
-                }
+                message: "Team registered in tournament successfully",
+                data: { id: result.insertId }
             },
             { status: 201 }
         );
 
     } catch (error) {
-        if (transactionStarted) {
-            try {
-                await connection.rollback();
-            } catch (rollbackError) {
-                console.error("TOURNAMENT TEAM ROLLBACK ERROR:", rollbackError);
-            }
-        }
-
+        if (transactionStarted) await connection.rollback();
         console.error("REGISTER TOURNAMENT TEAM ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
-                message: "Failed to register team",
+                message: "Failed to register tournament team",
                 error: error.message
             },
             { status: 500 }

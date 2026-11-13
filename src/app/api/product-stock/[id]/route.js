@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,7 @@ export async function GET(request, context) {
 s.id,
     s.product_id,
     s.branch_id,
+    b.academy_id,
     s.quantity,
     s.reserved_quantity,
     (s.quantity - s.reserved_quantity) AS available_quantity,
@@ -46,7 +48,6 @@ WHEN(s.quantity - s.reserved_quantity) <= s.low_stock_alert
     s.updated_at,
     p.product_name,
     p.product_code,
-    p.academy_id,
     p.category_id,
     b.branch_name
              FROM cst_product_stock s
@@ -61,6 +62,14 @@ WHEN(s.quantity - s.reserved_quantity) <= s.low_stock_alert
             return NextResponse.json(
                 { success: false, message: "Stock record not found." },
                 { status: 404 }
+            );
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Stock record belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 
@@ -97,11 +106,20 @@ export async function PUT(request, context) {
         connection = await db.getConnection();
         await connection.beginTransaction();
 
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
         const [rows] = await connection.execute(
-            `SELECT *
-    FROM cst_product_stock
-             WHERE id = ?
-    LIMIT 1
+            `SELECT s.*, b.academy_id
+             FROM cst_product_stock s
+             INNER JOIN cst_branch b ON b.id = s.branch_id
+             WHERE s.id = ?
+             LIMIT 1
              FOR UPDATE`,
             [id]
         );
@@ -116,6 +134,14 @@ export async function PUT(request, context) {
         }
 
         const existing = rows[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. You are not authorized to update this stock record." },
+                { status: 403 }
+            );
+        }
 
         const quantity =
             body.quantity === undefined
@@ -216,11 +242,20 @@ export async function DELETE(request, context) {
         connection = await db.getConnection();
         await connection.beginTransaction();
 
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized. Authentication required." },
+                { status: 401 }
+            );
+        }
+
         const [rows] = await connection.execute(
-            `SELECT id, reserved_quantity
-             FROM cst_product_stock
-             WHERE id = ?
-    LIMIT 1
+            `SELECT s.id, s.reserved_quantity, s.branch_id, b.academy_id
+             FROM cst_product_stock s
+             INNER JOIN cst_branch b ON b.id = s.branch_id
+             WHERE s.id = ?
+             LIMIT 1
              FOR UPDATE`,
             [id]
         );
@@ -231,6 +266,14 @@ export async function DELETE(request, context) {
             return NextResponse.json(
                 { success: false, message: "Stock record not found." },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. You are not authorized to delete this stock record." },
+                { status: 403 }
             );
         }
 

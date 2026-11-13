@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
-
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 const VALID_DAYS = [
     "Monday",
@@ -117,8 +116,8 @@ async function validateRelations(connection, data) {
     const [branches] = await connection.execute(
         `SELECT id
          FROM cst_branch
-         WHERE id = ? AND academy_id = ?
-    LIMIT 1`,
+         WHERE id = ? AND academy_id = ? AND is_deleted = 0
+         LIMIT 1`,
         [data.branch_id, data.academy_id]
     );
 
@@ -128,16 +127,16 @@ async function validateRelations(connection, data) {
 
     const [enrollments] = await connection.execute(
         `SELECT
-up.id,
-    up.branch_id,
-    p.academy_id,
-    p.branch_id AS program_branch_id
+            up.id,
+            up.branch_id,
+            p.academy_id,
+            p.branch_id AS program_branch_id
          FROM cst_user_programs up
          INNER JOIN cst_programs p ON p.id = up.program_id
          WHERE up.id = ?
-    AND up.branch_id = ?
-        AND p.academy_id = ?
-            AND up.status = 1
+           AND up.branch_id = ?
+           AND p.academy_id = ?
+           AND up.status = 1
            AND up.is_deleted = 0
            AND p.status = 1
            AND p.is_deleted = 0
@@ -166,9 +165,9 @@ up.id,
         `SELECT id
          FROM cst_users
          WHERE id = ?
-    AND academy_id = ?
-        AND branch_id = ?
-            AND status = 1
+           AND academy_id = ?
+           AND branch_id = ?
+           AND status = 1
            AND is_deleted = 0
          LIMIT 1`,
         [
@@ -192,14 +191,14 @@ async function hasCoachConflict(connection, data) {
         `SELECT id, training_days
          FROM cst_individual_training
          WHERE academy_id = ?
-    AND branch_id = ?
-        AND coach_user_id = ?
-            AND status IN('Scheduled', 'Active')
+           AND branch_id = ?
+           AND coach_user_id = ?
+           AND status IN ('Scheduled', 'Active')
            AND is_deleted = 0
            AND start_date <= COALESCE(?, '9999-12-31')
            AND COALESCE(end_date, '9999-12-31') >= ?
-    AND start_time < ?
-        AND end_time > ? `,
+           AND start_time < ?
+           AND end_time > ?`,
         [
             data.academy_id,
             data.branch_id,
@@ -216,15 +215,13 @@ async function hasCoachConflict(connection, data) {
     );
 }
 
-// GET: List training records with optional filters.
+// GET: List training records with tenant isolation
 export async function GET(request) {
     let connection;
 
     try {
-        const authUser = await getAuthUser(request);
-        if (!authUser) {
-            return errorResponse("Unauthorized. Authentication required.", 401);
-        }
+        const { user: authUser, errorResponse: authError } = await getAuthenticatedUser(request);
+        if (authError) return authError;
 
         connection = await pool.getConnection();
 
@@ -233,17 +230,17 @@ export async function GET(request) {
         const conditions = ["it.is_deleted = 0"];
         const values = [];
 
-        // Role-based scoping
+        // Role-based tenant scoping
         if (authUser.isPlayer) {
             conditions.push("it.user_program_id IN (SELECT id FROM cst_user_programs WHERE user_id = ?)");
             values.push(authUser.id);
         } else if (authUser.isCoach) {
             conditions.push("it.coach_user_id = ?");
             values.push(authUser.id);
-        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+        } else if (authUser.isBranchAdmin) {
             conditions.push("it.branch_id = ? AND it.academy_id = ?");
             values.push(authUser.branch_id, authUser.academy_id);
-        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+        } else if (authUser.isAcademyAdmin) {
             conditions.push("it.academy_id = ?");
             values.push(authUser.academy_id);
             const bId = params.get("branch_id");
@@ -251,9 +248,31 @@ export async function GET(request) {
                 conditions.push("it.branch_id = ?");
                 values.push(bId);
             }
-        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+        } else if (!authUser.isSuperAdmin) {
             conditions.push("it.academy_id = ?");
             values.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+            const bId = params.get("branch_id");
+            if (bId) {
+                if (allowed.includes(Number(bId))) {
+                    conditions.push("it.branch_id = ?");
+                    values.push(bId);
+                } else {
+                    conditions.push("it.branch_id = -1");
+                }
+            } else {
+                conditions.push(`it.branch_id IN (${allowed.map(() => "?").join(",")})`);
+                values.push(...allowed);
+            }
+        } else {
+            // Super Admin can filter by academy_id and branch_id
+            const aId = params.get("academy_id");
+            if (aId) {
+                conditions.push("it.academy_id = ?");
+                values.push(aId);
+            }
             const bId = params.get("branch_id");
             if (bId) {
                 conditions.push("it.branch_id = ?");
@@ -262,8 +281,6 @@ export async function GET(request) {
         }
 
         const filters = {
-            academy_id: "it.academy_id",
-            branch_id: "it.branch_id",
             user_program_id: "it.user_program_id",
             coach_user_id: "it.coach_user_id",
             status: "it.status",
@@ -277,12 +294,9 @@ export async function GET(request) {
                     return errorResponse("Invalid status filter.");
                 }
 
-                // If role already applied filter, don't duplicate
-                if (authUser.isBranchAdmin && key === "branch_id") continue;
                 if (authUser.isCoach && key === "coach_user_id") continue;
-                if ((authUser.isAcademyAdmin || !authUser.isSuperAdmin) && key === "academy_id") continue;
 
-                conditions.push(`${ column } = ?`);
+                conditions.push(`${column} = ?`);
                 values.push(value);
             }
         }
@@ -302,12 +316,12 @@ export async function GET(request) {
 
         if (search) {
             conditions.push(`(
-            ap.first_name LIKE ?
-            OR ap.last_name LIKE ?
-            OR ap.admission_no LIKE ?
-            OR coach.first_name LIKE ?
-            OR coach.last_name LIKE ?
-            OR p.program_name LIKE ?
+                ap.first_name LIKE ?
+                OR ap.last_name LIKE ?
+                OR ap.admission_no LIKE ?
+                OR coach.first_name LIKE ?
+                OR coach.last_name LIKE ?
+                OR p.program_name LIKE ?
             )`);
 
             const term = `%${search.trim()}%`;
@@ -316,34 +330,28 @@ export async function GET(request) {
 
         const [rows] = await connection.execute(
             `SELECT
-it.*,
-    up.program_id,
-    up.appointment_no,
-    ap.id AS admission_player_id,
-        ap.admission_no,
-        ap.first_name AS player_first_name,
-            ap.last_name AS player_last_name,
+                it.*,
+                up.program_id,
+                up.appointment_no,
+                ap.id AS admission_player_id,
+                ap.admission_no,
+                ap.first_name AS player_first_name,
+                ap.last_name AS player_last_name,
                 ap.phone AS player_phone,
-                    p.program_name,
-                    coach.first_name AS coach_first_name,
-                        coach.last_name AS coach_last_name,
-                            coach.appointment_no AS coach_appointment_no,
-                                a.academy_name,
-                                br.branch_code
+                p.program_name,
+                coach.first_name AS coach_first_name,
+                coach.last_name AS coach_last_name,
+                coach.appointment_no AS coach_appointment_no,
+                a.academy_name,
+                br.branch_code
              FROM cst_individual_training it
-             INNER JOIN cst_user_programs up
-                ON up.id = it.user_program_id
-             INNER JOIN cst_admission_players ap
-                ON ap.id = up.admission_players_id
-             INNER JOIN cst_programs p
-                ON p.id = up.program_id
-             INNER JOIN cst_users coach
-                ON coach.id = it.coach_user_id
-             INNER JOIN cst_academy a
-                ON a.id = it.academy_id
-             INNER JOIN cst_branch br
-                ON br.id = it.branch_id
-             WHERE ${ conditions.join(" AND ") }
+             INNER JOIN cst_user_programs up ON up.id = it.user_program_id
+             INNER JOIN cst_admission_players ap ON ap.id = up.admission_players_id
+             INNER JOIN cst_programs p ON p.id = up.program_id
+             INNER JOIN cst_users coach ON coach.id = it.coach_user_id
+             INNER JOIN cst_academy a ON a.id = it.academy_id
+             INNER JOIN cst_branch br ON br.id = it.branch_id
+             WHERE ${conditions.join(" AND ")}
              ORDER BY it.id DESC`,
             values
         );
@@ -371,8 +379,29 @@ export async function POST(request) {
     let transactionStarted = false;
 
     try {
+        const { user: authUser, errorResponse: authError } = await getAuthenticatedUser(request);
+        if (authError) return authError;
+
+        if (authUser.isPlayer) {
+            return errorResponse("Forbidden: Players cannot create training records.", 403);
+        }
+
         const body = await request.json();
         const data = normalizeBody(body);
+
+        // Enforce tenant scoping on input data
+        if (!authUser.isSuperAdmin) {
+            data.academy_id = Number(authUser.academy_id);
+            if (authUser.isBranchAdmin) {
+                data.branch_id = Number(authUser.branch_id);
+            } else if (!authUser.isAcademyAdmin) {
+                // Staff or coach
+                const allowed = authUser.assignedBranchIds || [Number(authUser.branch_id)];
+                if (!allowed.includes(Number(data.branch_id))) {
+                    return errorResponse("Forbidden: You are not authorized for this branch.", 403);
+                }
+            }
+        }
 
         const validationError = validate(data);
 
@@ -409,20 +438,20 @@ export async function POST(request) {
         }
 
         const [result] = await connection.execute(
-            `INSERT INTO cst_individual_training(
-                                    academy_id,
-                                    branch_id,
-                                    user_program_id,
-                                    coach_user_id,
-                                    training_days,
-                                    start_time,
-                                    end_time,
-                                    start_date,
-                                    end_date,
-                                    session_duration,
-                                    status,
-                                    remarks
-                                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO cst_individual_training (
+                academy_id,
+                branch_id,
+                user_program_id,
+                coach_user_id,
+                training_days,
+                start_time,
+                end_time,
+                start_date,
+                end_date,
+                session_duration,
+                status,
+                remarks
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 data.academy_id,
                 data.branch_id,

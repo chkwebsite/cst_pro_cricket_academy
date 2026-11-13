@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 export async function GET(request) {
-    const authUser = await getAuthUser(request);
-    if (!authUser) {
-        return NextResponse.json(
-            { success: false, message: "Unauthorized. Authentication required." },
-            { status: 401 }
-        );
-    }
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
 
     if (authUser.isPlayer || authUser.isCoach) {
         return NextResponse.json(
@@ -74,16 +69,26 @@ export async function GET(request) {
             );
         }
 
-        // Academy filter
-        if (academy_id) {
-            sql += ` AND r.academy_id = ?`;
-            params.push(academy_id);
-        }
+        // Tenant Isolation
+        if (!authUser.isSuperAdmin) {
+            sql += ` AND (r.academy_id = ? OR r.academy_id IS NULL)`;
+            params.push(authUser.academy_id);
+            if (authUser.isBranchAdmin) {
+                sql += ` AND (r.branch_id = ? OR r.branch_id IS NULL)`;
+                params.push(authUser.branch_id);
+            }
+        } else {
+            // Academy filter
+            if (academy_id) {
+                sql += ` AND r.academy_id = ?`;
+                params.push(academy_id);
+            }
 
-        // Branch filter
-        if (branch_id) {
-            sql += ` AND r.branch_id = ?`;
-            params.push(branch_id);
+            // Branch filter
+            if (branch_id) {
+                sql += ` AND r.branch_id = ?`;
+                params.push(branch_id);
+            }
         }
 
         // Status filter
@@ -129,8 +134,10 @@ export async function GET(request) {
 ===================================================== */
 
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (!authUser || !authUser.isSuperAdmin) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
         return NextResponse.json(
             { success: false, message: "Access denied. Only Super Admin can create roles." },
             { status: 403 }

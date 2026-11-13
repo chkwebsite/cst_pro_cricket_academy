@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 // GET: Get all match innings
 // Optional filters: ?match_id=1&innings_status=In Progress
@@ -8,17 +9,24 @@ export async function GET(request) {
 
     try {
         const { searchParams } = new URL(request.url);
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         const match_id = searchParams.get("match_id");
         const innings_status = searchParams.get("innings_status");
 
         let sql = `
-SELECT
-mi.*,
-    m.match_date,
-    m.match_type,
-    bt.team_name AS batting_team_name,
-        bw.team_name AS bowling_team_name
+            SELECT
+                mi.*,
+                m.match_no,
+                m.match_date,
+                m.match_type,
+                m.status AS match_status,
+                m.remarks AS match_remarks,
+                bt.team_name AS batting_team_name,
+                bw.team_name AS bowling_team_name
             FROM cst_match_innings mi
             INNER JOIN cst_matches m
                 ON m.id = mi.match_id
@@ -27,9 +35,57 @@ mi.*,
             INNER JOIN cst_teams bw
                 ON bw.id = mi.bowling_team_id
             WHERE 1 = 1
-    `;
+        `;
 
         const params = [];
+
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            if (authUser.academy_id) {
+                sql += " AND m.academy_id = ?";
+                params.push(authUser.academy_id);
+            }
+            sql += " AND m.id IN (SELECT match_id FROM cst_match_players WHERE user_id = ?)";
+            params.push(authUser.id);
+        } else if (authUser.isBranchAdmin && authUser.branch_id) {
+            sql += " AND m.branch_id = ? AND m.academy_id = ?";
+            params.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            sql += " AND m.academy_id = ?";
+            params.push(authUser.academy_id);
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam) {
+                sql += " AND m.branch_id = ?";
+                params.push(Number(branchIdParam));
+            }
+        } else if (authUser.isAccountant && authUser.academy_id) {
+            sql += " AND m.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (authUser.branch_id) {
+                sql += " AND m.branch_id = ?";
+                params.push(authUser.branch_id);
+            } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                sql += ` AND m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`;
+                params.push(...authUser.accessibleBranchIds);
+            }
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            sql += " AND m.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                sql += ` AND (m.branch_id IS NULL OR m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`;
+                params.push(...authUser.accessibleBranchIds);
+            }
+        } else if (authUser.isSuperAdmin) {
+            const academyIdParam = searchParams.get("academy_id");
+            if (academyIdParam) {
+                sql += " AND m.academy_id = ?";
+                params.push(Number(academyIdParam));
+            }
+            const branchIdParam = searchParams.get("branch_id");
+            if (branchIdParam) {
+                sql += " AND m.branch_id = ?";
+                params.push(Number(branchIdParam));
+            }
+        }
 
         if (match_id) {
             sql += " AND mi.match_id = ?";
@@ -68,6 +124,17 @@ mi.*,
 
 // POST: Create match innings
 export async function POST(request) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot manage match innings." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -193,7 +260,7 @@ export async function POST(request) {
 
         // Verify match exists
         const [matches] = await connection.execute(
-            "SELECT id FROM cst_matches WHERE id = ?",
+            "SELECT id, academy_id, branch_id FROM cst_matches WHERE id = ?",
             [match_id]
         );
 
@@ -201,6 +268,13 @@ export async function POST(request) {
             return NextResponse.json(
                 { success: false, message: "Match not found" },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: matches[0].academy_id, branch_id: matches[0].branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Match belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

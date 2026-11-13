@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET - Single menu
@@ -85,6 +86,14 @@ export async function PUT(request, { params }) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser || !authUser.isSuperAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Only super admin can manage system menus." },
+                { status: 403 }
+            );
+        }
+
         connection = await pool.getConnection();
 
         const { id } = await params;
@@ -304,6 +313,14 @@ export async function DELETE(request, { params }) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser || !authUser.isSuperAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Only super admin can manage system menus." },
+                { status: 403 }
+            );
+        }
+
         connection = await pool.getConnection();
 
         const { id } = await params;

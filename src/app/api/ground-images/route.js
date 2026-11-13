@@ -2,12 +2,26 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
+async function verifyGroundOwnership(connection, groundId, authUser) {
+    const [rows] = await connection.query(
+        `SELECT id, academy_id, branch_id FROM cst_ground WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+        [groundId]
+    );
+    if (rows.length === 0) return { allowed: false, notFound: true };
+    const g = rows[0];
+    if (authUser.isSuperAdmin) return { allowed: true, ground: g };
+    if (authUser.isPlayer) return { allowed: false, ground: g };
+    if (Number(g.academy_id) !== Number(authUser.academy_id)) return { allowed: false, ground: g };
+    if (authUser.isAcademyAdmin) return { allowed: true, ground: g };
+    if (authUser.isBranchAdmin) return { allowed: Number(g.branch_id) === Number(authUser.branch_id), ground: g };
+    const allowedBranches = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return { allowed: allowedBranches.includes(Number(g.branch_id)), ground: g };
+}
 
 // ======================================================
 // GET GROUND IMAGES
-// GET /api/ground-images
-// GET /api/ground-images?ground_id=1
 // ======================================================
 export async function GET(request) {
     let connection;
@@ -19,66 +33,65 @@ export async function GET(request) {
 
         const groundId = searchParams.get("ground_id")?.trim() || "";
         const academyId = searchParams.get("academy_id")?.trim() || "";
+        const branchId = searchParams.get("branch_id")?.trim() || "";
 
         let sql = `
             SELECT
-                id,
-                ground_id,
-                ground_image,
-                is_primary,
-                status,
-                created_at
-            FROM cst_ground_images
-            WHERE status = 1
+                gi.id,
+                gi.ground_id,
+                gi.ground_image,
+                gi.is_primary,
+                gi.status,
+                gi.created_at,
+                g.academy_id,
+                g.branch_id
+            FROM cst_ground_images gi
+            INNER JOIN cst_ground g ON g.id = gi.ground_id
+            WHERE gi.status = 1 AND g.is_deleted = 0
         `;
 
         const values = [];
 
-        // ==========================================
-        // GROUND ID FILTER
-        // ==========================================
+        // If authenticated user, apply scoping unless public
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser && !authUser.isSuperAdmin && !authUser.isPlayer) {
+                sql += " AND g.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (authUser.isBranchAdmin && authUser.branch_id) {
+                    sql += " AND g.branch_id = ?";
+                    values.push(authUser.branch_id);
+                } else if (!authUser.isAcademyAdmin) {
+                    const allowed = authUser.assignedBranchIds || [authUser.branch_id];
+                    sql += ` AND g.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                    values.push(...allowed);
+                }
+            }
+        }
 
         if (groundId) {
-
             if (isNaN(groundId)) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid ground ID"
-                    },
+                    { success: false, message: "Invalid ground ID" },
                     { status: 400 }
                 );
             }
-
-            sql += ` AND ground_id = ?`;
+            sql += ` AND gi.ground_id = ?`;
             values.push(groundId);
         }
 
-        if (academyId) {
-            if (isNaN(academyId)) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid academy ID"
-                    },
-                    { status: 400 }
-                );
-            }
-
-            sql += ` AND ground_id IN (
-                SELECT id
-                FROM cst_ground
-                WHERE academy_id = ?
-                AND is_deleted = 0
-            )`;
+        if (academyId && !isNaN(academyId)) {
+            sql += ` AND g.academy_id = ?`;
             values.push(academyId);
         }
 
-        sql += `
-            ORDER BY
-                is_primary DESC,
-                id DESC
-        `;
+        if (branchId && !isNaN(branchId)) {
+            sql += ` AND g.branch_id = ?`;
+            values.push(branchId);
+        }
+
+        sql += ` ORDER BY gi.is_primary DESC, gi.id DESC`;
 
         const [rows] = await connection.execute(sql, values);
 
@@ -90,9 +103,7 @@ export async function GET(request) {
         });
 
     } catch (error) {
-
         console.error("GET GROUND IMAGES ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
@@ -101,9 +112,7 @@ export async function GET(request) {
             },
             { status: 500 }
         );
-
     } finally {
-
         if (connection) {
             connection.release();
         }
@@ -111,8 +120,17 @@ export async function GET(request) {
 }
 
 
-
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot upload ground images." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -121,9 +139,6 @@ export async function POST(request) {
         const ground_id = formData.get("ground_id");
         const files = formData.getAll("ground_images");
 
-        // -----------------------------
-        // VALIDATION
-        // -----------------------------
         if (!ground_id) {
             return NextResponse.json(
                 {
@@ -144,30 +159,19 @@ export async function POST(request) {
             );
         }
 
-        // Check ground
-        const [ground] = await connection.query(
-            `SELECT id
-             FROM cst_ground
-             WHERE id = ?
-             AND status = 1
-             AND is_deleted = 0
-             LIMIT 1`,
-            [ground_id]
-        );
-
-        if (ground.length === 0) {
+        // Check ground ownership
+        const ownership = await verifyGroundOwnership(connection, ground_id, authUser);
+        if (!ownership.allowed) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Ground not found",
+                    message: ownership.notFound ? "Ground not found" : "Unauthorized: Ground does not belong to your academy/branch",
                 },
-                { status: 404 }
+                { status: ownership.notFound ? 404 : 403 }
             );
         }
 
-        // -----------------------------
-        // UPLOAD DIRECTORY
-        // -----------------------------
+        // Upload directory
         const uploadDir = path.join(
             process.cwd(),
             "public",
@@ -180,7 +184,7 @@ export async function POST(request) {
             recursive: true,
         });
 
-        // Does this ground already have an active primary image?
+        // Check if ground already has an active primary image
         const [primaryRows] = await connection.query(
             `SELECT id
              FROM cst_ground_images
@@ -196,15 +200,11 @@ export async function POST(request) {
 
         const uploadedImages = [];
 
-        // -----------------------------
-        // MULTIPLE FILE UPLOAD
-        // -----------------------------
         for (const file of files) {
             if (!file || typeof file.arrayBuffer !== "function") {
                 continue;
             }
 
-            // Check image type
             const allowedTypes = [
                 "image/jpeg",
                 "image/jpg",
@@ -214,7 +214,6 @@ export async function POST(request) {
 
             if (!allowedTypes.includes(file.type)) {
                 await connection.rollback();
-
                 return NextResponse.json(
                     {
                         success: false,
@@ -224,10 +223,8 @@ export async function POST(request) {
                 );
             }
 
-            // 2 MB limit
             if (file.size > 2 * 1024 * 1024) {
                 await connection.rollback();
-
                 return NextResponse.json(
                     {
                         success: false,
@@ -237,29 +234,23 @@ export async function POST(request) {
                 );
             }
 
-            // Extension
             const extension =
                 path.extname(file.name).toLowerCase() || ".jpg";
 
-            // Unique filename
             const fileName =
                 `${Date.now()}-${Math.floor(Math.random() * 1000000)}${extension}`;
 
             const filePath = path.join(uploadDir, fileName);
 
-            // Save file
             const buffer = Buffer.from(
                 await file.arrayBuffer()
             );
 
             await fs.writeFile(filePath, buffer);
 
-            // First uploaded image becomes primary only if the
-            // ground does not already have a primary image
             const isPrimary =
                 !hasPrimary && uploadedImages.length === 0 ? 1 : 0;
 
-            // Database path
             const imagePath =
                 `/images/uploads/grounds/${fileName}`;
 
@@ -299,7 +290,6 @@ export async function POST(request) {
         );
     } catch (error) {
         await connection.rollback();
-
         console.error("GROUND IMAGE UPLOAD ERROR:", error);
 
         return NextResponse.json(

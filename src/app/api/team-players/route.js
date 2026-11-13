@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
+// Helper to check team access
+function isTeamAuthorized(team, authUser) {
+    if (authUser.isSuperAdmin) return true;
+    if (!team.academy_id && !team.branch_id) return true;
+    if (Number(team.academy_id) !== Number(authUser.academy_id)) return false;
+    if (authUser.isAcademyAdmin) return true;
+    if (authUser.isBranchAdmin) {
+        return Number(team.branch_id) === Number(authUser.branch_id) || !team.branch_id;
+    }
+    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return allowed.includes(Number(team.branch_id)) || !team.branch_id;
+}
 
 export async function GET(request) {
     const connection = await pool.getConnection();
@@ -82,6 +95,65 @@ export async function GET(request) {
 
         const params = [];
 
+        // Check authentication
+        const authHeader = request.headers.get("authorization");
+        if (authHeader) {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            if (authUser) {
+                if (authUser.isPlayer) {
+                    sql += ` AND (
+                        tp.user_id = ?
+                        OR (t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL))
+                        OR (t.academy_id IS NULL AND t.branch_id IS NULL)
+                    )`;
+                    params.push(authUser.id, authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                    sql += ` AND (
+                        (t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL))
+                        OR (t.academy_id IS NULL AND t.branch_id IS NULL)
+                    )`;
+                    params.push(authUser.academy_id, authUser.branch_id);
+                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                    sql += ` AND (
+                        t.academy_id = ?
+                        OR (t.academy_id IS NULL AND t.branch_id IS NULL)
+                    )`;
+                    params.push(authUser.academy_id);
+                    if (branch_id) {
+                        sql += ` AND (t.branch_id = ? OR t.branch_id IS NULL)`;
+                        params.push(Number(branch_id));
+                    }
+                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                    sql += ` AND (
+                        (t.academy_id = ? AND (t.branch_id IN (${allowed.map(() => "?").join(",")}) OR t.branch_id IS NULL))
+                        OR (t.academy_id IS NULL AND t.branch_id IS NULL)
+                    )`;
+                    params.push(authUser.academy_id, ...allowed);
+                } else {
+                    // Super Admin
+                    if (academy_id) {
+                        sql += ` AND (t.academy_id = ? OR (t.academy_id IS NULL AND t.branch_id IS NULL))`;
+                        params.push(Number(academy_id));
+                    }
+                    if (branch_id) {
+                        sql += ` AND (t.branch_id = ? OR (t.academy_id IS NULL AND t.branch_id IS NULL))`;
+                        params.push(Number(branch_id));
+                    }
+                }
+            }
+        } else {
+            // Public / unauthenticated
+            if (academy_id) {
+                sql += ` AND (t.academy_id = ? OR (t.academy_id IS NULL AND t.branch_id IS NULL))`;
+                params.push(Number(academy_id));
+            }
+            if (branch_id) {
+                sql += ` AND (t.branch_id = ? OR (t.academy_id IS NULL AND t.branch_id IS NULL))`;
+                params.push(Number(branch_id));
+            }
+        }
+
         if (team_id !== null && team_id !== "") {
             sql += ` AND tp.team_id = ?`;
             params.push(Number(team_id));
@@ -92,17 +164,14 @@ export async function GET(request) {
             params.push(Number(user_id));
         }
 
-        if (
-            outside_player_id !== null &&
-            outside_player_id !== ""
-        ) {
+        if (outside_player_id !== null && outside_player_id !== "") {
             sql += ` AND tp.outside_player_id = ?`;
             params.push(Number(outside_player_id));
         }
 
-        if (jersey_no) {
-            sql += ` AND tp.jersey_no LIKE ?`;
-            params.push(`%${jersey_no}%`);
+        if (jersey_no !== null && jersey_no !== "") {
+            sql += ` AND tp.jersey_no = ?`;
+            params.push(Number(jersey_no));
         }
 
         if (player_role) {
@@ -115,22 +184,6 @@ export async function GET(request) {
             params.push(Number(status));
         }
 
-        if (academy_id !== null && academy_id !== "") {
-            sql += ` AND (
-                t.academy_id = ?
-                OR (t.academy_id IS NULL AND t.branch_id IS NULL)
-            )`;
-            params.push(Number(academy_id));
-        }
-
-        if (branch_id !== null && branch_id !== "") {
-            sql += ` AND (
-                t.branch_id = ?
-                OR (t.academy_id IS NULL AND t.branch_id IS NULL)
-            )`;
-            params.push(Number(branch_id));
-        }
-
         sql += ` ORDER BY tp.id DESC`;
 
         const [rows] = await connection.query(sql, params);
@@ -138,12 +191,12 @@ export async function GET(request) {
         return NextResponse.json({
             success: true,
             message: "Team players fetched successfully",
+            total: rows.length,
             data: rows
         });
 
     } catch (error) {
         console.error("GET TEAM PLAYERS ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
@@ -159,6 +212,16 @@ export async function GET(request) {
 
 
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot assign team players." },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {
@@ -175,36 +238,22 @@ export async function POST(request) {
             status
         } = body;
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE TEAM
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            team_id === null ||
-            team_id === undefined ||
-            team_id === ""
-        ) {
+        if (!team_id || isNaN(Number(team_id))) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Team ID is required"
+                    message: "Valid team_id is required"
                 },
                 { status: 400 }
             );
         }
 
+        // Validate Team & Authorization
         const [teamRows] = await connection.query(
             `
-            SELECT
-                id,
-                academy_id,
-                branch_id,
-                team_name
+            SELECT id, academy_id, branch_id, team_name
             FROM cst_teams
-            WHERE id = ?
-            AND is_deleted = 0
+            WHERE id = ? AND is_deleted = 0
             LIMIT 1
             `,
             [Number(team_id)]
@@ -220,28 +269,21 @@ export async function POST(request) {
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | USER OR OUTSIDE PLAYER
-        |--------------------------------------------------------------------------
-        */
+        if (!isTeamAuthorized(teamRows[0], authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied: Unauthorized to manage this team" },
+                { status: 403 }
+            );
+        }
 
-        const hasUser =
-            user_id !== null &&
-            user_id !== undefined &&
-            user_id !== "";
-
-        const hasOutsidePlayer =
-            outside_player_id !== null &&
-            outside_player_id !== undefined &&
-            outside_player_id !== "";
+        const hasUser = user_id !== null && user_id !== undefined && user_id !== "";
+        const hasOutsidePlayer = outside_player_id !== null && outside_player_id !== undefined && outside_player_id !== "";
 
         if (!hasUser && !hasOutsidePlayer) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Either user_id or outside_player_id is required"
+                    message: "Either user_id or outside_player_id is required"
                 },
                 { status: 400 }
             );
@@ -251,76 +293,59 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Only one of user_id or outside_player_id can be selected"
+                    message: "Only one of user_id or outside_player_id can be selected"
                 },
                 { status: 400 }
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE USER
-        |--------------------------------------------------------------------------
-        */
-
+        // Validate User belongs to tenant
         if (hasUser) {
             const [userRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_users
-                WHERE id = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
+                `SELECT id, academy_id, branch_id FROM cst_users WHERE id = ? AND is_deleted = 0 LIMIT 1`,
                 [Number(user_id)]
             );
 
             if (userRows.length === 0) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "User/player not found"
-                    },
+                    { success: false, message: "User/player not found" },
                     { status: 404 }
                 );
             }
+
+            if (!authUser.isSuperAdmin) {
+                if (Number(userRows[0].academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json(
+                        { success: false, message: "Selected player does not belong to authorized academy" },
+                        { status: 403 }
+                    );
+                }
+            }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE OUTSIDE PLAYER
-        |--------------------------------------------------------------------------
-        */
-
+        // Validate Outside Player belongs to tenant
         if (hasOutsidePlayer) {
             const [outsideRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_outside_players
-                WHERE id = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
+                `SELECT id, academy_id, branch_id FROM cst_outside_players WHERE id = ? AND is_deleted = 0 LIMIT 1`,
                 [Number(outside_player_id)]
             );
 
             if (outsideRows.length === 0) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Outside player not found"
-                    },
+                    { success: false, message: "Outside player not found" },
                     { status: 404 }
                 );
             }
-        }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALID PLAYER ROLE
-        |--------------------------------------------------------------------------
-        */
+            if (!authUser.isSuperAdmin) {
+                if (outsideRows[0].academy_id && Number(outsideRows[0].academy_id) !== Number(authUser.academy_id)) {
+                    return NextResponse.json(
+                        { success: false, message: "Outside player belongs to another academy" },
+                        { status: 403 }
+                    );
+                }
+            }
+        }
 
         const allowedRoles = [
             "Player",
@@ -347,44 +372,15 @@ export async function POST(request) {
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | DATE VALIDATION
-        |--------------------------------------------------------------------------
-        */
-
-        if (joined_date && left_date) {
-            if (
-                new Date(left_date) <
-                new Date(joined_date)
-            ) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message:
-                            "Left date cannot be before joined date"
-                    },
-                    { status: 400 }
-                );
-            }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | CHECK DUPLICATE PLAYER IN SAME TEAM
-        |--------------------------------------------------------------------------
-        */
-
+        // Check duplicate active player in same team
         let duplicateSql = `
             SELECT id
             FROM cst_team_players
             WHERE team_id = ?
             AND is_deleted = 0
+            AND status = 1
         `;
-
-        const duplicateParams = [
-            Number(team_id)
-        ];
+        const duplicateParams = [Number(team_id)];
 
         if (hasUser) {
             duplicateSql += ` AND user_id = ?`;
@@ -396,66 +392,17 @@ export async function POST(request) {
 
         duplicateSql += ` LIMIT 1`;
 
-        const [duplicatePlayerRows] =
-            await connection.query(
-                duplicateSql,
-                duplicateParams
-            );
+        const [duplicateRows] = await connection.query(duplicateSql, duplicateParams);
 
-        if (duplicatePlayerRows.length > 0) {
+        if (duplicateRows.length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "This player is already added to this team"
+                    message: "Player already active in this team"
                 },
                 { status: 409 }
             );
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | CHECK JERSEY NUMBER
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            jersey_no !== null &&
-            jersey_no !== undefined &&
-            jersey_no !== ""
-        ) {
-            const [jerseyRows] = await connection.query(
-                `
-                SELECT id
-                FROM cst_team_players
-                WHERE team_id = ?
-                AND jersey_no = ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [
-                    Number(team_id),
-                    jersey_no.toString().trim()
-                ]
-            );
-
-            if (jerseyRows.length > 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message:
-                            "This jersey number is already assigned to this team"
-                    },
-                    { status: 409 }
-                );
-            }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | INSERT
-        |--------------------------------------------------------------------------
-        */
 
         const [result] = await connection.query(
             `
@@ -473,29 +420,13 @@ export async function POST(request) {
             `,
             [
                 Number(team_id),
-
-                hasUser
-                    ? Number(user_id)
-                    : null,
-
-                hasOutsidePlayer
-                    ? Number(outside_player_id)
-                    : null,
-
-                jersey_no
-                    ? jersey_no.toString().trim()
-                    : null,
-
+                hasUser ? Number(user_id) : null,
+                hasOutsidePlayer ? Number(outside_player_id) : null,
+                jersey_no !== null && jersey_no !== undefined && jersey_no !== "" ? Number(jersey_no) : null,
                 finalRole,
-
                 joined_date || null,
                 left_date || null,
-
-                status !== null &&
-                    status !== undefined &&
-                    status !== ""
-                    ? Number(status)
-                    : 1
+                status !== null && status !== undefined && status !== "" ? Number(status) : 1
             ]
         );
 
@@ -504,16 +435,14 @@ export async function POST(request) {
                 success: true,
                 message: "Player added to team successfully",
                 data: {
-                    id: result.insertId,
-                    team_id: Number(team_id)
+                    id: result.insertId
                 }
             },
             { status: 201 }
         );
 
     } catch (error) {
-        console.error("CREATE TEAM PLAYER ERROR:", error);
-
+        console.error("ADD TEAM PLAYER ERROR:", error);
         return NextResponse.json(
             {
                 success: false,

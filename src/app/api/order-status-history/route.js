@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 const ORDER_STATUSES = [
     "Pending",
@@ -16,10 +17,34 @@ const ACTOR_TYPES = ["Public User", "Academy User", "System"];
 
 export async function GET(request) {
     try {
+        const authUser = await getAuthenticatedUser(request);
         const { searchParams } = new URL(request.url);
 
         const conditions = [];
         const values = [];
+
+        if (authUser) {
+            const roleId = Number(authUser.role_id);
+            if (authUser.isPlayer) {
+                conditions.push("(o.customer_user_id = ? OR LOWER(o.customer_email) = LOWER(?))");
+                values.push(authUser.id, authUser.email || "");
+            } else if (roleId === 2) {
+                conditions.push("o.academy_id = ?");
+                values.push(authUser.academy_id);
+            } else if (roleId === 3) {
+                conditions.push("o.fulfillment_branch_id = ?");
+                values.push(authUser.branch_id);
+            } else if (roleId !== 1) {
+                if (authUser.branchIds && authUser.branchIds.length > 0) {
+                    const placeholders = authUser.branchIds.map(() => "?").join(", ");
+                    conditions.push(`o.fulfillment_branch_id IN (${placeholders})`);
+                    values.push(...authUser.branchIds);
+                } else if (authUser.branch_id) {
+                    conditions.push("o.fulfillment_branch_id = ?");
+                    values.push(authUser.branch_id);
+                }
+            }
+        }
 
         const filters = [
             ["order_id", "h.order_id", "number"],
@@ -165,10 +190,12 @@ export async function POST(request) {
             );
         }
 
+        const authUser = await getAuthenticatedUser(request);
+
         await connection.beginTransaction();
 
         const [orders] = await connection.execute(
-            "SELECT id FROM cst_orders WHERE id = ? FOR UPDATE",
+            "SELECT id, academy_id, fulfillment_branch_id FROM cst_orders WHERE id = ? FOR UPDATE",
             [Number(order_id)]
         );
 
@@ -178,6 +205,14 @@ export async function POST(request) {
             return NextResponse.json(
                 { success: false, message: "Order not found" },
                 { status: 404 }
+            );
+        }
+
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: orders[0].academy_id, branch_id: orders[0].fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

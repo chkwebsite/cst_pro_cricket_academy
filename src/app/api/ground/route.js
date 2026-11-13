@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 // ======================================================
@@ -86,7 +86,7 @@ export async function GET(request) {
         }
 
         // Academy & Branch role-based scoping
-        const authUser = await getAuthUser(request);
+        const { user: authUser } = await getAuthenticatedUser(request);
         if (authUser) {
             if (authUser.isBranchAdmin && authUser.branch_id) {
                 sql += " AND g.branch_id = ? AND g.academy_id = ?";
@@ -101,6 +101,20 @@ export async function GET(request) {
             } else if (!authUser.isSuperAdmin && authUser.academy_id) {
                 sql += " AND g.academy_id = ?";
                 values.push(authUser.academy_id);
+                const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                    ? authUser.assignedBranchIds
+                    : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+                if (branchId && Number.isInteger(Number(branchId))) {
+                    if (allowed.includes(Number(branchId))) {
+                        sql += " AND g.branch_id = ?";
+                        values.push(Number(branchId));
+                    } else {
+                        sql += " AND g.branch_id = -1";
+                    }
+                } else {
+                    sql += ` AND g.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                    values.push(...allowed);
+                }
             } else {
                 if (academyId && !isNaN(academyId)) {
                     sql += ` AND g.academy_id = ?`;
@@ -112,6 +126,8 @@ export async function GET(request) {
                 }
             }
         } else {
+            // Public website browsing: show only active grounds
+            sql += " AND g.status = 1";
             if (academyId && !isNaN(academyId)) {
                 sql += ` AND g.academy_id = ?`;
                 values.push(academyId);
@@ -162,11 +178,21 @@ export async function POST(request) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Insufficient permissions to create ground" },
+                { status: 403 }
+            );
+        }
+
         connection = await pool.getConnection();
 
         const body = await request.json();
 
-        const {
+        let {
             academy_id,
             branch_id,
             ground_name,
@@ -179,6 +205,14 @@ export async function POST(request) {
             ground_facility,
             status
         } = body;
+
+        // Force/validate tenant ownership
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         // ==========================================
         // VALIDATION

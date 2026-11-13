@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit, Lock, Plus, Search, SearchSlash, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Edit, Lock, Plus, Search, SearchSlash, Trash2, Users, Building2, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { TEAM_TYPES } from "./TeamForm";
@@ -13,7 +13,9 @@ export default function TeamsPage() {
     const { academies, branches, error: orgError } = useOrgOptions(me);
 
     const isSuper = me.role === ROLES.SUPER;
+    const isAcademyAdmin = me.role === ROLES.ACADEMY;
     const isBranchAdmin = me.role === ROLES.BRANCH;
+
     // Fail closed: never list teams if we can't tell who is logged in
     const blocked = me.ready && (!me.role || (!isSuper && !me.academyId) || (isBranchAdmin && !me.branchId));
 
@@ -34,12 +36,19 @@ export default function TeamsPage() {
     const [status, setStatus] = useState("");
 
     // Super admin: chosen academy. Academy / branch admin: always their own academy.
-    const effectiveAcademyId = isSuper ? academyId : me.academyId ?? "";
+    const effectiveAcademyId = isSuper ? academyId : (me.academyId ?? "");
+    // Branch admin: always their own branch. Others: chosen branch filter.
+    const effectiveBranchId = isBranchAdmin ? (me.branchId ?? "") : branchId;
+
     const branchOptions = branches.filter((b) => !effectiveAcademyId || inAcademy(b, effectiveAcademyId));
 
-    // Branch admin sees the whole academy, but only manages their own branch's teams
-    const isMine = (t) => isBranchAdmin && Number(t.branch_id) === Number(me.branchId);
-    const canManage = (t) => !isBranchAdmin || isMine(t);
+    // Can manage permissions
+    const canManage = (t) => {
+        if (isSuper) return true;
+        if (isAcademyAdmin) return Number(t.academy_id) === Number(me.academyId);
+        if (isBranchAdmin) return Number(t.academy_id) === Number(me.academyId) && Number(t.branch_id) === Number(me.branchId);
+        return false;
+    };
 
     // Debounced fetch so we don't hit the API on every keystroke
     useEffect(() => {
@@ -58,7 +67,7 @@ export default function TeamsPage() {
             try {
                 const params = new URLSearchParams();
                 if (effectiveAcademyId) params.set("academy_id", effectiveAcademyId);
-                if (branchId) params.set("branch_id", branchId);
+                if (effectiveBranchId) params.set("branch_id", effectiveBranchId);
                 if (teamName.trim()) params.set("team_name", teamName.trim());
                 if (teamCode.trim()) params.set("team_code", teamCode.trim());
                 if (teamType) params.set("team_type", teamType);
@@ -85,7 +94,7 @@ export default function TeamsPage() {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [me.ready, blocked, effectiveAcademyId, branchId, teamName, teamCode, teamType, category, ageGroup, status]);
+    }, [me.ready, blocked, effectiveAcademyId, effectiveBranchId, teamName, teamCode, teamType, category, ageGroup, status]);
 
     const handleAcademyChange = (e) => {
         setAcademyId(e.target.value);
@@ -130,14 +139,14 @@ export default function TeamsPage() {
                     <div className="bg-white rounded-4 shadow-sm p-4 mb-4">
                         <div className="d-flex justify-content-between align-items-center gap-3">
                             <div>
-                                <Link href="match-management" className="btn btn-sm btn-outline-secondary mb-3">
-                                <ArrowLeft size={16} className="me-2"/> Back to match management
+                                <Link href="/next_panel/match-management" className="btn btn-sm btn-outline-secondary mb-3">
+                                    <ArrowLeft size={16} className="me-2"/> Back to match management
                                 </Link>
                                 <h3 className="mb-0"><Users /> Teams</h3>
                                 <p className="text-muted mb-0">
-                                    {isSuper && "All teams across every academy."}
-                                    {me.role === ROLES.ACADEMY && "All teams in your academy."}
-                                    {isBranchAdmin && "All teams in your academy. Teams from your branch are highlighted."}
+                                    {isSuper && "All teams across every academy and branch."}
+                                    {isAcademyAdmin && "All teams in your academy."}
+                                    {isBranchAdmin && "Teams belonging to your assigned branch."}
                                     {!me.role && "Manage teams."}
                                 </p>
                             </div>
@@ -188,24 +197,27 @@ export default function TeamsPage() {
                                         onChange={handleAcademyChange}
                                         style={{ maxWidth: "200px" }}
                                     >
-                                        <option value="">Choose Academy</option>
+                                        <option value="">All Academies</option>
                                         {academies.map((a) => (
                                             <option key={a.id} value={a.id}>{a.academy_name}</option>
                                         ))}
                                     </select>
                                 )}
 
-                                <select
-                                    className="form-select"
-                                    value={branchId}
-                                    onChange={(e) => setBranchId(e.target.value)}
-                                    style={{ maxWidth: "200px" }}
-                                >
-                                    <option value="">Choose Branch</option>
-                                    {branchOptions.map((b) => (
-                                        <option key={b.id} value={b.id}>{b.branch_name}</option>
-                                    ))}
-                                </select>
+                                {(isSuper || isAcademyAdmin) && (
+                                    <select
+                                        className="form-select"
+                                        value={branchId}
+                                        onChange={(e) => setBranchId(e.target.value)}
+                                        style={{ maxWidth: "200px" }}
+                                        disabled={isSuper && !academyId}
+                                    >
+                                        <option value="">All Branches</option>
+                                        {branchOptions.map((b) => (
+                                            <option key={b.id} value={b.id}>{b.branch_name}</option>
+                                        ))}
+                                    </select>
+                                )}
 
                                 <select
                                     className="form-select"
@@ -275,7 +287,7 @@ export default function TeamsPage() {
                                             <tr>
                                                 <th>#</th>
                                                 <th>Team</th>
-                                                {isSuper && <th>Academy</th>}
+                                                <th>Academy</th>
                                                 <th>Branch</th>
                                                 <th>Type</th>
                                                 <th>Category</th>
@@ -286,18 +298,22 @@ export default function TeamsPage() {
                                         </thead>
                                         <tbody>
                                             {pagedTeams.map((item, idx) => (
-                                                <tr key={item.id} className={isMine(item) ? "table-warning" : ""}>
+                                                <tr key={item.id}>
                                                     <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                     <td>
-                                                        <div>{item.team_name}</div>
+                                                        <div className="fw-semibold">{item.team_name}</div>
                                                         <small className="text-muted">{item.team_code || "—"}</small>
-                                                    </td>
-                                                    {isSuper && <td>{item.academy_name || "—"}</td>}
-                                                    <td>
-                                                        {item.branch_name || "—"}
-                                                        {isMine(item) && (
-                                                            <span className="badge bg-warning text-dark ms-2">My Branch</span>
+                                                        {item.created_by_name && (
+                                                            <small className="text-muted d-block" style={{ fontSize: "11px" }}>
+                                                                By: {item.created_by_name}
+                                                            </small>
                                                         )}
+                                                    </td>
+                                                    <td>
+                                                        <div className="fw-medium text-dark">{item.academy_name || "—"}</div>
+                                                    </td>
+                                                    <td>
+                                                        <div>{item.branch_name || "All / Main Branch"}</div>
                                                     </td>
                                                     <td>{item.team_type || "—"}</td>
                                                     <td>{item.category || "—"}</td>
@@ -332,7 +348,7 @@ export default function TeamsPage() {
                                                                     type="button"
                                                                     className="btn btn-outline-secondary"
                                                                     disabled
-                                                                    title="Only teams from your own branch can be changed"
+                                                                    title="Only teams from your authorized academy/branch can be changed"
                                                                 >
                                                                     <Lock size={16} />
                                                                 </button>
@@ -344,13 +360,15 @@ export default function TeamsPage() {
                                         </tbody>
                                     </table>
                                 </div>
-                                <Pagination
-                                    page={page}
-                                    totalPages={totalPages}
-                                    total={teams.length}
-                                    onPageChange={setPage}
-                                    pageSize={PAGE_SIZE}
-                                />
+                                <div className="mt-3">
+                                    <Pagination
+                                        page={page}
+                                        totalPages={totalPages}
+                                        total={teams.length}
+                                        onPageChange={setPage}
+                                        pageSize={PAGE_SIZE}
+                                    />
+                                </div>
                                 </>
                             )}
                         </div>

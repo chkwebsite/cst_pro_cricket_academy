@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 export const dynamic = "force-dynamic";
 
-async function handleEnsure(userProgramIdRaw, feeMonthRaw, amountRaw) {
+async function handleEnsure(authUser, userProgramIdRaw, feeMonthRaw, amountRaw) {
+    if (!authUser) {
+        return { error: "Unauthorized. Authentication required.", status: 401 };
+    }
+
     const user_program_id = Number(userProgramIdRaw);
     if (!Number.isInteger(user_program_id) || user_program_id <= 0) {
         return { error: "Valid user_program_id is required", status: 400 };
@@ -55,6 +59,9 @@ async function handleEnsure(userProgramIdRaw, feeMonthRaw, amountRaw) {
 
         if (existing.length > 0) {
             await connection.commit();
+            if (!verifyRecordAccess(authUser, { academy_id: existing[0].academy_id, branch_id: existing[0].branch_id })) {
+                return { error: "Forbidden. Fee invoice belongs to another academy or branch.", status: 403 };
+            }
             return {
                 data: {
                     success: true,
@@ -98,6 +105,10 @@ async function handleEnsure(userProgramIdRaw, feeMonthRaw, amountRaw) {
         }
 
         const en = enrollments[0];
+        if (!verifyRecordAccess(authUser, { academy_id: en.academy_id, branch_id: en.branch_id })) {
+            await connection.rollback();
+            return { error: "Forbidden. Enrollment belongs to another academy or branch.", status: 403 };
+        }
 
         // Determine fee amount
         let finalAmount = 0;
@@ -186,17 +197,20 @@ async function handleEnsure(userProgramIdRaw, feeMonthRaw, amountRaw) {
 }
 
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isCoach || authUser.isPlayer)) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json(
-            { success: false, message: "Coaches and Players do not have permission to generate fee invoices" },
+            { success: false, message: "Forbidden. Coaches and Players do not have permission to generate fee invoices" },
             { status: 403 }
         );
     }
 
     try {
         const body = await request.json();
-        const res = await handleEnsure(body.user_program_id, body.fee_month, body.amount);
+        const res = await handleEnsure(authUser, body.user_program_id, body.fee_month, body.amount);
         if (res.error) {
             return NextResponse.json({ success: false, message: res.error }, { status: res.status });
         }
@@ -207,10 +221,13 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isCoach || authUser.isPlayer)) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json(
-            { success: false, message: "Coaches and Players do not have permission to generate fee invoices" },
+            { success: false, message: "Forbidden. Coaches and Players do not have permission to generate fee invoices" },
             { status: 403 }
         );
     }
@@ -221,7 +238,7 @@ export async function GET(request) {
         const fee_month = searchParams.get("fee_month");
         const amount = searchParams.get("amount");
 
-        const res = await handleEnsure(user_program_id, fee_month, amount);
+        const res = await handleEnsure(authUser, user_program_id, fee_month, amount);
         if (res.error) {
             return NextResponse.json({ success: false, message: res.error }, { status: res.status });
         }

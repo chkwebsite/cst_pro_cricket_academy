@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 /* =====================================================
@@ -79,36 +79,28 @@ export async function GET(request) {
            ACADEMY / BRANCH ROLE SCOPE FILTER
         ========================================= */
 
-        const authUser = await getAuthUser(request);
-        if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
-                // Branch Admin: strictly their assigned branch
-                where += ` AND b.id = ? AND b.academy_id = ? `;
-                params.push(authUser.branch_id, authUser.academy_id);
-            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                // Academy Admin: strictly their academy's branches
-                where += ` AND b.academy_id = ? `;
-                params.push(authUser.academy_id);
-            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                where += ` AND b.academy_id = ? `;
-                params.push(authUser.academy_id);
-                if (authUser.branch_id) {
-                    where += ` AND b.id = ? `;
-                    params.push(authUser.branch_id);
-                }
-            } else if (academyId) {
-                const academyIdNumber = Number(academyId);
-                if (!Number.isInteger(academyIdNumber) || academyIdNumber <= 0) {
-                    return NextResponse.json(
-                        {
-                            success: false,
-                            message: "Invalid academy_id",
-                        },
-                        { status: 400 }
-                    );
-                }
-                where += ` AND b.academy_id = ? `;
-                params.push(academyIdNumber);
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (authUser.isBranchAdmin && authUser.branch_id) {
+            // Branch Admin: strictly their assigned branch
+            where += ` AND b.id = ? AND b.academy_id = ? `;
+            params.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+            // Academy Admin: strictly their academy's branches
+            where += ` AND b.academy_id = ? `;
+            params.push(authUser.academy_id);
+        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+            where += ` AND b.academy_id = ? `;
+            params.push(authUser.academy_id);
+            const allowedBranches = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : []);
+            if (allowedBranches.length > 0) {
+                where += ` AND b.id IN (?) `;
+                params.push(allowedBranches);
+            } else {
+                where += ` AND 1 = 0 `;
             }
         } else if (academyId) {
             const academyIdNumber = Number(academyId);
@@ -344,14 +336,14 @@ export async function GET(request) {
 ===================================================== */
 
 export async function POST(request) {
-    const authUser = await getAuthUser(request);
-    if (authUser) {
-        if (authUser.isBranchAdmin || authUser.isCoach || authUser.isPlayer) {
-            return NextResponse.json(
-                { success: false, message: "Only Academy Admin and Super Admin can create branches" },
-                { status: 403 }
-            );
-        }
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Only Academy Admin and Super Admin can create branches" },
+            { status: 403 }
+        );
     }
 
     const connection = await pool.getConnection();
@@ -361,8 +353,8 @@ export async function POST(request) {
         const body =
             await request.json();
 
-        // If Academy Admin, enforce their own academy_id
-        if (authUser && authUser.isAcademyAdmin && authUser.academy_id) {
+        // If Academy Admin, strictly enforce their own academy_id
+        if (authUser.isAcademyAdmin) {
             body.academy_id = authUser.academy_id;
         }
 

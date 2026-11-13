@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // ==========================================
 // GET ALL ROLE PERMISSIONS
 // ==========================================
-export async function GET() {
+export async function GET(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     const connection = await pool.getConnection();
 
     try {
-        const [rows] = await connection.query(`
+        let sql = `
             SELECT
                 rp.id,
                 rp.role_id,
@@ -25,8 +29,18 @@ export async function GET() {
             INNER JOIN cst_permissions p
                 ON p.id = rp.permission_id
 
-            ORDER BY rp.id DESC
-        `);
+            WHERE 1 = 1
+        `;
+        const params = [];
+
+        if (!authUser.isSuperAdmin) {
+            sql += ` AND (r.academy_id = ? OR r.academy_id IS NULL)`;
+            params.push(authUser.academy_id);
+        }
+
+        sql += ` ORDER BY rp.id DESC`;
+
+        const [rows] = await connection.query(sql, params);
 
         return NextResponse.json({
             success: true,
@@ -51,6 +65,16 @@ export async function GET() {
 // CREATE ROLE PERMISSION
 // ==========================================
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: Only Super Admin can assign permissions to roles" },
+            { status: 403 }
+        );
+    }
+
     const connection = await pool.getConnection();
 
     try {

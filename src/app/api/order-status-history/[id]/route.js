@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 const ORDER_STATUSES = [
     "Pending",
@@ -42,7 +43,11 @@ export async function GET(request, context) {
 h.*,
     o.order_no,
     o.customer_name,
-    o.customer_phone
+    o.customer_phone,
+    o.customer_user_id,
+    o.customer_email,
+    o.academy_id,
+    o.fulfillment_branch_id
        FROM cst_order_status_history h
        INNER JOIN cst_orders o ON o.id = h.order_id
        WHERE h.id = ?
@@ -55,6 +60,23 @@ h.*,
                 { success: false, message: "Order status history not found" },
                 { status: 404 }
             );
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                if (Number(rows[0].customer_user_id) !== Number(authUser.id) && String(rows[0].customer_email || "").toLowerCase() !== String(authUser.email || "").toLowerCase()) {
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. You can only view status history for your own orders." },
+                        { status: 403 }
+                    );
+                }
+            } else if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].fulfillment_branch_id })) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Order status history belongs to another academy or branch." },
+                    { status: 403 }
+                );
+            }
         }
 
         return NextResponse.json({
@@ -109,7 +131,10 @@ export async function PUT(request, context) {
         await connection.beginTransaction();
 
         const [existingRows] = await connection.execute(
-            "SELECT * FROM cst_order_status_history WHERE id = ? FOR UPDATE",
+            `SELECT h.*, o.academy_id, o.fulfillment_branch_id 
+             FROM cst_order_status_history h 
+             INNER JOIN cst_orders o ON o.id = h.order_id 
+             WHERE h.id = ? FOR UPDATE`,
             [id]
         );
 
@@ -123,6 +148,15 @@ export async function PUT(request, context) {
         }
 
         const existing = existingRows[0];
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order status history belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
         const updated = { ...existing, ...body };
 
         if (
@@ -232,7 +266,10 @@ export async function DELETE(request, context) {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute(
-            "SELECT id FROM cst_order_status_history WHERE id = ? FOR UPDATE",
+            `SELECT h.id, o.academy_id, o.fulfillment_branch_id 
+             FROM cst_order_status_history h 
+             INNER JOIN cst_orders o ON o.id = h.order_id 
+             WHERE h.id = ? FOR UPDATE`,
             [id]
         );
 
@@ -242,6 +279,15 @@ export async function DELETE(request, context) {
             return NextResponse.json(
                 { success: false, message: "Order status history not found" },
                 { status: 404 }
+            );
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && !verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order status history belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

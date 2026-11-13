@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { syncOnPaymentRecorded } from "@/app/components/lib/playerFlowSync.js";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 // ============================================
 // GET: Single Payment
@@ -9,6 +10,11 @@ export async function GET(request, context) {
     let connection;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
+
         const params = await context?.params;
         const { searchParams } = new URL(request.url);
         const id = params?.id || searchParams.get("id");
@@ -41,6 +47,7 @@ export async function GET(request, context) {
                 f.branch_id,
                 f.user_program_id,
                 f.admission_players_id,
+                ap.user_id,
                 f.program_id,
                 f.fee_month,
                 DATE_FORMAT(f.fee_month, '%M %Y') AS fee_month_name,
@@ -81,9 +88,18 @@ export async function GET(request, context) {
             );
         }
 
+        const record = rows[0];
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            if (Number(record.user_id) !== Number(authUser.id)) {
+                return NextResponse.json({ success: false, message: "Forbidden. You can only view your own payments." }, { status: 403 });
+            }
+        } else if (!verifyRecordAccess(authUser, { academy_id: record.academy_id, branch_id: record.branch_id })) {
+            return NextResponse.json({ success: false, message: "Forbidden. You do not have access to this payment record." }, { status: 403 });
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
     } catch (error) {
         console.error("GET Payment Error:", error);
@@ -100,6 +116,17 @@ export async function GET(request, context) {
 // PUT: Update Payment
 // ============================================
 export async function PUT(request, context) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot edit payment records." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -153,9 +180,10 @@ export async function PUT(request, context) {
 
         const [payments] = await connection.query(
             `
-            SELECT *
-            FROM cst_player_payments
-            WHERE id = ?
+            SELECT pay.*, f.academy_id, f.branch_id
+            FROM cst_player_payments pay
+            INNER JOIN cst_player_program_fees f ON f.id = pay.player_program_fee_id
+            WHERE pay.id = ?
             FOR UPDATE
             `,
             [id]
@@ -170,6 +198,14 @@ export async function PUT(request, context) {
                     message: "Payment record not found."
                 },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: payments[0].academy_id, branch_id: payments[0].branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Payment belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 
@@ -278,6 +314,17 @@ export async function PUT(request, context) {
 // DELETE: Delete Payment (only Failed)
 // ============================================
 export async function DELETE(request, context) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot delete payment records." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -302,9 +349,10 @@ export async function DELETE(request, context) {
 
         const [payments] = await connection.query(
             `
-            SELECT *
-            FROM cst_player_payments
-            WHERE id = ?
+            SELECT pay.*, f.academy_id, f.branch_id
+            FROM cst_player_payments pay
+            INNER JOIN cst_player_program_fees f ON f.id = pay.player_program_fee_id
+            WHERE pay.id = ?
             FOR UPDATE
             `,
             [id]
@@ -323,6 +371,14 @@ export async function DELETE(request, context) {
         }
 
         const payment = payments[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: payment.academy_id, branch_id: payment.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Payment belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         if (payment.payment_status !== "Failed") {
             await connection.rollback();

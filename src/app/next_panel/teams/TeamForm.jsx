@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Building2, GitBranch } from "lucide-react";
 import { useEffect, useState } from "react";
 import useCurrentUser, { ROLES } from "./useCurrentUser";
 import useOrgOptions, { inAcademy } from "./useOrgOptions";
@@ -27,6 +27,7 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
     const me = useCurrentUser();
     const { academies, branches, error: orgError } = useOrgOptions(me);
     const isSuper = me.role === ROLES.SUPER;
+    const isAcademyAdmin = me.role === ROLES.ACADEMY;
     const isBranchAdmin = me.role === ROLES.BRANCH;
     const blocked = me.ready && (!me.role || (!isSuper && !me.academyId) || (isBranchAdmin && !me.branchId));
 
@@ -58,8 +59,8 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
         if (isEdit || !me.ready || blocked || isSuper) return;
         setFormData((prev) => ({
             ...prev,
-            academy_id: me.academyId,
-            branch_id: isBranchAdmin ? me.branchId : prev.branch_id,
+            academy_id: me.academyId ? String(me.academyId) : "",
+            branch_id: isBranchAdmin ? (me.branchId ? String(me.branchId) : "") : prev.branch_id,
         }));
     }, [isEdit, me.ready, blocked, isSuper, isBranchAdmin, me.academyId, me.branchId]);
 
@@ -85,8 +86,8 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                 if (isBranchAdmin && Number(d.branch_id) !== Number(me.branchId)) return setForbidden(true);
 
                 setFormData({
-                    academy_id: d.academy_id ?? "",
-                    branch_id: d.branch_id ?? "",
+                    academy_id: d.academy_id ? String(d.academy_id) : "",
+                    branch_id: d.branch_id ? String(d.branch_id) : "",
                     team_name: d.team_name || "",
                     team_code: d.team_code || "",
                     team_type: d.team_type || "Academy",
@@ -108,7 +109,6 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
         setFormData((prev) => ({
             ...prev,
             [name]: name === "status" ? Number(value) : value,
-            // changing academy invalidates the chosen branch
             ...(name === "academy_id" ? { branch_id: "" } : {}),
         }));
     };
@@ -118,9 +118,9 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
             setGeneratingCode(true);
             setError("");
 
+            const effectiveAcademy = isSuper ? formData.academy_id : me.academyId;
             const params = new URLSearchParams();
-            const academyId = formData.team_type === "Academy" ? formData.academy_id : "";
-            if (academyId) params.set("academy_id", academyId);
+            if (effectiveAcademy) params.set("academy_id", effectiveAcademy);
 
             const query = params.toString();
             const res = await fetch(`/api/teams${query ? `?${query}` : ""}`);
@@ -131,7 +131,7 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
             }
 
             const academyTeams = (json.data || []).filter(
-                (team) => String(team.academy_id || "") === String(academyId || "")
+                (team) => String(team.academy_id || "") === String(effectiveAcademy || "")
             );
             const pattern = /^TEAM-CODE-(\d+)$/i;
             const maxNumber = academyTeams.reduce((max, team) => {
@@ -153,14 +153,12 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
 
         if (!formData.team_name.trim()) return setError("Team name is required");
 
-        // Non-academy team types are not linked to an academy or branch.
-        const isAcademyTeam = formData.team_type === "Academy";
-        const academy_id = isAcademyTeam
-            ? isSuper ? formData.academy_id : me.academyId
-            : null;
-        const branch_id = isAcademyTeam
-            ? isBranchAdmin ? me.branchId : formData.branch_id
-            : null;
+        const effectiveAcademyId = isSuper ? formData.academy_id : me.academyId;
+        const effectiveBranchId = isBranchAdmin ? me.branchId : (formData.branch_id || null);
+
+        if (!effectiveAcademyId && isSuper) {
+            return setError("Please select an academy");
+        }
 
         try {
             setLoading(true);
@@ -170,15 +168,14 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                 method: isEdit ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    academy_id: academy_id || null,
-                    branch_id: branch_id || null,
+                    academy_id: effectiveAcademyId ? Number(effectiveAcademyId) : null,
+                    branch_id: effectiveBranchId ? Number(effectiveBranchId) : null,
                     team_name: formData.team_name.trim(),
                     team_code: formData.team_code.trim() || null,
                     team_type: formData.team_type,
                     category: formData.category.trim() || null,
                     age_group: formData.age_group.trim() || null,
                     status: formData.status,
-                    // only on create - on edit the API keeps the original creator
                     ...(!isEdit && me.id ? { created_by: me.id } : {}),
                 }),
             });
@@ -212,10 +209,20 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
         return <div className="alert alert-danger">You do not have access to this team.</div>;
     }
 
-    const isAcademyTeam = formData.team_type === "Academy";
-    const branchOptions = formData.academy_id
-        ? branches.filter((b) => inAcademy(b, formData.academy_id))
+    const currentAcademyId = isSuper ? formData.academy_id : me.academyId;
+    const branchOptions = currentAcademyId
+        ? branches.filter((b) => inAcademy(b, currentAcademyId))
         : [];
+
+    const currentAcademyName =
+        me.academyName ||
+        academies.find((a) => Number(a.id) === Number(currentAcademyId))?.academy_name ||
+        "CST Pro Cricket Academy";
+
+    const currentBranchName =
+        me.branchName ||
+        branches.find((b) => Number(b.id) === Number(formData.branch_id || me.branchId))?.branch_name ||
+        "Main Branch";
 
     return (
         <div className="card shadow-sm">
@@ -227,47 +234,130 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                 {(error || orgError) && <div className="alert alert-danger">{error || orgError}</div>}
 
                 <form onSubmit={handleSubmit}>
-                    {isAcademyTeam && <div className="row">
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Academy</label>
-                            <select
-                                name="academy_id"
-                                className="form-select"
-                                value={formData.academy_id}
-                                onChange={handleChange}
-                                disabled={!isSuper}
-                            >
-                                <option value="">{isSuper ? "No academy (external team)" : "Choose Academy"}</option>
-                                {academies.map((a) => (
-                                    <option key={a.id} value={a.id}>{a.academy_name}</option>
-                                ))}
-                            </select>
-                            {!isSuper && <div className="form-text">Locked to your academy.</div>}
-                        </div>
+                    {/* Academy & Branch Selection / Auto-filled Display */}
+                    <div className="row mb-3 p-3 bg-light rounded-3 border">
+                        {isSuper ? (
+                            <>
+                                <div className="col-md-6 mb-2 mb-md-0">
+                                    <label className="form-label fw-semibold">
+                                        <Building2 size={16} className="me-1 text-primary" />
+                                        Academy <span className="text-danger">*</span>
+                                    </label>
+                                    <select
+                                        name="academy_id"
+                                        className="form-select"
+                                        value={formData.academy_id}
+                                        onChange={handleChange}
+                                        required
+                                    >
+                                        <option value="">Select Academy</option>
+                                        {academies.map((a) => (
+                                            <option key={a.id} value={a.id}>
+                                                {a.academy_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Branch (optional)</label>
-                            <select
-                                name="branch_id"
-                                className="form-select"
-                                value={formData.branch_id}
-                                onChange={handleChange}
-                                disabled={isBranchAdmin || !formData.academy_id}
-                            >
-                                <option value="">
-                                    {formData.academy_id ? "No branch (academy-level team)" : "Choose academy first"}
-                                </option>
-                                {branchOptions.map((b) => (
-                                    <option key={b.id} value={b.id}>{b.branch_name}</option>
-                                ))}
-                            </select>
-                            {isBranchAdmin && <div className="form-text">Locked to your branch.</div>}
-                        </div>
-                    </div>}
+                                <div className="col-md-6">
+                                    <label className="form-label fw-semibold">
+                                        <GitBranch size={16} className="me-1 text-primary" />
+                                        Branch (optional)
+                                    </label>
+                                    <select
+                                        name="branch_id"
+                                        className="form-select"
+                                        value={formData.branch_id}
+                                        onChange={handleChange}
+                                        disabled={!formData.academy_id}
+                                    >
+                                        <option value="">
+                                            {formData.academy_id ? "No branch (All / Main Branch)" : "Choose academy first"}
+                                        </option>
+                                        {branchOptions.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.branch_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        ) : isAcademyAdmin ? (
+                            <>
+                                <div className="col-md-6 mb-2 mb-md-0">
+                                    <label className="form-label fw-semibold">
+                                        <Building2 size={16} className="me-1 text-primary" />
+                                        Academy (Auto Assigned)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control bg-white"
+                                        value={currentAcademyName}
+                                        readOnly
+                                        disabled
+                                    />
+                                    <input type="hidden" name="academy_id" value={me.academyId} />
+                                </div>
+
+                                <div className="col-md-6">
+                                    <label className="form-label fw-semibold">
+                                        <GitBranch size={16} className="me-1 text-primary" />
+                                        Branch (optional)
+                                    </label>
+                                    <select
+                                        name="branch_id"
+                                        className="form-select"
+                                        value={formData.branch_id}
+                                        onChange={handleChange}
+                                    >
+                                        <option value="">All / Main Branch</option>
+                                        {branchOptions.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.branch_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        ) : (
+                            /* Branch Admin / Staff: both auto-filled */
+                            <>
+                                <div className="col-md-6 mb-2 mb-md-0">
+                                    <label className="form-label fw-semibold">
+                                        <Building2 size={16} className="me-1 text-primary" />
+                                        Academy (Auto Assigned)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control bg-white"
+                                        value={currentAcademyName}
+                                        readOnly
+                                        disabled
+                                    />
+                                    <input type="hidden" name="academy_id" value={me.academyId} />
+                                </div>
+
+                                <div className="col-md-6">
+                                    <label className="form-label fw-semibold">
+                                        <GitBranch size={16} className="me-1 text-primary" />
+                                        Branch (Auto Assigned)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control bg-white"
+                                        value={currentBranchName}
+                                        readOnly
+                                        disabled
+                                    />
+                                    <input type="hidden" name="branch_id" value={me.branchId} />
+                                </div>
+                            </>
+                        )}
+                    </div>
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team Name</label>
+                            <label className="form-label">Team Name <span className="text-danger">*</span></label>
                             <input
                                 type="text"
                                 name="team_name"
@@ -322,23 +412,28 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                                 className="form-control"
                                 value={formData.category}
                                 onChange={handleChange}
-                                placeholder="e.g. Senior"
+                                placeholder="e.g. Senior / Junior / Club"
                             />
                         </div>
 
                         <div className="col-md-4 mb-3">
                             <label className="form-label">Age Group (optional)</label>
-                            <select
+                            <input
+                                type="text"
                                 name="age_group"
-                                className="form-select"
+                                className="form-control"
+                                list="age-groups-datalist"
                                 value={formData.age_group}
                                 onChange={handleChange}
-                            >
-                                <option value="">Select Age Group</option>
-                                {ageGroups.map((g) => (
-                                    <option key={g.id} value={g.age_group}>{g.age_group}</option>
-                                ))}
-                            </select>
+                                placeholder="e.g. Under-19"
+                            />
+                            {ageGroups.length > 0 && (
+                                <datalist id="age-groups-datalist">
+                                    {ageGroups.map((a) => (
+                                        <option key={a.id} value={a.age_group} />
+                                    ))}
+                                </datalist>
+                            )}
                         </div>
                     </div>
 
@@ -354,7 +449,11 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                         <button type="submit" className="btn btn-primary" disabled={loading}>
                             {loading ? "Saving..." : isEdit ? "Update Team" : "Add Team"}
                         </button>
-                        <button type="button" className="btn btn-secondary" onClick={() => router.push(returnTo)}>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => router.push(returnTo)}
+                        >
                             Cancel
                         </button>
                     </div>

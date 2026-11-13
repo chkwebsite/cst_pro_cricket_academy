@@ -1,56 +1,51 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
+// Helper to check tenant permission for a ground booking record
+function isBookingAuthorized(booking, authUser) {
+    if (authUser.isSuperAdmin) return true;
+    if (Number(booking.academy_id) !== Number(authUser.academy_id)) return false;
 
+    if (authUser.isPlayer) {
+        return (
+            Number(booking.user_id) === Number(authUser.id) ||
+            (booking.customer_phone && booking.customer_phone === authUser.phone)
+        );
+    }
 
+    if (authUser.isAcademyAdmin) return true;
 
+    if (authUser.isBranchAdmin) {
+        return Number(booking.branch_id) === Number(authUser.branch_id);
+    }
+
+    // Branch Staff / Coach / Accountant
+    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+    return allowed.includes(Number(booking.branch_id));
+}
 
 // =====================================================
 // GET SINGLE BOOKING
 // =====================================================
 export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
 
     const connection = await pool.getConnection();
 
     try {
-
         const { id } = await params;
-
-        const { searchParams } = new URL(request.url);
-
-        const academy_id = searchParams.get("academy_id");
-        const branch_id = searchParams.get("branch_id");
-
-        if (!academy_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Academy ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!branch_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Branch ID is required"
-                },
-                { status: 400 }
-            );
-        }
 
         // ==========================================
         // BOOKING
         // ==========================================
-
         const [rows] = await connection.query(
             `
             SELECT
                 gb.id,
                 gb.booking_no,
+                gb.user_id,
 
                 gb.ground_id,
                 g.ground_name,
@@ -95,21 +90,14 @@ export async function GET(request, { params }) {
                 ON gs.id = gb.slot_id
 
             WHERE gb.id = ?
-            AND g.academy_id = ?
-            AND g.branch_id = ?
             AND g.is_deleted = 0
 
             LIMIT 1
             `,
-            [
-                id,
-                academy_id,
-                branch_id
-            ]
+            [id]
         );
 
         if (rows.length === 0) {
-
             return NextResponse.json(
                 {
                     success: false,
@@ -119,10 +107,19 @@ export async function GET(request, { params }) {
             );
         }
 
+        const booking = rows[0];
+
+        // Tenant access check
+        if (!isBookingAuthorized(booking, authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Booking not found or access denied" },
+                { status: 404 }
+            );
+        }
+
         // ==========================================
         // PAYMENTS
         // ==========================================
-
         const [payments] = await connection.query(
             `
             SELECT
@@ -148,15 +145,13 @@ export async function GET(request, { params }) {
             success: true,
             message: "Ground booking fetched successfully",
             data: {
-                ...rows[0],
+                ...booking,
                 payments
             }
         });
 
     } catch (error) {
-
         console.error("GET SINGLE BOOKING ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
@@ -165,7 +160,6 @@ export async function GET(request, { params }) {
             },
             { status: 500 }
         );
-
     } finally {
         connection.release();
     }
@@ -176,10 +170,12 @@ export async function GET(request, { params }) {
 // PUT - UPDATE BOOKING
 // =====================================================
 export async function PUT(request, { params }) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player"))) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
         return NextResponse.json(
-            { success: false, message: "Forbidden. Players have view-only access to ground bookings." },
+            { success: false, message: "Forbidden. Players cannot update ground bookings." },
             { status: 403 }
         );
     }
@@ -187,100 +183,83 @@ export async function PUT(request, { params }) {
     const connection = await pool.getConnection();
 
     try {
-
         const { id } = await params;
-
         const body = await request.json();
 
-        const {
-            academy_id,
-            branch_id,
+        // 1. Check existing booking & tenant access
+        const [existingRows] = await connection.query(
+            `
+            SELECT
+                gb.id,
+                gb.ground_id,
+                gb.slot_id,
+                gb.booking_date,
+                g.academy_id,
+                g.branch_id
+            FROM cst_ground_bookings gb
+            INNER JOIN cst_ground g ON g.id = gb.ground_id
+            WHERE gb.id = ? AND g.is_deleted = 0
+            LIMIT 1
+            `,
+            [id]
+        );
 
+        if (existingRows.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "Booking not found or access denied" },
+                { status: 404 }
+            );
+        }
+
+        const existingBooking = existingRows[0];
+        if (!isBookingAuthorized(existingBooking, authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied: Unauthorized to edit this booking" },
+                { status: 403 }
+            );
+        }
+
+        let academy_id = body.academy_id || existingBooking.academy_id;
+        let branch_id = body.branch_id || existingBooking.branch_id;
+
+        // Enforce tenant boundary
+        if (!authUser.isSuperAdmin) {
+            academy_id = authUser.academy_id;
+            if (authUser.isBranchAdmin) {
+                branch_id = authUser.branch_id;
+            } else if (!authUser.isAcademyAdmin) {
+                const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                if (!allowed.includes(Number(branch_id))) {
+                    return NextResponse.json(
+                        { success: false, message: "Access denied for target branch" },
+                        { status: 403 }
+                    );
+                }
+            }
+        }
+
+        const {
             ground_id,
             slot_id,
-
             match_id = null,
             tournament_id = null,
-
             customer_name,
             customer_phone = null,
             customer_email = null,
-
             booking_date,
-
             purpose = "Practice",
-
             total_amount = 0,
             paid_amount = 0,
-
             payment_mode = null,
             transaction_no = null,
-
             booking_status = "Booked",
-
             remarks = null
         } = body;
 
-        // ==========================================
-        // VALIDATION
-        // ==========================================
-
-        if (!academy_id) {
+        // Validation
+        if (!ground_id || !slot_id || !customer_name || !booking_date) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Academy ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!branch_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Branch ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!ground_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!slot_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Slot ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!customer_name) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Customer name is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!booking_date) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Booking date is required"
-                },
+                { success: false, message: "Required fields missing (ground_id, slot_id, customer_name, booking_date)" },
                 { status: 400 }
             );
         }
@@ -290,40 +269,26 @@ export async function PUT(request, { params }) {
 
         if (totalAmount < 0 || paidAmount < 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Amount cannot be negative"
-                },
+                { success: false, message: "Amount cannot be negative" },
                 { status: 400 }
             );
         }
 
         if (paidAmount > totalAmount) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Paid amount cannot be greater than total amount"
-                },
+                { success: false, message: "Paid amount cannot be greater than total amount" },
                 { status: 400 }
             );
         }
 
         if (paidAmount > 0 && !payment_mode) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Payment mode is required when paid amount is greater than 0"
-                },
+                { success: false, message: "Payment mode is required when paid amount is greater than 0" },
                 { status: 400 }
             );
         }
 
-        // ==========================================
-        // PAYMENT STATUS
-        // ==========================================
-
         let paymentStatus = "Pending";
-
         if (totalAmount > 0 && paidAmount === totalAmount) {
             paymentStatus = "Paid";
         } else if (paidAmount > 0 && paidAmount < totalAmount) {
@@ -334,180 +299,68 @@ export async function PUT(request, { params }) {
 
         await connection.beginTransaction();
 
-        // ==========================================
-        // CHECK EXISTING BOOKING
-        // ==========================================
-
-        const [existingRows] = await connection.query(
-            `
-            SELECT
-                gb.id,
-                gb.ground_id,
-                gb.slot_id,
-                gb.booking_date
-            FROM cst_ground_bookings gb
-
-            INNER JOIN cst_ground g
-                ON g.id = gb.ground_id
-
-            WHERE gb.id = ?
-            AND g.academy_id = ?
-            AND g.branch_id = ?
-            AND g.is_deleted = 0
-
-            LIMIT 1
-            `,
-            [
-                id,
-                academy_id,
-                branch_id
-            ]
-        );
-
-        if (existingRows.length === 0) {
-
-            await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Booking not found or access denied"
-                },
-                { status: 404 }
-            );
-        }
-
-        // ==========================================
-        // CHECK GROUND
-        // ==========================================
-
+        // Check target ground belongs to tenant
         const [groundRows] = await connection.query(
             `
-            SELECT
-                id,
-                academy_id,
-                branch_id,
-                status,
-                is_deleted
-
+            SELECT id, academy_id, branch_id, status, is_deleted
             FROM cst_ground
-
-            WHERE id = ?
-            AND academy_id = ?
-            AND branch_id = ?
-            AND is_deleted = 0
-
+            WHERE id = ? AND academy_id = ? AND branch_id = ? AND is_deleted = 0
             LIMIT 1
             `,
-            [
-                ground_id,
-                academy_id,
-                branch_id
-            ]
+            [ground_id, academy_id, branch_id]
         );
 
         if (groundRows.length === 0) {
-
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground does not belong to selected academy/branch"
-                },
+                { success: false, message: "Ground does not belong to authorized academy/branch" },
                 { status: 400 }
             );
         }
 
         if (groundRows[0].status !== 1) {
-
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground is inactive"
-                },
+                { success: false, message: "Ground is inactive" },
                 { status: 400 }
             );
         }
 
-        // ==========================================
-        // CHECK SLOT
-        // ==========================================
-
+        // Check slot
         const [slotRows] = await connection.query(
             `
-            SELECT
-                gs.id
-
+            SELECT gs.id
             FROM cst_ground_slots gs
-
-            INNER JOIN cst_ground g
-                ON g.id = gs.ground_id
-
-            WHERE gs.id = ?
-            AND gs.ground_id = ?
-            AND g.academy_id = ?
-            AND g.branch_id = ?
-            AND g.is_deleted = 0
-            AND gs.status = 1
-
+            INNER JOIN cst_ground g ON g.id = gs.ground_id
+            WHERE gs.id = ? AND gs.ground_id = ? AND g.academy_id = ? AND g.branch_id = ? AND g.is_deleted = 0 AND gs.status = 1
             LIMIT 1
             `,
-            [
-                slot_id,
-                ground_id,
-                academy_id,
-                branch_id
-            ]
+            [slot_id, ground_id, academy_id, branch_id]
         );
 
         if (slotRows.length === 0) {
-
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid slot for selected ground"
-                },
+                { success: false, message: "Invalid slot for selected ground" },
                 { status: 400 }
             );
         }
 
-        // ==========================================
-        // DUPLICATE BOOKING
-        // ==========================================
-
+        // Check duplicate booking
         const [duplicateRows] = await connection.query(
             `
             SELECT id, booking_no
-
             FROM cst_ground_bookings
-
-            WHERE ground_id = ?
-            AND slot_id = ?
-            AND booking_date = ?
-
+            WHERE ground_id = ? AND slot_id = ? AND booking_date = ?
             AND booking_status IN ('Booked', 'Confirmed')
-
             AND id != ?
-
             LIMIT 1
             `,
-            [
-                ground_id,
-                slot_id,
-                booking_date,
-                id
-            ]
+            [ground_id, slot_id, booking_date, id]
         );
 
         if (duplicateRows.length > 0) {
-
             await connection.rollback();
-
             return NextResponse.json(
                 {
                     success: false,
@@ -518,119 +371,64 @@ export async function PUT(request, { params }) {
             );
         }
 
-        // ==========================================
-        // UPDATE BOOKING
-        // ==========================================
-
+        // Update booking
         await connection.query(
             `
             UPDATE cst_ground_bookings
-
             SET
                 ground_id = ?,
                 slot_id = ?,
-
                 match_id = ?,
                 tournament_id = ?,
-
                 customer_name = ?,
                 customer_phone = ?,
                 customer_email = ?,
-
                 booking_date = ?,
                 purpose = ?,
-
                 total_amount = ?,
                 paid_amount = ?,
                 balance_amount = ?,
-
                 payment_status = ?,
                 booking_status = ?,
-
                 remarks = ?
-
             WHERE id = ?
             `,
             [
                 ground_id,
                 slot_id,
-
                 match_id,
                 tournament_id,
-
                 customer_name,
                 customer_phone,
                 customer_email,
-
                 booking_date,
                 purpose,
-
                 totalAmount,
                 paidAmount,
                 balanceAmount,
-
                 paymentStatus,
                 booking_status,
-
                 remarks,
-
                 id
             ]
         );
 
-        // ==========================================
-        // DELETE OLD PAYMENTS
-        // ==========================================
-
+        // Delete old payments and re-insert if paidAmount > 0
         await connection.query(
-            `
-            DELETE FROM cst_ground_payments
-            WHERE booking_id = ?
-            `,
+            `DELETE FROM cst_ground_payments WHERE booking_id = ?`,
             [id]
         );
 
-        // ==========================================
-        // INSERT NEW PAYMENT
-        // ==========================================
-
         if (paidAmount > 0) {
-
             await connection.query(
                 `
                 INSERT INTO cst_ground_payments
-                (
-                    booking_id,
-                    payment_date,
-                    amount,
-                    payment_mode,
-                    transaction_no,
-                    remarks
-                )
-
-                VALUES
-                (
-                    ?,
-                    CURDATE(),
-                    ?,
-                    ?,
-                    ?,
-                    ?
-                )
+                (booking_id, payment_date, amount, payment_mode, transaction_no, remarks)
+                VALUES (?, CURDATE(), ?, ?, ?, ?)
                 `,
-                [
-                    id,
-                    paidAmount,
-                    payment_mode,
-                    transaction_no,
-                    remarks
-                ]
+                [id, paidAmount, payment_mode, transaction_no, remarks]
             );
         }
-
-        // ==========================================
-        // COMMIT
-        // ==========================================
 
         await connection.commit();
 
@@ -652,11 +450,8 @@ export async function PUT(request, { params }) {
         });
 
     } catch (error) {
-
         await connection.rollback();
-
         console.error("PUT GROUND BOOKING ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
@@ -665,7 +460,6 @@ export async function PUT(request, { params }) {
             },
             { status: 500 }
         );
-
     } finally {
         connection.release();
     }
@@ -676,10 +470,12 @@ export async function PUT(request, { params }) {
 // DELETE - DELETE BOOKING
 // =====================================================
 export async function DELETE(request, { params }) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player"))) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer) {
         return NextResponse.json(
-            { success: false, message: "Forbidden. Players have view-only access to ground bookings." },
+            { success: false, message: "Forbidden. Players cannot delete ground bookings." },
             { status: 403 }
         );
     }
@@ -687,81 +483,43 @@ export async function DELETE(request, { params }) {
     const connection = await pool.getConnection();
 
     try {
-
         const { id } = await params;
 
-        const { searchParams } = new URL(request.url);
-
-        const academy_id = searchParams.get("academy_id");
-        const branch_id = searchParams.get("branch_id");
-
-        if (!academy_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Academy ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!branch_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Branch ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        // ==========================================
-        // CHECK BOOKING ACCESS
-        // ==========================================
-
+        // Check booking access
         const [rows] = await connection.query(
             `
-            SELECT gb.id
-
+            SELECT gb.id, g.academy_id, g.branch_id
             FROM cst_ground_bookings gb
-
-            INNER JOIN cst_ground g
-                ON g.id = gb.ground_id
-
-            WHERE gb.id = ?
-            AND g.academy_id = ?
-            AND g.branch_id = ?
-            AND g.is_deleted = 0
-
+            INNER JOIN cst_ground g ON g.id = gb.ground_id
+            WHERE gb.id = ? AND g.is_deleted = 0
             LIMIT 1
             `,
-            [
-                id,
-                academy_id,
-                branch_id
-            ]
+            [id]
         );
 
         if (rows.length === 0) {
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Booking not found or access denied"
-                },
+                { success: false, message: "Booking not found or access denied" },
                 { status: 404 }
             );
         }
 
-        // ==========================================
-        // DELETE BOOKING
-        // ==========================================
+        const booking = rows[0];
+        if (!isBookingAuthorized(booking, authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Access denied: Unauthorized to delete this booking" },
+                { status: 403 }
+            );
+        }
+
+        // Delete payments then booking
+        await connection.query(
+            `DELETE FROM cst_ground_payments WHERE booking_id = ?`,
+            [id]
+        );
 
         await connection.query(
-            `
-            DELETE FROM cst_ground_bookings
-            WHERE id = ?
-            `,
+            `DELETE FROM cst_ground_bookings WHERE id = ?`,
             [id]
         );
 
@@ -771,9 +529,7 @@ export async function DELETE(request, { params }) {
         });
 
     } catch (error) {
-
         console.error("DELETE GROUND BOOKING ERROR:", error);
-
         return NextResponse.json(
             {
                 success: false,
@@ -782,7 +538,6 @@ export async function DELETE(request, { params }) {
             },
             { status: 500 }
         );
-
     } finally {
         connection.release();
     }

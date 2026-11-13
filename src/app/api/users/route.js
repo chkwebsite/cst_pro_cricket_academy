@@ -5,7 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 import pool from "@/app/components/lib/db";
 import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, validateBranchBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 
 // =====================================================
@@ -17,13 +17,8 @@ export async function GET(request) {
     const connection = await pool.getConnection();
 
     try {
-        const authUser = await getAuthUser(request);
-        if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized. Authentication required." },
-                { status: 401 }
-            );
-        }
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
 
         if (authUser.isPlayer) {
             return NextResponse.json(
@@ -109,9 +104,17 @@ u.id,
         } else if (!authUser.isSuperAdmin && authUser.academy_id) {
             sql += " AND u.academy_id = ?";
             values.push(authUser.academy_id);
-            if (branch_id) {
+            const allowedBranches = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : []);
+            if (branch_id && allowedBranches.includes(Number(branch_id))) {
                 sql += " AND u.branch_id = ?";
                 values.push(branch_id);
+            } else if (allowedBranches.length > 0) {
+                sql += " AND u.branch_id IN (?)";
+                values.push(allowedBranches);
+            } else {
+                sql += " AND 1 = 0";
             }
         } else {
             if (academy_id) {
@@ -337,8 +340,10 @@ u.id,
 
 export async function POST(request) {
 
-    const authUser = await getAuthUser(request);
-    if (!authUser || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
         return NextResponse.json(
             { success: false, message: "Access denied. Administrator authorization required." },
             { status: 403 }
@@ -364,11 +369,27 @@ export async function POST(request) {
                 ?.toString()
                 .trim();
 
-        const academy_id =
+        let academy_id =
             formData.get("academy_id") || null;
 
-        const branch_id =
+        let branch_id =
             formData.get("branch_id") || null;
+
+        if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+            if (branch_id) {
+                const isValid = await validateBranchBelongsToAcademy(connection, branch_id, authUser.academy_id);
+                if (!isValid) {
+                    return NextResponse.json(
+                        { success: false, message: "Branch does not belong to your academy" },
+                        { status: 400 }
+                    );
+                }
+            }
+        } else if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        }
 
         const first_name =
             formData.get("first_name")
@@ -550,20 +571,21 @@ export async function POST(request) {
             // PLAYER
             // -------------------------------------------------
 
+            let playerSql = `
+                SELECT id, admission_no, user_id, branch_id
+                FROM cst_admission_players
+                WHERE admission_no = ?
+                AND is_deleted = 0
+            `;
+            const playerParams = [appointment_no];
+            if (branch_id) {
+                playerSql += ` AND branch_id = ?`;
+                playerParams.push(branch_id);
+            }
+            playerSql += ` LIMIT 1`;
+
             const [playerRows] =
-                await connection.query(
-                    `
-SELECT
-id,
-    admission_no,
-    user_id
-                    FROM cst_admission_players
-                    WHERE admission_no = ?
-    AND is_deleted = 0
-                    LIMIT 1
-    `,
-                    [appointment_no]
-                );
+                await connection.query(playerSql, playerParams);
 
 
             if (playerRows.length === 0) {
@@ -601,20 +623,25 @@ id,
             // STAFF / ADMIN / OTHER USER
             // -------------------------------------------------
 
+            let staffSql = `
+                SELECT id, appointment_no, user_id, academy_id, branch_id
+                FROM cst_staff
+                WHERE appointment_no = ?
+                AND is_deleted = 0
+            `;
+            const staffParams = [appointment_no];
+            if (academy_id) {
+                staffSql += ` AND academy_id = ?`;
+                staffParams.push(academy_id);
+            }
+            if (branch_id) {
+                staffSql += ` AND branch_id = ?`;
+                staffParams.push(branch_id);
+            }
+            staffSql += ` LIMIT 1`;
+
             const [staffRows] =
-                await connection.query(
-                    `
-SELECT
-id,
-    appointment_no,
-    user_id
-                    FROM cst_staff
-                    WHERE appointment_no = ?
-    AND is_deleted = 0
-                    LIMIT 1
-                    `,
-                    [appointment_no]
-                );
+                await connection.query(staffSql, staffParams);
 
 
             if (staffRows.length === 0) {

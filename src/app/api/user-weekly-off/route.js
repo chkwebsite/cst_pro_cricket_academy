@@ -215,6 +215,29 @@ export async function POST(request) {
 
         connection = await pool.getConnection();
 
+        // Verify target user belongs to caller's academy and branch
+        const [targetUserRows] = await connection.execute(
+            `SELECT id, academy_id, branch_id FROM cst_users WHERE id = ? AND is_deleted = 0`,
+            [user_id]
+        );
+        if (!targetUserRows.length) {
+            return NextResponse.json({ success: false, message: "Target user not found" }, { status: 404 });
+        }
+        if (!authUser.isSuperAdmin) {
+            if (Number(targetUserRows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden: Target user belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && Number(targetUserRows[0].branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden: Target user belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
+
         // 1. If 'days' array is supplied, replace all weekly off days for this user
         if (Array.isArray(days)) {
             await connection.beginTransaction();

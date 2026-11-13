@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 
 // GET - List user branches
 export async function GET(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     let connection;
 
     try {
@@ -37,14 +41,43 @@ export async function GET(request) {
 
         where.push("ub.status >= 0");
 
-        if (user_id) {
+        // Tenant Scoping
+        if (authUser.isBranchAdmin) {
+            where.push("b.academy_id = ?");
+            values.push(authUser.academy_id);
+            where.push("ub.branch_id = ?");
+            values.push(authUser.branch_id);
+        } else if (authUser.isAcademyAdmin) {
+            where.push("b.academy_id = ?");
+            values.push(authUser.academy_id);
+            if (branch_id) {
+                where.push("ub.branch_id = ?");
+                values.push(branch_id);
+            }
+        } else if (authUser.isPlayer) {
             where.push("ub.user_id = ?");
-            values.push(user_id);
+            values.push(authUser.id);
+        } else if (!authUser.isSuperAdmin) {
+            where.push("b.academy_id = ?");
+            values.push(authUser.academy_id);
+            const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+            if (allowedBranches.length > 0) {
+                where.push("ub.branch_id IN (?)");
+                values.push(allowedBranches);
+            } else {
+                where.push("1 = 0");
+            }
+        } else {
+            // Super Admin can filter
+            if (branch_id) {
+                where.push("ub.branch_id = ?");
+                values.push(branch_id);
+            }
         }
 
-        if (branch_id) {
-            where.push("ub.branch_id = ?");
-            values.push(branch_id);
+        if (user_id && !authUser.isPlayer) {
+            where.push("ub.user_id = ?");
+            values.push(user_id);
         }
 
         if (is_primary !== null && is_primary !== "") {
@@ -171,6 +204,16 @@ export async function GET(request) {
 
 // POST - Create user branch
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (authUser.isPlayer || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to assign branches" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -178,12 +221,17 @@ export async function POST(request) {
 
         const body = await request.json();
 
-        const {
+        let {
             user_id,
             branch_id,
             is_primary = 0,
             status = 1,
         } = body;
+
+        // Force branch_id for Branch Admin
+        if (authUser.isBranchAdmin) {
+            branch_id = authUser.branch_id;
+        }
 
         if (!branch_id) {
             return NextResponse.json(
@@ -195,24 +243,24 @@ export async function POST(request) {
             );
         }
 
-        // Check user
+        // Check user belongs to authorized academy
         let userAppointmentNo = body.appointment_no || null;
         if (user_id) {
-            const [userRows] = await connection.query(
-                `
-                SELECT id, appointment_no
-                FROM cst_users
-                WHERE id = ?
-                LIMIT 1
-                `,
-                [user_id]
-            );
+            let userSql = `SELECT id, appointment_no, academy_id FROM cst_users WHERE id = ?`;
+            const userParams = [user_id];
+            if (!authUser.isSuperAdmin) {
+                userSql += ` AND academy_id = ?`;
+                userParams.push(authUser.academy_id);
+            }
+            userSql += ` LIMIT 1`;
+
+            const [userRows] = await connection.query(userSql, userParams);
 
             if (userRows.length === 0) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message: "User not found",
+                        message: "User not found or belongs to another academy",
                     },
                     { status: 404 }
                 );
@@ -226,22 +274,22 @@ export async function POST(request) {
             userAppointmentNo = `UB-${user_id || "0"}-${branch_id}`;
         }
 
-        // Check branch
-        const [branchRows] = await connection.query(
-            `
-            SELECT id
-            FROM cst_branch
-            WHERE id = ?
-            LIMIT 1
-            `,
-            [branch_id]
-        );
+        // Check branch belongs to authorized academy
+        let branchSql = `SELECT id, academy_id FROM cst_branch WHERE id = ?`;
+        const branchParams = [branch_id];
+        if (!authUser.isSuperAdmin) {
+            branchSql += ` AND academy_id = ?`;
+            branchParams.push(authUser.academy_id);
+        }
+        branchSql += ` LIMIT 1`;
+
+        const [branchRows] = await connection.query(branchSql, branchParams);
 
         if (branchRows.length === 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Branch not found",
+                    message: "Branch not found or belongs to another academy",
                 },
                 { status: 404 }
             );

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 const VALID_DAYS = [
     "Monday",
@@ -156,8 +156,8 @@ async function validateRelations(connection, data) {
     const [branches] = await connection.execute(
         `SELECT id
          FROM cst_branch
-         WHERE id = ? AND academy_id = ?
-    LIMIT 1`,
+         WHERE id = ? AND academy_id = ? AND is_deleted = 0
+         LIMIT 1`,
         [data.branch_id, data.academy_id]
     );
 
@@ -170,9 +170,9 @@ async function validateRelations(connection, data) {
          FROM cst_user_programs up
          INNER JOIN cst_programs p ON p.id = up.program_id
          WHERE up.id = ?
-    AND up.branch_id = ?
-        AND p.academy_id = ?
-            AND up.status = 1
+           AND up.branch_id = ?
+           AND p.academy_id = ?
+           AND up.status = 1
            AND up.is_deleted = 0
            AND p.status = 1
            AND p.is_deleted = 0
@@ -199,9 +199,9 @@ async function validateRelations(connection, data) {
         `SELECT id
          FROM cst_users
          WHERE id = ?
-    AND academy_id = ?
-        AND branch_id = ?
-            AND status = 1
+           AND academy_id = ?
+           AND branch_id = ?
+           AND status = 1
            AND is_deleted = 0
          LIMIT 1`,
         [
@@ -218,11 +218,25 @@ async function validateRelations(connection, data) {
     return null;
 }
 
+function checkAuthorization(user, record) {
+    if (user.isSuperAdmin) return true;
+    if (Number(record.academy_id) !== Number(user.academy_id)) return false;
+    if (user.isAcademyAdmin) return true;
+    if (user.isBranchAdmin) {
+        return Number(record.branch_id) === Number(user.branch_id);
+    }
+    const allowed = user.assignedBranchIds || (user.branch_id ? [Number(user.branch_id)] : []);
+    return allowed.includes(Number(record.branch_id));
+}
+
 // GET: Fetch one individual training record.
 export async function GET(request, { params }) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse: authError } = await getAuthenticatedUser(request);
+        if (authError) return authError;
+
         const { id: rawId } = await params;
         const id = Number(rawId);
 
@@ -234,35 +248,29 @@ export async function GET(request, { params }) {
 
         const [rows] = await connection.execute(
             `SELECT
-it.*,
-    up.program_id,
-    up.appointment_no,
-    ap.id AS admission_player_id,
-        ap.admission_no,
-        ap.first_name AS player_first_name,
-            ap.last_name AS player_last_name,
+                it.*,
+                up.user_id AS player_user_id,
+                up.program_id,
+                up.appointment_no,
+                ap.id AS admission_player_id,
+                ap.admission_no,
+                ap.first_name AS player_first_name,
+                ap.last_name AS player_last_name,
                 ap.phone AS player_phone,
-                    p.program_name,
-                    coach.first_name AS coach_first_name,
-                        coach.last_name AS coach_last_name,
-                            coach.appointment_no AS coach_appointment_no,
-                                a.academy_name,
-                                br.branch_code
+                p.program_name,
+                coach.first_name AS coach_first_name,
+                coach.last_name AS coach_last_name,
+                coach.appointment_no AS coach_appointment_no,
+                a.academy_name,
+                br.branch_code
              FROM cst_individual_training it
-             INNER JOIN cst_user_programs up
-                ON up.id = it.user_program_id
-             INNER JOIN cst_admission_players ap
-                ON ap.id = up.admission_players_id
-             INNER JOIN cst_programs p
-                ON p.id = up.program_id
-             INNER JOIN cst_users coach
-                ON coach.id = it.coach_user_id
-             INNER JOIN cst_academy a
-                ON a.id = it.academy_id
-             INNER JOIN cst_branch br
-                ON br.id = it.branch_id
-             WHERE it.id = ?
-    AND it.is_deleted = 0
+             INNER JOIN cst_user_programs up ON up.id = it.user_program_id
+             INNER JOIN cst_admission_players ap ON ap.id = up.admission_players_id
+             INNER JOIN cst_programs p ON p.id = up.program_id
+             INNER JOIN cst_users coach ON coach.id = it.coach_user_id
+             INNER JOIN cst_academy a ON a.id = it.academy_id
+             INNER JOIN cst_branch br ON br.id = it.branch_id
+             WHERE it.id = ? AND it.is_deleted = 0
              LIMIT 1`,
             [id]
         );
@@ -271,9 +279,22 @@ it.*,
             return errorResponse("Individual training not found.", 404);
         }
 
+        const record = rows[0];
+
+        // Scoping check
+        if (authUser.isPlayer && Number(record.player_user_id) !== Number(authUser.id)) {
+            return errorResponse("Forbidden: You cannot access another player's training record.", 403);
+        }
+        if (authUser.isCoach && Number(record.coach_user_id) !== Number(authUser.id)) {
+            return errorResponse("Forbidden: You cannot access another coach's training record.", 403);
+        }
+        if (!checkAuthorization(authUser, record)) {
+            return errorResponse("Forbidden: Access denied to records outside your academy or branch.", 403);
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
     } catch (error) {
         console.error("GET single individual training:", error);
@@ -293,6 +314,13 @@ export async function PUT(request, { params }) {
     let transactionStarted = false;
 
     try {
+        const { user: authUser, errorResponse: authError } = await getAuthenticatedUser(request);
+        if (authError) return authError;
+
+        if (authUser.isPlayer) {
+            return errorResponse("Forbidden: Players cannot update training records.", 403);
+        }
+
         const { id: rawId } = await params;
         const id = Number(rawId);
 
@@ -320,7 +348,7 @@ export async function PUT(request, { params }) {
 
         const [rows] = await connection.execute(
             `SELECT *
-    FROM cst_individual_training
+             FROM cst_individual_training
              WHERE id = ? AND is_deleted = 0
              FOR UPDATE`,
             [id]
@@ -329,15 +357,41 @@ export async function PUT(request, { params }) {
         if (!rows.length) {
             await connection.rollback();
             transactionStarted = false;
-
             return errorResponse("Individual training not found.", 404);
         }
 
         const existing = rows[0];
 
+        // Access check on existing record
+        if (!checkAuthorization(authUser, existing)) {
+            await connection.rollback();
+            transactionStarted = false;
+            return errorResponse("Forbidden: You cannot modify training records outside your scope.", 403);
+        }
+
+        // Prevent cross-academy or cross-branch manipulation
+        if (!authUser.isSuperAdmin) {
+            if (data.academy_id && Number(data.academy_id) !== Number(authUser.academy_id)) {
+                await connection.rollback();
+                transactionStarted = false;
+                return errorResponse("Forbidden: Cannot assign record to another academy.", 403);
+            }
+            data.academy_id = Number(authUser.academy_id);
+
+            if (authUser.isBranchAdmin) {
+                data.branch_id = Number(authUser.branch_id);
+            } else if (!authUser.isAcademyAdmin && data.branch_id) {
+                const allowed = authUser.assignedBranchIds || [Number(authUser.branch_id)];
+                if (!allowed.includes(Number(data.branch_id))) {
+                    await connection.rollback();
+                    transactionStarted = false;
+                    return errorResponse("Forbidden: Unauthorized branch selected.", 403);
+                }
+            }
+        }
+
         const dateString = (value) => {
             if (!value) return null;
-
             return value instanceof Date
                 ? value.toISOString().slice(0, 10)
                 : String(value).slice(0, 10);
@@ -371,7 +425,6 @@ export async function PUT(request, { params }) {
         if (fullValidationError) {
             await connection.rollback();
             transactionStarted = false;
-
             return errorResponse(fullValidationError, 422);
         }
 
@@ -386,7 +439,6 @@ export async function PUT(request, { params }) {
         if (relationError) {
             await connection.rollback();
             transactionStarted = false;
-
             return errorResponse(relationError, 422);
         }
 
@@ -397,15 +449,15 @@ export async function PUT(request, { params }) {
                 `SELECT id, training_days
                  FROM cst_individual_training
                  WHERE id <> ?
-    AND academy_id = ?
-        AND branch_id = ?
-            AND coach_user_id = ?
-                AND status IN('Scheduled', 'Active')
+                   AND academy_id = ?
+                   AND branch_id = ?
+                   AND coach_user_id = ?
+                   AND status IN ('Scheduled', 'Active')
                    AND is_deleted = 0
                    AND start_date <= COALESCE(?, '9999-12-31')
                    AND COALESCE(end_date, '9999-12-31') >= ?
-    AND start_time < ?
-        AND end_time > ? `,
+                   AND start_time < ?
+                   AND end_time > ?`,
                 [
                     id,
                     updated.academy_id,
@@ -425,7 +477,6 @@ export async function PUT(request, { params }) {
             if (hasConflict) {
                 await connection.rollback();
                 transactionStarted = false;
-
                 return errorResponse(
                     "Coach already has an overlapping training schedule.",
                     409
@@ -438,7 +489,6 @@ export async function PUT(request, { params }) {
             if (field === "end_date" || field === "remarks") {
                 return data[field] ?? null;
             }
-
             return data[field];
         });
 
@@ -481,6 +531,13 @@ export async function DELETE(request, { params }) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse: authError } = await getAuthenticatedUser(request);
+        if (authError) return authError;
+
+        if (authUser.isPlayer) {
+            return errorResponse("Forbidden: Players cannot delete training records.", 403);
+        }
+
         const { id: rawId } = await params;
         const id = Number(rawId);
 
@@ -490,12 +547,23 @@ export async function DELETE(request, { params }) {
 
         connection = await pool.getConnection();
 
+        const [rows] = await connection.execute(
+            `SELECT id, academy_id, branch_id FROM cst_individual_training WHERE id = ? AND is_deleted = 0`,
+            [id]
+        );
+
+        if (!rows.length) {
+            return errorResponse("Individual training not found.", 404);
+        }
+
+        if (!checkAuthorization(authUser, rows[0])) {
+            return errorResponse("Forbidden: You cannot delete records outside your academy or branch.", 403);
+        }
+
         const [result] = await connection.execute(
             `UPDATE cst_individual_training
-             SET is_deleted = 1,
-    status = 'Cancelled'
-             WHERE id = ?
-    AND is_deleted = 0`,
+             SET is_deleted = 1, status = 'Cancelled'
+             WHERE id = ? AND is_deleted = 0`,
             [id]
         );
 

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { syncIndividualTrainingOnEnrollment } from "@/app/components/lib/playerFlowSync.js";
-import { getAuthUser } from "@/app/components/lib/rbac";
-
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 const VALID_STATUSES = [
     "Active",
@@ -11,11 +10,26 @@ const VALID_STATUSES = [
     "Left",
 ];
 
+// Helper to verify coach or staff permissions for batch assignment
+function isAuthorizedForBatch(user, batch) {
+    if (user.isSuperAdmin) return true;
+    if (Number(batch.academy_id) !== Number(user.academy_id)) return false;
+    if (user.isAcademyAdmin) return true;
+    if (user.isBranchAdmin) {
+        return Number(batch.branch_id) === Number(user.branch_id);
+    }
+    const allowedBranches = user.assignedBranchIds || (user.branch_id ? [Number(user.branch_id)] : []);
+    return allowedBranches.includes(Number(batch.branch_id));
+}
+
 // GET: List batch players
 export async function GET(request) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
         const { searchParams } = new URL(request.url);
 
         const id = searchParams.get("id");
@@ -32,62 +46,98 @@ export async function GET(request) {
         connection = await pool.getConnection();
 
         let sql = `
-SELECT
-bp.*,
+            SELECT
+                bp.*,
+                b.batch_name,
+                b.batch_code,
+                b.academy_id,
+                b.branch_id,
+                b.program_id,
+                b.age_group_id,
+                b.start_time,
+                b.end_time,
+                b.training_days,
 
-    b.batch_name,
-    b.batch_code,
-    b.academy_id,
-    b.branch_id,
-    b.program_id,
-    b.age_group_id,
-    b.start_time,
-    b.end_time,
-    b.training_days,
+                up.user_id,
+                up.appointment_no,
+                up.program_id AS enrollment_program_id,
+                up.branch_id AS enrollment_branch_id,
+                up.admission_players_id,
 
-    up.user_id,
-    up.appointment_no,
-    up.program_id AS enrollment_program_id,
-        up.branch_id AS enrollment_branch_id,
-            up.admission_players_id,
+                ap.admission_no,
+                ap.first_name,
+                ap.last_name,
+                ap.father_name,
+                ap.phone,
+                ap.email,
 
-            ap.admission_no,
-            ap.first_name,
-            ap.last_name,
-            ap.father_name,
-            ap.phone,
-            ap.email,
-
-            p.program_name,
-
-            a.academy_name,
-            br.branch_code
-
+                p.program_name,
+                a.academy_name,
+                br.branch_code
             FROM cst_batch_players bp
-
-            INNER JOIN cst_batches b
-                ON b.id = bp.batch_id
-
-            INNER JOIN cst_user_programs up
-                ON up.id = bp.user_program_id
-
-            INNER JOIN cst_admission_players ap
-                ON ap.id = up.admission_players_id
-
-            INNER JOIN cst_programs p
-                ON p.id = up.program_id
-
-            INNER JOIN cst_academy a
-                ON a.id = b.academy_id
-
-            INNER JOIN cst_branch br
-                ON br.id = b.branch_id
-
+            INNER JOIN cst_batches b ON b.id = bp.batch_id
+            INNER JOIN cst_user_programs up ON up.id = bp.user_program_id
+            INNER JOIN cst_admission_players ap ON ap.id = up.admission_players_id
+            INNER JOIN cst_programs p ON p.id = up.program_id
+            INNER JOIN cst_academy a ON a.id = b.academy_id
+            INNER JOIN cst_branch br ON br.id = b.branch_id
             WHERE 1 = 1
-    `;
+        `;
 
         const params = [];
 
+        // Tenant and role scoping
+        if (authUser.isPlayer) {
+            // Strictly player's own enrollments
+            sql += " AND up.user_id = ?";
+            params.push(authUser.id);
+        } else if (authUser.isCoach) {
+            // Coach only sees players in their assigned batches
+            sql += ` AND bp.batch_id IN (
+                SELECT batch_id FROM cst_batch_coaches
+                WHERE coach_user_id = ? AND status = 1 AND is_deleted = 0
+            )`;
+            params.push(authUser.id);
+        } else if (authUser.isBranchAdmin) {
+            sql += " AND b.branch_id = ? AND b.academy_id = ?";
+            params.push(authUser.branch_id, authUser.academy_id);
+        } else if (authUser.isAcademyAdmin) {
+            sql += " AND b.academy_id = ?";
+            params.push(authUser.academy_id);
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
+            }
+        } else if (!authUser.isSuperAdmin) {
+            sql += " AND b.academy_id = ?";
+            params.push(authUser.academy_id);
+            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                ? authUser.assignedBranchIds
+                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+            if (branch_id) {
+                if (allowed.includes(Number(branch_id))) {
+                    sql += " AND b.branch_id = ?";
+                    params.push(branch_id);
+                } else {
+                    sql += " AND b.branch_id = -1";
+                }
+            } else {
+                sql += ` AND b.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                params.push(...allowed);
+            }
+        } else {
+            // Super Admin can filter by academy and branch
+            if (academy_id) {
+                sql += " AND b.academy_id = ?";
+                params.push(academy_id);
+            }
+            if (branch_id) {
+                sql += " AND b.branch_id = ?";
+                params.push(branch_id);
+            }
+        }
+
+        // Additional filters
         if (id) {
             sql += " AND bp.id = ?";
             params.push(id);
@@ -108,52 +158,9 @@ bp.*,
             params.push(admission_players_id);
         }
 
-        if (user_id) {
+        if (user_id && !authUser.isPlayer) {
             sql += " AND up.user_id = ?";
             params.push(user_id);
-        }
-
-        const authUser = await getAuthUser(request);
-        if (!authUser) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized. Authentication required." },
-                { status: 401 }
-            );
-        }
-
-        if (authUser.isCoach) {
-            // Coach only sees players in their assigned batches
-            sql += ` AND bp.batch_id IN (
-                SELECT batch_id FROM cst_batch_coaches
-                WHERE coach_user_id = ? AND status = 1 AND is_deleted = 0
-            )`;
-            params.push(authUser.id);
-        } else if (authUser.isBranchAdmin && authUser.branch_id) {
-            sql += " AND b.branch_id = ? AND b.academy_id = ?";
-            params.push(authUser.branch_id, authUser.academy_id);
-        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-            sql += " AND b.academy_id = ?";
-            params.push(authUser.academy_id);
-            if (branch_id) {
-                sql += " AND b.branch_id = ?";
-                params.push(branch_id);
-            }
-        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-            sql += " AND b.academy_id = ?";
-            params.push(authUser.academy_id);
-            if (branch_id) {
-                sql += " AND b.branch_id = ?";
-                params.push(branch_id);
-            }
-        } else {
-            if (academy_id) {
-                sql += " AND b.academy_id = ?";
-                params.push(academy_id);
-            }
-            if (branch_id) {
-                sql += " AND b.branch_id = ?";
-                params.push(branch_id);
-            }
         }
 
         if (program_id) {
@@ -167,29 +174,17 @@ bp.*,
         }
 
         if (search) {
-            sql += `
-AND(
-    b.batch_name LIKE ?
-    OR b.batch_code LIKE ?
-    OR ap.first_name LIKE ?
-    OR ap.last_name LIKE ?
-    OR ap.admission_no LIKE ?
-    OR up.appointment_no LIKE ?
-    OR p.program_name LIKE ?
-                )
-    `;
-
+            sql += ` AND (
+                b.batch_name LIKE ?
+                OR b.batch_code LIKE ?
+                OR ap.first_name LIKE ?
+                OR ap.last_name LIKE ?
+                OR ap.admission_no LIKE ?
+                OR up.appointment_no LIKE ?
+                OR p.program_name LIKE ?
+            )`;
             const keyword = `%${search.trim()}%`;
-
-            params.push(
-                keyword,
-                keyword,
-                keyword,
-                keyword,
-                keyword,
-                keyword,
-                keyword
-            );
+            params.push(keyword, keyword, keyword, keyword, keyword, keyword, keyword);
         }
 
         sql += " ORDER BY bp.id DESC";
@@ -204,13 +199,8 @@ AND(
         });
     } catch (error) {
         console.error("GET batch players error:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to fetch batch players",
-                error: error.message,
-            },
+            { success: false, message: "Failed to fetch batch players", error: error.message },
             { status: 500 }
         );
     } finally {
@@ -218,14 +208,22 @@ AND(
     }
 }
 
-
 // POST: Assign player to a batch
 export async function POST(request) {
     let connection;
 
     try {
-        const body = await request.json();
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
 
+        if (authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Players cannot assign players to batches" },
+                { status: 403 }
+            );
+        }
+
+        const body = await request.json();
         const {
             batch_id,
             user_program_id,
@@ -237,31 +235,21 @@ export async function POST(request) {
 
         if (!batch_id || !user_program_id || !start_date) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "batch_id, user_program_id and start_date are required",
-                },
+                { success: false, message: "batch_id, user_program_id and start_date are required" },
                 { status: 400 }
             );
         }
 
         if (!VALID_STATUSES.includes(status)) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid player assignment status",
-                },
+                { success: false, message: "Invalid player assignment status" },
                 { status: 400 }
             );
         }
 
         if (end_date && end_date < start_date) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "end_date cannot be before start_date",
-                },
+                { success: false, message: "end_date cannot be before start_date" },
                 { status: 400 }
             );
         }
@@ -269,77 +257,58 @@ export async function POST(request) {
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
-        // Lock the batch row to protect its capacity from concurrent assignments
+        // Lock batch row and verify existence and tenant authorization
         const [batches] = await connection.query(
-            `
-SELECT
-id,
-    academy_id,
-    branch_id,
-    program_id,
-    age_group_id,
-    max_players
-                FROM cst_batches
-                WHERE id = ?
-    AND status = 1
-                  AND is_deleted = 0
-                FOR UPDATE
-    `,
+            `SELECT id, academy_id, branch_id, program_id, age_group_id, max_players, batch_name, batch_code, training_days, start_time, end_time
+             FROM cst_batches
+             WHERE id = ? AND status = 1 AND is_deleted = 0
+             FOR UPDATE`,
             [batch_id]
         );
 
         if (batches.length === 0) {
             await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Active batch not found",
-                },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Active batch not found" }, { status: 404 });
         }
 
         const batch = batches[0];
 
-        // Verify enrollment belongs to the same branch/program and an eligible player
+        // Tenant authorization check on batch
+        if (!isAuthorizedForBatch(authUser, batch)) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Access denied: You are not authorized to assign players to this batch" },
+                { status: 403 }
+            );
+        }
+
+        // Verify enrollment belongs to the same branch/program and authorized academy
         const [enrollments] = await connection.query(
-            `
-SELECT
-up.id,
-    up.user_id,
-    up.admission_players_id,
-    up.program_id,
-    up.branch_id,
-    up.start_date,
-    up.end_date,
-    up.status AS enrollment_status,
-        up.is_deleted AS enrollment_is_deleted,
-            ap.status AS player_status,
+            `SELECT
+                up.id,
+                up.user_id,
+                up.admission_players_id,
+                up.program_id,
+                up.branch_id,
+                up.start_date,
+                up.end_date,
+                up.status AS enrollment_status,
+                up.is_deleted AS enrollment_is_deleted,
+                ap.status AS player_status,
                 ap.is_deleted AS player_is_deleted,
-                    p.academy_id AS program_academy_id
-                FROM cst_user_programs up
-
-                INNER JOIN cst_admission_players ap
-                    ON ap.id = up.admission_players_id
-
-                INNER JOIN cst_programs p
-                    ON p.id = up.program_id
-
-                WHERE up.id = ?
-    FOR UPDATE
-        `,
+                p.academy_id AS program_academy_id
+             FROM cst_user_programs up
+             INNER JOIN cst_admission_players ap ON ap.id = up.admission_players_id
+             INNER JOIN cst_programs p ON p.id = up.program_id
+             WHERE up.id = ?
+             FOR UPDATE`,
             [user_program_id]
         );
 
         if (enrollments.length === 0) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Player program enrollment not found",
-                },
+                { success: false, message: "Player program enrollment not found" },
                 { status: 404 }
             );
         }
@@ -353,12 +322,8 @@ up.id,
             Number(enrollment.player_status) !== 1
         ) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Player or enrollment is inactive",
-                },
+                { success: false, message: "Player or enrollment is inactive" },
                 { status: 400 }
             );
         }
@@ -369,42 +334,28 @@ up.id,
             Number(enrollment.program_academy_id) !== Number(batch.academy_id)
         ) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "Player enrollment and batch must belong to the same academy, branch and program",
-                },
+                { success: false, message: "Player enrollment and batch must belong to the same academy, branch and program" },
                 { status: 400 }
             );
         }
 
-        // Validate that the selected batch age group exists and is valid.
-        // Player DOB validation can be added if DOB is stored in the player table.
-
-        // Check for another active assignment for the same enrollment.
+        // Check for another active assignment for the same enrollment
         const [existingAssignments] = await connection.query(
-            `
-                SELECT id, batch_id
-                FROM cst_batch_players
-                WHERE user_program_id = ?
-    AND status = 'Active'
-AND(end_date IS NULL OR end_date >= ?)
-                LIMIT 1
-                FOR UPDATE
-    `,
+            `SELECT id, batch_id
+             FROM cst_batch_players
+             WHERE user_program_id = ? AND status = 'Active' AND (end_date IS NULL OR end_date >= ?)
+             LIMIT 1
+             FOR UPDATE`,
             [user_program_id, start_date]
         );
 
         if (existingAssignments.length > 0) {
             await connection.rollback();
-
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "This enrollment already has an active batch assignment. Transfer it before assigning another batch.",
+                    message: "This enrollment already has an active batch assignment. Transfer it before assigning another batch.",
                     data: existingAssignments[0],
                 },
                 { status: 409 }
@@ -413,49 +364,31 @@ AND(end_date IS NULL OR end_date >= ?)
 
         if (status === "Active") {
             const [counts] = await connection.query(
-                `
-                    SELECT COUNT(*) AS total
-                    FROM cst_batch_players
-                    WHERE batch_id = ?
-    AND status = 'Active'
-AND(end_date IS NULL OR end_date >= CURDATE())
-    `,
+                `SELECT COUNT(*) AS total
+                 FROM cst_batch_players
+                 WHERE batch_id = ? AND status = 'Active' AND (end_date IS NULL OR end_date >= CURDATE())`,
                 [batch_id]
             );
 
             if (Number(counts[0].total) >= Number(batch.max_players)) {
                 await connection.rollback();
-
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Batch is full. No seats are available.",
-                    },
+                    { success: false, message: "Batch is full. No seats are available." },
                     { status: 409 }
                 );
             }
         }
 
         const [result] = await connection.query(
-            `
-                INSERT INTO cst_batch_players(
-        batch_id,
-        user_program_id,
-        start_date,
-        end_date,
-        status,
-        remarks
-    )
-VALUES(?, ?, ?, ?, ?, ?)
-    `,
-            [
+            `INSERT INTO cst_batch_players (
                 batch_id,
                 user_program_id,
                 start_date,
                 end_date,
                 status,
-                remarks,
-            ]
+                remarks
+            ) VALUES (?, ?, ?, ?, ?, ?)`,
+            [batch_id, user_program_id, start_date, end_date, status, remarks]
         );
 
         // Auto-sync into cst_individual_training if batch or enrollment is program_id 1 (One-on-One 1:1)
@@ -464,7 +397,7 @@ VALUES(?, ?, ?, ?, ?, ?)
                 let batchCoachId = null;
                 const [bCoaches] = await connection.query(
                     `SELECT coach_user_id FROM cst_batch_coaches WHERE batch_id = ? AND status = 1 AND is_deleted = 0 ORDER BY id ASC LIMIT 1`,
-                    [updated.batch_id]
+                    [batch_id]
                 );
                 if (bCoaches.length > 0) {
                     batchCoachId = bCoaches[0].coach_user_id;
@@ -480,14 +413,14 @@ VALUES(?, ?, ?, ?, ?, ?)
                     connection,
                     academyId: batch.academy_id,
                     branchId: batch.branch_id,
-                    userProgramId: updated.user_program_id,
-                    startDate: updated.start_date,
-                    endDate: updated.end_date,
+                    userProgramId: user_program_id,
+                    startDate: start_date,
+                    endDate: end_date,
                     coachUserId: batchCoachId,
                     trainingDays,
                     startTime: sTime,
                     endTime: eTime,
-                    status: updated.status === "Active" ? "Active" : "On Hold",
+                    status: status === "Active" ? "Active" : "On Hold",
                     remarks: `Auto-updated from batch ${batch.batch_name || ""} (${batch.batch_code || ""})`,
                 });
             } catch (itErr) {
@@ -514,15 +447,9 @@ VALUES(?, ?, ?, ?, ?, ?)
         );
     } catch (error) {
         if (connection) await connection.rollback();
-
         console.error("POST batch players error:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to assign player to batch",
-                error: error.message,
-            },
+            { success: false, message: "Failed to assign player to batch", error: error.message },
             { status: 500 }
         );
     } finally {
@@ -530,14 +457,22 @@ VALUES(?, ?, ?, ?, ?, ?)
     }
 }
 
-
 // PUT: Update a batch player assignment
 export async function PUT(request) {
     let connection;
 
     try {
-        const body = await request.json();
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
 
+        if (authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Players cannot update batch assignments" },
+                { status: 403 }
+            );
+        }
+
+        const body = await request.json();
         const {
             id,
             batch_id,
@@ -550,20 +485,14 @@ export async function PUT(request) {
 
         if (!id) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Assignment id is required",
-                },
+                { success: false, message: "Assignment id is required" },
                 { status: 400 }
             );
         }
 
         if (status && !VALID_STATUSES.includes(status)) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid player assignment status",
-                },
+                { success: false, message: "Invalid player assignment status" },
                 { status: 400 }
             );
         }
@@ -572,113 +501,88 @@ export async function PUT(request) {
         await connection.beginTransaction();
 
         const [rows] = await connection.query(
-            `
-SELECT *
-    FROM cst_batch_players
-                WHERE id = ?
-    FOR UPDATE
-        `,
+            `SELECT bp.*, b.academy_id, b.branch_id
+             FROM cst_batch_players bp
+             INNER JOIN cst_batches b ON b.id = bp.batch_id
+             WHERE bp.id = ?
+             FOR UPDATE`,
             [id]
         );
 
         if (rows.length === 0) {
             await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Batch player assignment not found",
-                },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Batch player assignment not found" }, { status: 404 });
         }
 
         const old = rows[0];
+
+        // Tenant authorization check on current assignment
+        if (!isAuthorizedForBatch(authUser, { academy_id: old.academy_id, branch_id: old.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Access denied: You are not authorized to update this assignment" },
+                { status: 403 }
+            );
+        }
 
         const updated = {
             batch_id: batch_id ?? old.batch_id,
             user_program_id: user_program_id ?? old.user_program_id,
             start_date: start_date ?? old.start_date,
-            end_date:
-                end_date === undefined ? old.end_date : end_date || null,
+            end_date: end_date === undefined ? old.end_date : end_date || null,
             status: status ?? old.status,
             remarks: remarks === undefined ? old.remarks : remarks,
         };
 
         if (updated.end_date && updated.end_date < updated.start_date) {
             await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "end_date cannot be before start_date",
-                },
-                { status: 400 }
-            );
+            return NextResponse.json({ success: false, message: "end_date cannot be before start_date" }, { status: 400 });
         }
 
         const [batches] = await connection.query(
-            `
-SELECT
-id,
-    academy_id,
-    branch_id,
-    program_id,
-    max_players
-                FROM cst_batches
-                WHERE id = ?
-    AND status = 1
-                  AND is_deleted = 0
-                FOR UPDATE
-    `,
+            `SELECT id, academy_id, branch_id, program_id, max_players, batch_name, batch_code, training_days, start_time, end_time
+             FROM cst_batches
+             WHERE id = ? AND status = 1 AND is_deleted = 0
+             FOR UPDATE`,
             [updated.batch_id]
         );
 
         if (batches.length === 0) {
             await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Active batch not found",
-                },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Active batch not found" }, { status: 404 });
         }
 
         const batch = batches[0];
 
+        // Verify target batch permissions if batch was changed
+        if (!isAuthorizedForBatch(authUser, batch)) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Access denied: Target batch belongs to an unauthorized branch/academy" },
+                { status: 403 }
+            );
+        }
+
         const [enrollments] = await connection.query(
-            `
-SELECT
-up.id,
-    up.program_id,
-    up.branch_id,
-    up.status AS enrollment_status,
-        up.is_deleted AS enrollment_is_deleted,
-            ap.status AS player_status,
+            `SELECT
+                up.id,
+                up.program_id,
+                up.branch_id,
+                up.status AS enrollment_status,
+                up.is_deleted AS enrollment_is_deleted,
+                ap.status AS player_status,
                 ap.is_deleted AS player_is_deleted,
-                    p.academy_id AS program_academy_id
-                FROM cst_user_programs up
-                INNER JOIN cst_admission_players ap
-                    ON ap.id = up.admission_players_id
-                INNER JOIN cst_programs p
-                    ON p.id = up.program_id
-                WHERE up.id = ?
-    `,
+                p.academy_id AS program_academy_id
+             FROM cst_user_programs up
+             INNER JOIN cst_admission_players ap ON ap.id = up.admission_players_id
+             INNER JOIN cst_programs p ON p.id = up.program_id
+             WHERE up.id = ?`,
             [updated.user_program_id]
         );
 
         if (enrollments.length === 0) {
             await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Player program enrollment not found",
-                },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: "Player program enrollment not found" }, { status: 404 });
         }
 
         const enrollment = enrollments[0];
@@ -690,14 +594,7 @@ up.id,
             Number(enrollment.player_status) !== 1
         ) {
             await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Player or enrollment is inactive",
-                },
-                { status: 400 }
-            );
+            return NextResponse.json({ success: false, message: "Player or enrollment is inactive" }, { status: 400 });
         }
 
         if (
@@ -706,85 +603,49 @@ up.id,
             Number(enrollment.program_academy_id) !== Number(batch.academy_id)
         ) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "Player enrollment and batch must belong to the same academy, branch and program",
-                },
+                { success: false, message: "Player enrollment and batch must belong to the same academy, branch and program" },
                 { status: 400 }
             );
         }
 
         if (updated.status === "Active") {
             const [duplicateRows] = await connection.query(
-                `
-                    SELECT id
-                    FROM cst_batch_players
-                    WHERE user_program_id = ?
-    AND id <> ?
-        AND status = 'Active'
-AND(end_date IS NULL OR end_date >= ?)
-                    LIMIT 1
-    `,
-                [
-                    updated.user_program_id,
-                    id,
-                    updated.start_date,
-                ]
+                `SELECT id
+                 FROM cst_batch_players
+                 WHERE user_program_id = ? AND id <> ? AND status = 'Active' AND (end_date IS NULL OR end_date >= ?)
+                 LIMIT 1`,
+                [updated.user_program_id, id, updated.start_date]
             );
 
             if (duplicateRows.length > 0) {
                 await connection.rollback();
-
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message:
-                            "This enrollment already has another active batch assignment",
-                    },
+                    { success: false, message: "This enrollment already has another active batch assignment" },
                     { status: 409 }
                 );
             }
 
             const [counts] = await connection.query(
-                `
-                    SELECT COUNT(*) AS total
-                    FROM cst_batch_players
-                    WHERE batch_id = ?
-    AND id <> ?
-        AND status = 'Active'
-AND(end_date IS NULL OR end_date >= CURDATE())
-    `,
+                `SELECT COUNT(*) AS total
+                 FROM cst_batch_players
+                 WHERE batch_id = ? AND id <> ? AND status = 'Active' AND (end_date IS NULL OR end_date >= CURDATE())`,
                 [updated.batch_id, id]
             );
 
             if (Number(counts[0].total) >= Number(batch.max_players)) {
                 await connection.rollback();
-
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Batch is full. No seats are available.",
-                    },
+                    { success: false, message: "Batch is full. No seats are available." },
                     { status: 409 }
                 );
             }
         }
 
         await connection.query(
-            `
-                UPDATE cst_batch_players
-SET
-batch_id = ?,
-    user_program_id = ?,
-    start_date = ?,
-    end_date = ?,
-    status = ?,
-    remarks = ?
-        WHERE id = ?
-            `,
+            `UPDATE cst_batch_players
+             SET batch_id = ?, user_program_id = ?, start_date = ?, end_date = ?, status = ?, remarks = ?
+             WHERE id = ?`,
             [
                 updated.batch_id,
                 updated.user_program_id,
@@ -841,15 +702,9 @@ batch_id = ?,
         });
     } catch (error) {
         if (connection) await connection.rollback();
-
         console.error("PUT batch players error:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to update batch player assignment",
-                error: error.message,
-            },
+            { success: false, message: "Failed to update batch player assignment", error: error.message },
             { status: 500 }
         );
     } finally {
@@ -857,21 +712,27 @@ batch_id = ?,
     }
 }
 
-
 // DELETE: Mark player as Left, preserving assignment history
 export async function DELETE(request) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Players cannot delete batch assignments" },
+                { status: 403 }
+            );
+        }
+
         const { searchParams } = new URL(request.url);
         const id = searchParams.get("id");
 
         if (!id) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Assignment id is required",
-                },
+                { success: false, message: "Assignment id is required" },
                 { status: 400 }
             );
         }
@@ -879,42 +740,41 @@ export async function DELETE(request) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.query(
-            `
-                SELECT id, status
-                FROM cst_batch_players
-                WHERE id = ?
-    `,
+            `SELECT bp.id, bp.status, b.academy_id, b.branch_id
+             FROM cst_batch_players bp
+             INNER JOIN cst_batches b ON b.id = bp.batch_id
+             WHERE bp.id = ?`,
             [id]
         );
 
         if (rows.length === 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Batch player assignment not found",
-                },
+                { success: false, message: "Batch player assignment not found" },
                 { status: 404 }
             );
         }
 
-        if (rows[0].status !== "Active") {
+        const target = rows[0];
+
+        // Tenant authorization check
+        if (!isAuthorizedForBatch(authUser, { academy_id: target.academy_id, branch_id: target.branch_id })) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Only active assignments can be removed",
-                },
+                { success: false, message: "Access denied: You are not authorized to modify this assignment" },
+                { status: 403 }
+            );
+        }
+
+        if (target.status !== "Active") {
+            return NextResponse.json(
+                { success: false, message: "Only active assignments can be removed" },
                 { status: 409 }
             );
         }
 
         await connection.query(
-            `
-                UPDATE cst_batch_players
-SET
-status = 'Left',
-    end_date = COALESCE(end_date, CURDATE())
-                WHERE id = ?
-    `,
+            `UPDATE cst_batch_players
+             SET status = 'Left', end_date = COALESCE(end_date, CURDATE())
+             WHERE id = ?`,
             [id]
         );
 
@@ -924,13 +784,8 @@ status = 'Left',
         });
     } catch (error) {
         console.error("DELETE batch players error:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to remove player from batch",
-                error: error.message,
-            },
+            { success: false, message: "Failed to remove player from batch", error: error.message },
             { status: 500 }
         );
     } finally {

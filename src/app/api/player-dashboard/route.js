@@ -220,13 +220,25 @@ export async function GET(request) {
 
         // Determine target player user ID:
         let targetUserId = null;
-        if (requestedUserId) {
-            targetUserId = Number(requestedUserId);
-        } else if (isStaff) {
-            // For admins/staff, auto-select the first player in their scope
-            targetUserId = playerOptions.length > 0 ? playerOptions[0].id : null;
+        if (isStaff) {
+            if (requestedUserId) {
+                const reqId = Number(requestedUserId);
+                // Verify requested player is in scope
+                const isAllowed = isSuperAdmin || playerOptions.some((p) => Number(p.id) === reqId);
+                if (isAllowed) {
+                    targetUserId = reqId;
+                } else {
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. Selected player is outside your authorized academy or branch scope." },
+                        { status: 403 }
+                    );
+                }
+            } else {
+                // For admins/staff, auto-select the first player in their scope
+                targetUserId = playerOptions.length > 0 ? playerOptions[0].id : null;
+            }
         } else {
-            // For regular players, use their own user id
+            // For regular players, ALWAYS enforce their own user ID (prevent IDOR)
             targetUserId = authUser?.id || null;
             if (!targetUserId && authUser?.appointment_no) {
                 const [matchedUser] = await connection.query(

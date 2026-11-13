@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 /* =====================================================
    GET SINGLE ROLE
 ===================================================== */
 
-export async function GET(request,{ params }) {
+export async function GET(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     try {
 
         const { id } = await params;
@@ -57,10 +61,25 @@ export async function GET(request,{ params }) {
             );
         }
 
+        const roleRecord = rows[0];
+        if (!authUser.isSuperAdmin) {
+            if (roleRecord.academy_id && Number(roleRecord.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Role belongs to another academy" },
+                    { status: 403 }
+                );
+            }
+            if (authUser.isBranchAdmin && roleRecord.branch_id && Number(roleRecord.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json(
+                    { success: false, message: "Access denied: Role belongs to another branch" },
+                    { status: 403 }
+                );
+            }
+        }
 
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: roleRecord,
         });
 
     } catch (error) {
@@ -91,6 +110,16 @@ export async function PUT(
     request,
     { params }
 ) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: Only Super Admin can update roles" },
+            { status: 403 }
+        );
+    }
+
     let connection = null;
 
     try {
@@ -497,6 +526,16 @@ export async function DELETE(
     request,
     { params }
 ) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: Only Super Admin can delete roles" },
+            { status: 403 }
+        );
+    }
+
     let connection = null;
 
     try {

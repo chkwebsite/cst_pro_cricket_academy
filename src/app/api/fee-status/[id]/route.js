@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, verifyRecordAccess, validateBranchBelongsToAcademy } from "@/app/components/lib/tenant-isolation";
 
 
 const FEE_TYPES = [
@@ -131,6 +131,11 @@ async function validateForeignKeys(connection, data) {
 export async function GET(request, context) {
     try {
         const { id } = await context.params;
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user || (authResult?.id ? authResult : null);
+        if (!authUser || authResult?.errorResponse) {
+            return authResult?.errorResponse || NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         if (String(id).startsWith("ppf_") || String(id).startsWith("prog_")) {
             const cleanId = Number(String(id).replace(/^(ppf_|prog_)/, ""));
@@ -173,7 +178,17 @@ export async function GET(request, context) {
             if (!pRows.length) {
                 return NextResponse.json({ success: false, message: "Fee record not found." }, { status: 404 });
             }
-            return NextResponse.json({ success: true, data: pRows[0] });
+
+            const record = pRows[0];
+            if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+                if (Number(record.user_id) !== Number(authUser.id)) {
+                    return NextResponse.json({ success: false, message: "Forbidden. You can only view your own fee records." }, { status: 403 });
+                }
+            } else if (!verifyRecordAccess(authUser, { academy_id: record.academy_id, branch_id: record.branch_id })) {
+                return NextResponse.json({ success: false, message: "Forbidden. You do not have access to this fee record." }, { status: 403 });
+            }
+
+            return NextResponse.json({ success: true, data: record });
         }
 
         if (!isPositiveInt(id)) {
@@ -186,6 +201,8 @@ export async function GET(request, context) {
         const [rows] = await pool.execute(
             `SELECT
                 fs.*,
+                ttp.user_id AS ttp_user_id,
+                mp.user_id AS mp_user_id,
                 a.academy_name,
                 b.branch_name,
                 t.tournament_name,
@@ -251,9 +268,23 @@ export async function GET(request, context) {
             );
         }
 
+        const record = rows[0];
+        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+            const matchesPlayer = (
+                Number(record.user_id) === Number(authUser.id) ||
+                Number(record.ttp_user_id) === Number(authUser.id) ||
+                Number(record.mp_user_id) === Number(authUser.id)
+            );
+            if (!matchesPlayer) {
+                return NextResponse.json({ success: false, message: "Forbidden. You can only view your own fee records." }, { status: 403 });
+            }
+        } else if (!verifyRecordAccess(authUser, { academy_id: record.academy_id, branch_id: record.branch_id })) {
+            return NextResponse.json({ success: false, message: "Forbidden. You do not have access to this fee record." }, { status: 403 });
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
     } catch (error) {
         console.error("GET single fee status error:", error);
@@ -274,8 +305,12 @@ export async function PUT(request, context) {
 
     try {
         const { id } = await context.params;
-        const authUser = await getAuthUser(request);
-        if (authUser && (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player"))) {
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user || (authResult?.id ? authResult : null);
+        if (!authUser || authResult?.errorResponse) {
+            return authResult?.errorResponse || NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
+        if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
             return NextResponse.json(
                 { success: false, message: "Forbidden. Players and coaches cannot edit fee records." },
                 { status: 403 }
@@ -312,6 +347,13 @@ export async function PUT(request, context) {
         }
 
         const old = existingRows[0];
+        if (!verifyRecordAccess(authUser, { academy_id: old.academy_id, branch_id: old.branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Fee record belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         const nullableFields = [
             "branch_id",
@@ -364,6 +406,30 @@ export async function PUT(request, context) {
                 body[field] === undefined
                     ? old[field]
                     : getNullableId(body[field]);
+        }
+
+        if (!authUser.isSuperAdmin) {
+            data.academy_id = authUser.academy_id;
+            if (authUser.isBranchAdmin) {
+                data.branch_id = authUser.branch_id;
+            } else if (data.branch_id && authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                if (!authUser.accessibleBranchIds.includes(data.branch_id)) {
+                    await connection.rollback();
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. You are not assigned to this branch." },
+                        { status: 403 }
+                    );
+                }
+            }
+        } else if (data.academy_id && data.branch_id) {
+            const isBelong = await validateBranchBelongsToAcademy(data.branch_id, data.academy_id);
+            if (!isBelong) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: "Branch does not belong to selected academy." },
+                    { status: 400 }
+                );
+            }
         }
 
         if (!isPositiveInt(data.academy_id)) {
@@ -545,8 +611,12 @@ export async function PUT(request, context) {
 
 // DELETE /api/fee-status/10
 export async function DELETE(request, context) {
-    const authUser = await getAuthUser(request);
-    if (authUser && (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player"))) {
+    const authResult = await getAuthenticatedUser(request);
+    const authUser = authResult?.user || (authResult?.id ? authResult : null);
+    if (!authUser || authResult?.errorResponse) {
+        return authResult?.errorResponse || NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
         return NextResponse.json(
             { success: false, message: "Forbidden. Players and coaches cannot delete fee records." },
             { status: 403 }
@@ -568,6 +638,20 @@ export async function DELETE(request, context) {
             }
 
             connection = await pool.getConnection();
+            const [pRows] = await connection.execute(
+                "SELECT id, academy_id, branch_id, paid_amount FROM cst_player_program_fees WHERE id = ? LIMIT 1",
+                [cleanId]
+            );
+            if (!pRows.length) {
+                return NextResponse.json({ success: false, message: "Fee record not found." }, { status: 404 });
+            }
+            if (!verifyRecordAccess(authUser, { academy_id: pRows[0].academy_id, branch_id: pRows[0].branch_id })) {
+                return NextResponse.json({ success: false, message: "Forbidden. Record belongs to another academy or branch." }, { status: 403 });
+            }
+            if (Number(pRows[0].paid_amount) > 0) {
+                return NextResponse.json({ success: false, message: "Cannot delete fee record with recorded payments." }, { status: 409 });
+            }
+
             await connection.execute(
                 "DELETE FROM cst_player_program_fees WHERE id = ?",
                 [cleanId]
@@ -589,7 +673,7 @@ export async function DELETE(request, context) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            "SELECT id FROM cst_fee_status WHERE id = ? LIMIT 1",
+            "SELECT id, academy_id, branch_id, paid_amount FROM cst_fee_status WHERE id = ? LIMIT 1",
             [Number(id)]
         );
 
@@ -597,6 +681,19 @@ export async function DELETE(request, context) {
             return NextResponse.json(
                 { success: false, message: "Fee record not found." },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Record belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
+        if (Number(rows[0].paid_amount) > 0) {
+            return NextResponse.json(
+                { success: false, message: "Cannot delete fee record with recorded payments." },
+                { status: 409 }
             );
         }
 

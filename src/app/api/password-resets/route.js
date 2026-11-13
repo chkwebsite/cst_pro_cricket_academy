@@ -62,7 +62,7 @@ export async function GET(request) {
         const params = [];
 
         if (authUser.role === ROLES.BRANCH_ADMIN) {
-            query += ` AND (COALESCE(r.branch_id, u.branch_id) = ? OR (r.academy_id = ? AND r.branch_id IS NULL))`;
+            query += ` AND COALESCE(r.branch_id, u.branch_id) = ? AND (COALESCE(r.academy_id, u.academy_id) = ?)`;
             params.push(authUser.branch_id, authUser.academy_id);
         } else if (authUser.role === ROLES.ACADEMY_ADMIN) {
             query += ` AND (COALESCE(r.academy_id, u.academy_id) = ?)`;

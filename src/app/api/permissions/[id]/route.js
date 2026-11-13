@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET SINGLE PERMISSION
 export async function GET(req, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(req);
+    if (errorResponse) return errorResponse;
+
     let connection = null;
 
     try {
@@ -47,6 +51,13 @@ export async function GET(req, { params }) {
 
 // UPDATE PERMISSION
 export async function PUT(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Only Super Admin can modify permissions" }, { status: 403 });
+    }
+
     let connection = null;
 
     try {
@@ -152,6 +163,13 @@ export async function PUT(request, { params }) {
 
 // DELETE PERMISSION
 export async function DELETE(request, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json({ success: false, message: "Forbidden: Only Super Admin can delete permissions" }, { status: 403 });
+    }
+
     let connection = null;
 
     try {

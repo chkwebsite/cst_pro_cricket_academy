@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    Building2,
     CheckCircle2,
     Edit,
     FolderTree,
@@ -15,10 +16,20 @@ import {
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useUser } from "../components/UserContext";
 import Pagination from "../components/Pagination";
 
 export default function ProductCategoriesPage() {
+    const { user } = useUser();
+    const isSuperAdmin = Boolean(
+        Number(user?.role_id) === 1 ||
+        String(user?.user_type || "").toLowerCase().includes("super")
+    );
+    const userAcademyId = user?.academy_id;
+
     const [categories, setCategories] = useState([]);
+    const [academies, setAcademies] = useState([]);
+    const [academyFilter, setAcademyFilter] = useState("");
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
     const [loading, setLoading] = useState(true);
@@ -34,6 +45,7 @@ export default function ProductCategoriesPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState(null);
     const [formData, setFormData] = useState({
+        academy_id: "",
         category_name: "",
         slug: "",
         description: "",
@@ -44,6 +56,20 @@ export default function ProductCategoriesPage() {
     const [imagePreview, setImagePreview] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState("");
+
+    // Load Academies for Super Admin
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+        (async () => {
+            try {
+                const res = await fetch("/api/academies");
+                const json = await res.json();
+                if (res.ok && json.success) setAcademies(json.data || []);
+            } catch {
+                /* non-fatal */
+            }
+        })();
+    }, [isSuperAdmin]);
 
     // Load categories
     useEffect(() => {
@@ -56,6 +82,7 @@ export default function ProductCategoriesPage() {
                 const params = new URLSearchParams();
                 if (search.trim()) params.set("search", search.trim());
                 if (statusFilter !== "") params.set("status", statusFilter);
+                if (isSuperAdmin && academyFilter) params.set("academy_id", academyFilter);
 
                 const res = await fetch(`/api/product-categories?${params.toString()}`);
                 const json = await res.json();
@@ -74,11 +101,11 @@ export default function ProductCategoriesPage() {
 
         loadData();
         return () => { cancelled = true; };
-    }, [search, statusFilter, reloadCount]);
+    }, [search, statusFilter, academyFilter, reloadCount, isSuperAdmin]);
 
     useEffect(() => {
         setPage(1);
-    }, [search, statusFilter]);
+    }, [search, statusFilter, academyFilter]);
 
     const totalPages = Math.ceil(categories.length / PAGE_SIZE) || 1;
     const pagedCategories = categories.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -97,6 +124,7 @@ export default function ProductCategoriesPage() {
     const handleOpenCreate = () => {
         setEditingCategory(null);
         setFormData({
+            academy_id: isSuperAdmin ? (academies[0]?.id ? String(academies[0].id) : "") : (userAcademyId ? String(userAcademyId) : ""),
             category_name: "",
             slug: "",
             description: "",
@@ -113,6 +141,7 @@ export default function ProductCategoriesPage() {
     const handleOpenEdit = (item) => {
         setEditingCategory(item);
         setFormData({
+            academy_id: item.academy_id ? String(item.academy_id) : (userAcademyId ? String(userAcademyId) : ""),
             category_name: item.category_name || "",
             slug: item.slug || "",
             description: item.description || "",
@@ -183,6 +212,13 @@ export default function ProductCategoriesPage() {
             body.append("status", String(formData.status));
             if (formData.image) {
                 body.append("category_image", formData.image);
+            }
+
+            const targetAcademyId = isSuperAdmin
+                ? (formData.academy_id ? Number(formData.academy_id) : "")
+                : (userAcademyId ? Number(userAcademyId) : "");
+            if (targetAcademyId) {
+                body.append("academy_id", String(targetAcademyId));
             }
 
             const isEdit = Boolean(editingCategory);
@@ -268,7 +304,7 @@ export default function ProductCategoriesPage() {
             <div className="bg-white rounded-4 shadow-sm p-3 mb-3 border">
                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <div className="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
-                        <div className="input-group" style={{ maxWidth: "340px" }}>
+                        <div className="input-group" style={{ maxWidth: "300px" }}>
                             <span className="input-group-text bg-light border-end-0">
                                 <Search size={16} className="text-muted" />
                             </span>
@@ -281,6 +317,20 @@ export default function ProductCategoriesPage() {
                             />
                         </div>
 
+                        {isSuperAdmin && (
+                            <select
+                                className="form-select"
+                                value={academyFilter}
+                                onChange={(e) => setAcademyFilter(e.target.value)}
+                                style={{ maxWidth: "200px" }}
+                            >
+                                <option value="">All Academies</option>
+                                {academies.map((ac) => (
+                                    <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
+                                ))}
+                            </select>
+                        )}
+
                         <select
                             className="form-select"
                             value={statusFilter}
@@ -292,11 +342,11 @@ export default function ProductCategoriesPage() {
                             <option value="0">Inactive</option>
                         </select>
 
-                        {(search || statusFilter !== "") && (
+                        {(search || academyFilter || statusFilter !== "") && (
                             <button
                                 type="button"
                                 className="btn btn-outline-secondary d-flex align-items-center gap-1"
-                                onClick={() => { setSearch(""); setStatusFilter(""); }}
+                                onClick={() => { setSearch(""); setAcademyFilter(""); setStatusFilter(""); }}
                             >
                                 <SearchSlash size={16} />
                                 <span>Reset</span>
@@ -334,6 +384,7 @@ export default function ProductCategoriesPage() {
                                     <th style={{ width: "60px" }} className="text-center">#</th>
                                     <th style={{ width: "70px" }}>Image</th>
                                     <th>Category Name</th>
+                                    <th>Academy</th>
                                     <th>Slug</th>
                                     <th>Description</th>
                                     <th className="text-center">Sort Order</th>
@@ -366,6 +417,12 @@ export default function ProductCategoriesPage() {
                                         <td>
                                             <div className="fw-bold text-dark">{item.category_name}</div>
                                             <span className="text-muted small">ID: #{item.id}</span>
+                                        </td>
+                                        <td>
+                                            <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 d-inline-flex align-items-center gap-1">
+                                                <Building2 size={12} />
+                                                <span>{item.academy_name || "All"}</span>
+                                            </span>
                                         </td>
                                         <td>
                                             <code className="bg-light px-2 py-1 rounded small text-secondary">{item.slug}</code>
@@ -448,6 +505,30 @@ export default function ProductCategoriesPage() {
                                     {formError && (
                                         <div className="alert alert-danger py-2 small mb-3">
                                             {formError}
+                                        </div>
+                                    )}
+
+                                    {isSuperAdmin ? (
+                                        <div className="mb-3">
+                                            <label className="form-label small fw-semibold text-secondary">Academy</label>
+                                            <select
+                                                className="form-select"
+                                                value={formData.academy_id}
+                                                onChange={(e) => setFormData({ ...formData, academy_id: e.target.value })}
+                                            >
+                                                <option value="">Global / All Academies</option>
+                                                {academies.map((ac) => (
+                                                    <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
+                                                ))}
+                                            </select>
+                                            <div className="form-text small">Leave as Global or assign specifically to an academy.</div>
+                                        </div>
+                                    ) : (
+                                        <div className="mb-3">
+                                            <div className="p-2 px-3 rounded-3 bg-light border d-flex align-items-center gap-2 small text-muted">
+                                                <Building2 size={16} className="text-success" />
+                                                <span>Academy: <strong>{user?.academy_name || "Current Academy"}</strong></span>
+                                            </div>
                                         </div>
                                     )}
 

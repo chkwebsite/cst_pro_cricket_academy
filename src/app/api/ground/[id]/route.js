@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
 
 
 // ======================================================
@@ -10,6 +11,7 @@ export async function GET(request, { params }) {
     let connection;
 
     try {
+        const { user: authUser } = await getAuthenticatedUser(request);
         connection = await pool.getConnection();
 
         const { id } = await params;
@@ -64,6 +66,17 @@ export async function GET(request, { params }) {
             );
         }
 
+        const ground = rows[0];
+
+        if (authUser) {
+            if (authUser.isBranchAdmin && (Number(ground.branch_id) !== Number(authUser.branch_id) || (authUser.academy_id && Number(ground.academy_id) !== Number(authUser.academy_id)))) {
+                return NextResponse.json({ success: false, message: "Forbidden: You cannot access grounds from another branch." }, { status: 403 });
+            }
+            if (authUser.isAcademyAdmin && authUser.academy_id && Number(ground.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Forbidden: You cannot access grounds from another academy." }, { status: 403 });
+            }
+        }
+
         const [images] = await connection.execute(
             `
             SELECT id, ground_image, is_primary
@@ -111,6 +124,13 @@ export async function PUT(request, { params }) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json({ success: false, message: "Forbidden: Insufficient permissions to update ground" }, { status: 403 });
+        }
+
         connection = await pool.getConnection();
 
         const { id } = await params;
@@ -127,7 +147,7 @@ export async function PUT(request, { params }) {
 
         const body = await request.json();
 
-        const {
+        let {
             academy_id,
             branch_id,
             ground_name,
@@ -140,6 +160,14 @@ export async function PUT(request, { params }) {
             ground_facility,
             status
         } = body;
+
+        // Force tenant values for branch admin & academy admin
+        if (authUser.isBranchAdmin) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        } else if (authUser.isAcademyAdmin) {
+            academy_id = authUser.academy_id;
+        }
 
         // ==========================================
         // VALIDATION
@@ -204,7 +232,7 @@ export async function PUT(request, { params }) {
 
         const [existingGround] = await connection.execute(
             `
-            SELECT id
+            SELECT id, academy_id, branch_id
             FROM cst_ground
             WHERE id = ?
             AND is_deleted = 0
@@ -221,6 +249,13 @@ export async function PUT(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        if (authUser.isBranchAdmin && (Number(existingGround[0].branch_id) !== Number(authUser.branch_id) || (authUser.academy_id && Number(existingGround[0].academy_id) !== Number(authUser.academy_id)))) {
+            return NextResponse.json({ success: false, message: "Forbidden: You cannot update grounds from another branch" }, { status: 403 });
+        }
+        if (authUser.isAcademyAdmin && authUser.academy_id && Number(existingGround[0].academy_id) !== Number(authUser.academy_id)) {
+            return NextResponse.json({ success: false, message: "Forbidden: You cannot update grounds from another academy" }, { status: 403 });
         }
 
         // ==========================================
@@ -444,6 +479,13 @@ export async function DELETE(request, { params }) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+            return NextResponse.json({ success: false, message: "Forbidden: Insufficient permissions to delete ground" }, { status: 403 });
+        }
+
         connection = await pool.getConnection();
 
         const { id } = await params;
@@ -464,7 +506,7 @@ export async function DELETE(request, { params }) {
 
         const [existingGround] = await connection.execute(
             `
-            SELECT id
+            SELECT id, academy_id, branch_id
             FROM cst_ground
             WHERE id = ?
             AND is_deleted = 0
@@ -481,6 +523,13 @@ export async function DELETE(request, { params }) {
                 },
                 { status: 404 }
             );
+        }
+
+        if (authUser.isBranchAdmin && (Number(existingGround[0].branch_id) !== Number(authUser.branch_id) || (authUser.academy_id && Number(existingGround[0].academy_id) !== Number(authUser.academy_id)))) {
+            return NextResponse.json({ success: false, message: "Forbidden: You cannot update grounds from another branch" }, { status: 403 });
+        }
+        if (authUser.isAcademyAdmin && authUser.academy_id && Number(existingGround[0].academy_id) !== Number(authUser.academy_id)) {
+            return NextResponse.json({ success: false, message: "Forbidden: You cannot update grounds from another academy" }, { status: 403 });
         }
 
         // ==========================================

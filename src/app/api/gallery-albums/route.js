@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import fs from "fs/promises";
 import path from "path";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 
 // GET: All Gallery Albums
@@ -42,12 +43,38 @@ ga.*,
 
         const values = [];
 
-        if (academy_id !== null && academy_id !== "") {
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser) {
+            const roleId = Number(authUser.role_id);
+            if (roleId === 2) {
+                sql += " AND (ga.academy_id = ? OR ga.academy_id IS NULL)";
+                values.push(authUser.academy_id);
+            } else if (roleId === 3) {
+                sql += " AND (ga.branch_id = ? OR (ga.academy_id = ? AND ga.branch_id IS NULL))";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (roleId !== 1) {
+                if (authUser.branchIds && authUser.branchIds.length > 0) {
+                    const placeholders = authUser.branchIds.map(() => "?").join(", ");
+                    sql += ` AND (ga.branch_id IN (${placeholders}) OR (ga.academy_id = ? AND ga.branch_id IS NULL))`;
+                    values.push(...authUser.branchIds, authUser.academy_id);
+                } else if (authUser.branch_id) {
+                    sql += " AND (ga.branch_id = ? OR (ga.academy_id = ? AND ga.branch_id IS NULL))";
+                    values.push(authUser.branch_id, authUser.academy_id);
+                } else if (authUser.academy_id) {
+                    sql += " AND (ga.academy_id = ? OR ga.academy_id IS NULL)";
+                    values.push(authUser.academy_id);
+                }
+            }
+        } else {
+            sql += " AND ga.status = 1";
+        }
+
+        if (academy_id !== null && academy_id !== "" && (!authUser || Number(authUser.role_id) === 1)) {
             sql += ` AND ga.academy_id = ? `;
             values.push(academy_id);
         }
 
-        if (branch_id !== null && branch_id !== "") {
+        if (branch_id !== null && branch_id !== "" && (!authUser || Number(authUser.role_id) === 1 || Number(authUser.role_id) === 2)) {
             sql += ` AND ga.branch_id = ? `;
             values.push(branch_id);
         }
@@ -118,11 +145,34 @@ export async function POST(request) {
     let coverImagePath = null;
 
     try {
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({
+                success: false,
+                message: "Unauthorized. Authentication required."
+            }, { status: 401 });
+        }
+
+        const roleId = Number(authUser.role_id);
+        if (roleId !== 1 && roleId !== 2 && roleId !== 3) {
+            return NextResponse.json({
+                success: false,
+                message: "Forbidden. You are not authorized to create gallery albums."
+            }, { status: 403 });
+        }
+
         const formData = await request.formData();
 
-        const academy_id = formData.get("academy_id") || null;
+        let academy_id = formData.get("academy_id") || null;
+        let branch_id = formData.get("branch_id") || null;
         const category_id = formData.get("category_id") || null;
-        const branch_id = formData.get("branch_id") || null;
+
+        if (roleId === 2) {
+            academy_id = authUser.academy_id;
+        } else if (roleId === 3) {
+            academy_id = authUser.academy_id;
+            branch_id = authUser.branch_id;
+        }
 
         const album_title = formData.get("album_title")?.trim();
         const slug = formData.get("slug")?.trim();

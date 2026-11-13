@@ -1,5 +1,18 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
+
+// Helper to check tenant permissions
+function checkAttendanceAccess(user, record) {
+    if (user.isSuperAdmin) return true;
+    if (Number(record.academy_id) !== Number(user.academy_id)) return false;
+    if (user.isAcademyAdmin) return true;
+    if (user.isBranchAdmin) {
+        return Number(record.branch_id) === Number(user.branch_id);
+    }
+    const allowed = user.assignedBranchIds || (user.branch_id ? [Number(user.branch_id)] : []);
+    return allowed.includes(Number(record.branch_id));
+}
 
 // ============================================
 // GET: Single Attendance Record
@@ -8,6 +21,9 @@ export async function GET(request, context) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
         const params = await context?.params;
         const { searchParams } = new URL(request.url);
         const id = params?.id || searchParams.get("id");
@@ -36,6 +52,7 @@ export async function GET(request, context) {
                 a.marked_by,
                 a.created_at,
                 a.updated_at,
+                up.user_id AS player_user_id,
                 ap.admission_no,
                 CONCAT_WS(' ', ap.first_name, ap.last_name) AS player_name,
                 p.program_name,
@@ -59,9 +76,26 @@ export async function GET(request, context) {
             );
         }
 
+        const record = rows[0];
+
+        // Access check
+        if (authUser.isPlayer && Number(record.player_user_id) !== Number(authUser.id)) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You cannot access another player's attendance." },
+                { status: 403 }
+            );
+        }
+
+        if (!checkAttendanceAccess(authUser, record)) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Record belongs to an unauthorized academy or branch." },
+                { status: 403 }
+            );
+        }
+
         return NextResponse.json({
             success: true,
-            data: rows[0],
+            data: record,
         });
     } catch (error) {
         console.error("GET Attendance Record Error:", error);
@@ -81,6 +115,16 @@ export async function PUT(request, context) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Players cannot update attendance records." },
+                { status: 403 }
+            );
+        }
+
         const params = await context?.params;
         const body = await request.json();
 
@@ -93,10 +137,7 @@ export async function PUT(request, context) {
 
         if (!id) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance id is required."
-                },
+                { success: false, message: "Attendance id is required." },
                 { status: 400 }
             );
         }
@@ -107,65 +148,47 @@ export async function PUT(request, context) {
             remarks === undefined
         ) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "At least one field is required to update."
-                },
+                { success: false, message: "At least one field is required to update." },
                 { status: 400 }
             );
         }
 
         if (
             attendance_date !== undefined &&
-            (
-                typeof attendance_date !== "string" ||
-                !/^\d{4}-\d{2}-\d{2}$/.test(attendance_date)
-            )
+            (typeof attendance_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(attendance_date))
         ) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid attendance_date. Use YYYY-MM-DD."
-                },
+                { success: false, message: "Invalid attendance_date. Use YYYY-MM-DD." },
                 { status: 400 }
             );
         }
 
-        const allowedStatuses = [
-            "Present",
-            "Absent",
-            "Late",
-            "Leave"
-        ];
-
+        const allowedStatuses = ["Present", "Absent", "Late", "Leave"];
         if (
             attendance_status !== undefined &&
             !allowedStatuses.includes(attendance_status)
         ) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid attendance_status."
-                },
+                { success: false, message: "Invalid attendance_status." },
                 { status: 400 }
             );
         }
 
         connection = await pool.getConnection();
-
         await connection.beginTransaction();
 
         const [attendanceRows] = await connection.query(
             `
             SELECT
                 a.id,
+                a.academy_id,
+                a.branch_id,
                 a.user_program_id,
                 a.attendance_date,
                 COALESCE(up.start_date, (SELECT MIN(DATE(ap.created_at)) FROM cst_admission_players ap WHERE ap.id = up.admission_players_id), DATE(up.created_at)) AS start_date,
                 up.end_date
             FROM cst_player_attendance a
-            INNER JOIN cst_user_programs up
-                ON up.id = a.user_program_id
+            INNER JOIN cst_user_programs up ON up.id = a.user_program_id
             WHERE a.id = ?
             FOR UPDATE
             `,
@@ -174,28 +197,29 @@ export async function PUT(request, context) {
 
         if (attendanceRows.length === 0) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance record not found."
-                },
+                { success: false, message: "Attendance record not found." },
                 { status: 404 }
             );
         }
 
         const current = attendanceRows[0];
 
+        // Access check
+        if (!checkAttendanceAccess(authUser, current)) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You are not authorized to update this attendance record." },
+                { status: 403 }
+            );
+        }
+
         const newDate = attendance_date ?? current.attendance_date;
         const effectiveStartDate = current.start_date ? String(current.start_date).slice(0, 10) : null;
         const targetDateStr = String(newDate).slice(0, 10);
 
-        if (
-            effectiveStartDate &&
-            targetDateStr < effectiveStartDate
-        ) {
+        if (effectiveStartDate && targetDateStr < effectiveStartDate) {
             await connection.rollback();
-
             return NextResponse.json(
                 {
                     success: false,
@@ -205,17 +229,10 @@ export async function PUT(request, context) {
             );
         }
 
-        if (
-            current.end_date &&
-            newDate > current.end_date
-        ) {
+        if (current.end_date && newDate > current.end_date) {
             await connection.rollback();
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance date is after enrollment end date."
-                },
+                { success: false, message: "Attendance date is after enrollment end date." },
                 { status: 400 }
             );
         }
@@ -236,12 +253,8 @@ export async function PUT(request, context) {
 
             if (duplicates.length > 0) {
                 await connection.rollback();
-
                 return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Attendance already exists for this date."
-                    },
+                    { success: false, message: "Attendance already exists for this date." },
                     { status: 409 }
                 );
             }
@@ -265,6 +278,9 @@ export async function PUT(request, context) {
             values.push(remarks || null);
         }
 
+        updates.push("marked_by = ?");
+        values.push(authUser.id);
+
         values.push(id);
 
         await connection.query(
@@ -284,31 +300,20 @@ export async function PUT(request, context) {
         });
 
     } catch (error) {
-        if (connection) {
-            await connection.rollback();
-        }
-
+        if (connection) await connection.rollback();
         console.error("PUT Attendance Error:", error);
 
         if (error.code === "ER_DUP_ENTRY") {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance already exists for this date."
-                },
+                { success: false, message: "Attendance already exists for this date." },
                 { status: 409 }
             );
         }
 
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to update attendance.",
-                error: error.message
-            },
+            { success: false, message: "Failed to update attendance.", error: error.message },
             { status: 500 }
         );
-
     } finally {
         if (connection) connection.release();
     }
@@ -321,40 +326,49 @@ export async function DELETE(request, context) {
     let connection;
 
     try {
+        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+        if (errorResponse) return errorResponse;
+
+        if (authUser.isPlayer) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: Players cannot delete attendance records." },
+                { status: 403 }
+            );
+        }
+
         const params = await context?.params;
         const { searchParams } = new URL(request.url);
-
         const id = searchParams.get("id") || params?.id;
 
         if (!id) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance id is required."
-                },
+                { success: false, message: "Attendance id is required." },
                 { status: 400 }
             );
         }
 
         connection = await pool.getConnection();
 
-        const [result] = await connection.query(
-            `
-            DELETE FROM cst_player_attendance
-            WHERE id = ?
-            `,
+        const [rows] = await connection.query(
+            `SELECT id, academy_id, branch_id FROM cst_player_attendance WHERE id = ?`,
             [id]
         );
 
-        if (result.affectedRows === 0) {
+        if (rows.length === 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Attendance record not found."
-                },
+                { success: false, message: "Attendance record not found." },
                 { status: 404 }
             );
         }
+
+        if (!checkAttendanceAccess(authUser, rows[0])) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden: You are not authorized to delete records outside your scope." },
+                { status: 403 }
+            );
+        }
+
+        await connection.query(`DELETE FROM cst_player_attendance WHERE id = ?`, [id]);
 
         return NextResponse.json({
             success: true,
@@ -363,16 +377,10 @@ export async function DELETE(request, context) {
 
     } catch (error) {
         console.error("DELETE Attendance Error:", error);
-
         return NextResponse.json(
-            {
-                success: false,
-                message: "Failed to delete attendance.",
-                error: error.message
-            },
+            { success: false, message: "Failed to delete attendance.", error: error.message },
             { status: 500 }
         );
-
     } finally {
         if (connection) connection.release();
     }

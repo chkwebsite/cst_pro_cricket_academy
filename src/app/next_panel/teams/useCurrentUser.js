@@ -17,15 +17,6 @@ function normalizeRole(value) {
     return null;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Wraps your UserContext so the teams pages only depend on this one shape:
-|   { ready, id, role, academyId, branchId }
-|--------------------------------------------------------------------------
-| useUser() may return the user directly, or { user, loading } - both work.
-| If your context exposes the user under another key / role under another
-| field name, only this file needs a change.
-*/
 export default function useCurrentUser() {
     const ctx = useUser();
     const user = ctx && "user" in ctx ? ctx.user : ctx;
@@ -39,5 +30,8 @@ export default function useCurrentUser() {
         role: normalizeRole(user?.role ?? user?.role_name ?? user?.user_role ?? user?.user_type),
         academyId: user?.academy_id ?? null,
         branchId: user?.branch_id ?? null,
+        academyName: user?.academy_name ?? null,
+        branchName: user?.branch_name ?? null,
+        user,
     };
 }

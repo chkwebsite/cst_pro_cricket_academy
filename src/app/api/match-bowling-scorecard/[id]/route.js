@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 
 // GET: Single bowling scorecard record
@@ -8,20 +9,28 @@ export async function GET(request, { params }) {
 
     try {
         const { id } = await params;
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
             `SELECT
-bs.*,
-    mi.innings_no,
-    mi.batting_team_id,
-    mi.bowling_team_id,
-    mp.team_id,
-    mp.user_id,
-    mp.outside_player_id,
-    COALESCE(CONCAT(u.first_name, ' ', COALESCE(u.last_name, '')), op.player_name, '') AS player_name
+                bs.*,
+                m.academy_id,
+                m.branch_id,
+                mi.innings_no,
+                mi.batting_team_id,
+                mi.bowling_team_id,
+                mp.team_id,
+                mp.user_id,
+                mp.outside_player_id,
+                COALESCE(CONCAT(u.first_name, ' ', COALESCE(u.last_name, '')), op.player_name, '') AS player_name
              FROM cst_match_bowling_scorecard bs
+             INNER JOIN cst_matches m
+                ON m.id = bs.match_id
              INNER JOIN cst_match_innings mi
                 ON mi.id = bs.innings_id
              INNER JOIN cst_match_players mp
@@ -31,7 +40,7 @@ bs.*,
              LEFT JOIN cst_outside_players op
                 ON op.id = mp.outside_player_id
              WHERE bs.id = ?
-    LIMIT 1`,
+             LIMIT 1`,
             [id]
         );
 
@@ -43,6 +52,10 @@ bs.*,
                 },
                 { status: 404 }
             );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json({ success: false, message: "Forbidden. Bowling scorecard belongs to another academy or branch." }, { status: 403 });
         }
 
         return NextResponse.json({
@@ -66,6 +79,17 @@ bs.*,
 
 // PUT: Update bowling scorecard record
 export async function PUT(request, { params }) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser) {
+        return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+    }
+    if (authUser.isCoach || authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players and coaches cannot edit bowling scorecards." },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -105,7 +129,10 @@ export async function PUT(request, { params }) {
         connection = await pool.getConnection();
 
         const [existingRows] = await connection.execute(
-            "SELECT * FROM cst_match_bowling_scorecard WHERE id = ?",
+            `SELECT bs.*, m.academy_id, m.branch_id
+             FROM cst_match_bowling_scorecard bs
+             INNER JOIN cst_matches m ON m.id = bs.match_id
+             WHERE bs.id = ?`,
             [id]
         );
 
@@ -120,6 +147,13 @@ export async function PUT(request, { params }) {
         }
 
         const existing = existingRows[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Scorecard belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
         const updated = { ...existing, ...body };
 
         const numericFields = [
@@ -253,11 +287,18 @@ export async function DELETE(request, { params }) {
 
     try {
         const { id } = await params;
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser) {
+            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
+        }
 
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            "SELECT id FROM cst_match_bowling_scorecard WHERE id = ?",
+            `SELECT bs.id, m.academy_id, m.branch_id 
+             FROM cst_match_bowling_scorecard bs 
+             INNER JOIN cst_matches m ON m.id = bs.match_id 
+             WHERE bs.id = ?`,
             [id]
         );
 
@@ -268,6 +309,13 @@ export async function DELETE(request, { params }) {
                     message: "Bowling scorecard not found",
                 },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: rows[0].academy_id, branch_id: rows[0].branch_id })) {
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Scorecard belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 

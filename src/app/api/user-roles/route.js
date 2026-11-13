@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
+import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
 
 // GET - List user roles
 export async function GET(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
     let connection;
 
     try {
@@ -36,7 +40,31 @@ export async function GET(request) {
 
         where.push("1 = 1");
 
-        if (user_id) {
+        // Tenant Scoping
+        if (authUser.isPlayer) {
+            where.push("ur.user_id = ?");
+            values.push(authUser.id);
+        } else if (authUser.isBranchAdmin) {
+            where.push("u.academy_id = ?");
+            values.push(authUser.academy_id);
+            where.push("u.branch_id = ?");
+            values.push(authUser.branch_id);
+        } else if (authUser.isAcademyAdmin) {
+            where.push("u.academy_id = ?");
+            values.push(authUser.academy_id);
+        } else if (!authUser.isSuperAdmin) {
+            where.push("u.academy_id = ?");
+            values.push(authUser.academy_id);
+            const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+            if (allowedBranches.length > 0) {
+                where.push("u.branch_id IN (?)");
+                values.push(allowedBranches);
+            } else {
+                where.push("1 = 0");
+            }
+        }
+
+        if (user_id && !authUser.isPlayer) {
             where.push("ur.user_id = ?");
             values.push(user_id);
         }
@@ -158,6 +186,16 @@ export async function GET(request) {
 
 // POST - Create user role
 export async function POST(request) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: You are not authorized to assign roles" },
+            { status: 403 }
+        );
+    }
+
     let connection;
 
     try {
@@ -190,22 +228,26 @@ export async function POST(request) {
             );
         }
 
-        // Check user
-        const [userRows] = await connection.query(
-            `
-            SELECT id
-            FROM cst_users
-            WHERE id = ?
-            LIMIT 1
-            `,
-            [user_id]
-        );
+        // Validate user belongs to authorized academy/branch
+        let userSql = `SELECT id, academy_id, branch_id FROM cst_users WHERE id = ?`;
+        const userParams = [user_id];
+        if (!authUser.isSuperAdmin) {
+            userSql += ` AND academy_id = ?`;
+            userParams.push(authUser.academy_id);
+            if (authUser.isBranchAdmin) {
+                userSql += ` AND branch_id = ?`;
+                userParams.push(authUser.branch_id);
+            }
+        }
+        userSql += ` LIMIT 1`;
+
+        const [userRows] = await connection.query(userSql, userParams);
 
         if (userRows.length === 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "User not found",
+                    message: "User not found or not in authorized academy/branch",
                 },
                 { status: 404 }
             );

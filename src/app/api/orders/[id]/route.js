@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/app/components/lib/db";
-import { getAuthUser } from "@/app/components/lib/rbac";
+import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
 const VALID_FULFILLMENT_TYPES = ["Delivery", "Pickup"];
 
@@ -211,9 +211,38 @@ o.*,
             );
         }
 
+        const order = orders[0];
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                if (Number(order.customer_user_id) !== Number(authUser.id) && String(order.customer_email || "").toLowerCase() !== String(authUser.email || "").toLowerCase()) {
+                    return NextResponse.json(
+                        { success: false, message: "Forbidden. You can only view your own orders." },
+                        { status: 403 }
+                    );
+                }
+            } else if (!verifyRecordAccess(authUser, { academy_id: order.academy_id, branch_id: order.fulfillment_branch_id })) {
+                return NextResponse.json(
+                    { success: false, message: "Forbidden. Order belongs to another academy or branch." },
+                    { status: 403 }
+                );
+            }
+        } else {
+            const { searchParams } = new URL(request.url);
+            const order_no = searchParams.get("order_no");
+            const customer_email = searchParams.get("customer_email");
+            const customer_phone = searchParams.get("customer_phone");
+            if (!order_no || (!customer_email && !customer_phone) || order.order_no !== order_no) {
+                return NextResponse.json(
+                    { success: false, message: "Unauthorized. Authentication required to view order." },
+                    { status: 401 }
+                );
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            data: orders[0],
+            data: order,
         });
     } catch (error) {
         console.error("GET Single Order Error:", error);
@@ -228,11 +257,18 @@ o.*,
 
 // PUT: Update an order
 export async function PUT(request, context) {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthenticatedUser(request);
     if (!authUser) {
         return NextResponse.json(
             { success: false, message: "Unauthorized. Authentication required to update orders." },
             { status: 401 }
+        );
+    }
+
+    if (authUser.isPlayer) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden. Players cannot update orders." },
+            { status: 403 }
         );
     }
 
@@ -268,6 +304,14 @@ export async function PUT(request, context) {
         }
 
         const existing = existingOrders[0];
+
+        if (!verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order belongs to another academy or branch." },
+                { status: 403 }
+            );
+        }
 
         // Merge supplied fields with the existing order.
         // Omitted fields retain their previous values.
@@ -498,8 +542,8 @@ export async function PUT(request, context) {
 
 // DELETE: Delete an order
 export async function DELETE(request, context) {
-    const authUser = await getAuthUser(request);
-    if (!authUser || (!authUser.isSuperAdmin && !authUser.isAcademyAdmin && !authUser.isBranchAdmin)) {
+    const authUser = await getAuthenticatedUser(request);
+    if (!authUser || authUser.isPlayer) {
         return NextResponse.json(
             { success: false, message: "Unauthorized. Admin authorization required to delete orders." },
             { status: 403 }
@@ -522,7 +566,7 @@ export async function DELETE(request, context) {
         await connection.beginTransaction();
 
         const [orders] = await connection.execute(
-            "SELECT id, order_no FROM cst_orders WHERE id = ? FOR UPDATE",
+            "SELECT id, order_no, academy_id, fulfillment_branch_id FROM cst_orders WHERE id = ? FOR UPDATE",
             [Number(id)]
         );
 
@@ -532,6 +576,14 @@ export async function DELETE(request, context) {
             return NextResponse.json(
                 { success: false, message: "Order not found." },
                 { status: 404 }
+            );
+        }
+
+        if (!verifyRecordAccess(authUser, { academy_id: orders[0].academy_id, branch_id: orders[0].fulfillment_branch_id })) {
+            await connection.rollback();
+            return NextResponse.json(
+                { success: false, message: "Forbidden. Order belongs to another academy or branch." },
+                { status: 403 }
             );
         }
 
