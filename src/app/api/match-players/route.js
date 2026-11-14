@@ -164,7 +164,7 @@ async function validateMatchTeam(connection, matchId, teamId) {
     }
 
     const [teams] = await connection.execute(
-        `SELECT academy_id, branch_id
+        `SELECT academy_id, branch_id, team_type
          FROM cst_teams
          WHERE id = ?
          LIMIT 1`,
@@ -380,6 +380,7 @@ export async function GET(request) {
                 m.tournament_id,
                 t.team_name,
                 t.team_code,
+                t.team_type,
                 COALESCE(u.first_name, ttpu.first_name) AS first_name,
                 COALESCE(u.last_name, ttpu.last_name) AS last_name,
                 COALESCE(op.player_name, ttpop.player_name) AS outside_player_name,
@@ -540,6 +541,17 @@ export async function POST(request) {
                 { status: 403 }
             );
         }
+
+        const isExternalTeam = matchTeam.team?.team_type === "External";
+        const finalPlayerFee = isExternalTeam ? 0 : playerFee;
+        const finalPaidAmount = isExternalTeam ? 0 : paidAmount;
+        const finalPaymentStatus = isExternalTeam || finalPlayerFee === 0
+            ? "Not Generated"
+            : finalPaidAmount >= finalPlayerFee
+            ? "Paid"
+            : finalPaidAmount > 0
+            ? "Partial"
+            : "Pending";
 
         const playerError = await validatePlayer(
             connection,
@@ -761,78 +773,75 @@ export async function POST(request) {
                 selection.data.vice_captain,
                 selection.data.wicket_keeper,
                 selection.data.status,
-                playerFee,
-                paidAmount,
-                playerFee <= 0
-                    ? "Not Generated"
-                    : paidAmount <= 0
-                        ? "Pending"
-                        : paidAmount >= playerFee
-                            ? "Paid"
-                            : "Partial",
+                finalPlayerFee,
+                finalPaidAmount,
+                finalPaymentStatus,
             ]
         );
 
-        const feeStatus = selection.data.status === 0
-            ? "Cancelled"
-            : playerFee === 0 || paidAmount >= playerFee
-                ? "Paid"
-                : paidAmount > 0
-                    ? "Partial"
-                    : "Pending";
-        const [feeStatusResult] = await connection.execute(
-            `INSERT INTO cst_fee_status (
-                academy_id,
-                branch_id,
-                fee_type,
-                tournament_id,
-                match_id,
-                match_player_id,
-                user_id,
-                outside_player_id,
-                fee_amount,
-                paid_amount,
-                status,
-                remarks,
-                created_by
-            ) VALUES (?, ?, 'Match Player', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                Number(academyId),
-                branchId === null ? null : Number(branchId),
-                matchRecord.tournament_id,
-                matchId,
-                result.insertId,
-                player.user_id,
-                player.outside_player_id,
-                playerFee,
-                paidAmount,
-                feeStatus,
-                "Match player fee",
-                createdBy,
-            ]
-        );
-
-        if (paidAmount > 0) {
-            await connection.execute(
-                `INSERT INTO cst_fee_payments (
-                    fee_status_id,
-                    amount,
-                    payment_mode,
-                    transaction_no,
-                    payment_date,
+        // Individual player fees apply only to Academy/Branch teams, never External teams
+        if (!isExternalTeam) {
+            const feeStatus = selection.data.status === 0
+                ? "Cancelled"
+                : finalPlayerFee === 0 || finalPaidAmount >= finalPlayerFee
+                    ? "Paid"
+                    : finalPaidAmount > 0
+                        ? "Partial"
+                        : "Pending";
+            const [feeStatusResult] = await connection.execute(
+                `INSERT INTO cst_fee_status (
+                    academy_id,
+                    branch_id,
+                    fee_type,
+                    tournament_id,
+                    match_id,
+                    match_player_id,
+                    user_id,
+                    outside_player_id,
+                    fee_amount,
+                    paid_amount,
                     status,
                     remarks,
                     created_by
-                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'Paid', ?, ?)`,
+                ) VALUES (?, ?, 'Match Player', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    feeStatusResult.insertId,
-                    paidAmount,
-                    paymentMode,
-                    body.transaction_no ? String(body.transaction_no).trim() : null,
-                    "Initial match player payment",
+                    Number(academyId),
+                    branchId === null ? null : Number(branchId),
+                    matchRecord.tournament_id,
+                    matchId,
+                    result.insertId,
+                    player.user_id,
+                    player.outside_player_id,
+                    finalPlayerFee,
+                    finalPaidAmount,
+                    feeStatus,
+                    "Match player fee",
                     createdBy,
                 ]
             );
+
+            if (finalPaidAmount > 0) {
+                await connection.execute(
+                    `INSERT INTO cst_fee_payments (
+                        fee_status_id,
+                        amount,
+                        payment_mode,
+                        transaction_no,
+                        payment_date,
+                        status,
+                        remarks,
+                        created_by
+                    ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'Paid', ?, ?)`,
+                    [
+                        feeStatusResult.insertId,
+                        finalPaidAmount,
+                        paymentMode,
+                        body.transaction_no ? String(body.transaction_no).trim() : null,
+                        "Initial match player payment",
+                        createdBy,
+                    ]
+                );
+            }
         }
 
         await connection.commit();
@@ -853,7 +862,7 @@ export async function POST(request) {
         return NextResponse.json(
             {
                 success: false,
-                message: "Failed to add match player.",
+                message: error?.message || "Failed to add match player.",
             },
             { status: 500 }
         );

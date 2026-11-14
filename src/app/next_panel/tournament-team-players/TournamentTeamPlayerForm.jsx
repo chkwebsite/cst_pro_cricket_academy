@@ -62,6 +62,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                     tournament_id: d.tournament_id ?? "",
                     tournament_team_id: d.tournament_team_id ?? "",
                     team_id: d.team_id ?? "",
+                    team_type: d.team_type || "",
                     player_source: d.user_id ? "user" : "outside",
                     user_id: d.user_id ?? "",
                     outside_player_id: d.outside_player_id ?? "",
@@ -124,9 +125,11 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
             try {
                 setPlayerOptionsLoading(true);
                 setError("");
+                const scoped = me.role !== "super_admin";
+                const academyParam = scoped && me.academyId ? `&academy_id=${me.academyId}` : "";
                 const endpoint = formData.player_source === "user"
-                    ? "/api/users?user_type=Player"
-                    : "/api/outside-players";
+                    ? `/api/users?user_type=Player${academyParam}`
+                    : `/api/outside-players${scoped && me.academyId ? `?academy_id=${me.academyId}` : ""}`;
                 const res = await fetch(endpoint, { signal: controller.signal });
                 const result = await res.json();
 
@@ -134,10 +137,15 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                     throw new Error(result.message || "Unable to load players");
                 }
 
+                let rows = result.data || [];
+                if (scoped && me.academyId) {
+                    rows = rows.filter((p) => !p.academy_id || Number(p.academy_id) === Number(me.academyId));
+                }
+
                 if (formData.player_source === "user") {
-                    setRegisteredPlayers(result.data || []);
+                    setRegisteredPlayers(rows);
                 } else {
-                    setOutsidePlayers(result.data || []);
+                    setOutsidePlayers(rows);
                 }
             } catch (err) {
                 if (err.name !== "AbortError") setError(err.message);
@@ -148,7 +156,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
 
         loadPlayers();
         return () => controller.abort();
-    }, [formData.player_source]);
+    }, [formData.player_source, me.role, me.academyId]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -204,10 +212,14 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
 
         if (name === "tournament_team_id") {
             const registration = tournamentTeams.find((item) => Number(item.id) === Number(value));
+            const isExt = registration?.team_type === "External";
             setFormData((prev) => ({
                 ...prev,
                 tournament_team_id: value,
                 team_id: registration ? String(registration.team_id) : "",
+                team_type: registration?.team_type || "",
+                player_fee: isExt ? 0 : prev.player_fee,
+                paid_amount: isExt ? 0 : prev.paid_amount,
             }));
             return;
         }
@@ -256,11 +268,14 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
             return;
         }
 
-        const fee = Number(formData.player_fee);
-        if (!Number.isFinite(fee) || fee < 0) return setError("Player fee must be zero or greater");
-        const paidAmount = Number(formData.paid_amount);
-        if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > fee) {
-            return setError("Paid amount must be between zero and player fee");
+        const selectedReg = tournamentTeams.find((item) => Number(item.id) === tournamentTeamId);
+        const isExternalTeam = selectedReg?.team_type === "External" || formData.team_type === "External";
+
+        const fee = isExternalTeam ? 0 : Number(formData.player_fee);
+        if (!isExternalTeam && (!Number.isFinite(fee) || fee < 0)) return setError("Player tournament fee must be zero or greater");
+        const paidAmount = isExternalTeam ? 0 : Number(formData.paid_amount);
+        if (!isExternalTeam && (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > fee)) {
+            return setError("Paid amount must be between zero and player tournament fee");
         }
 
         try {
@@ -284,7 +299,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                     payment_mode: formData.payment_mode,
                     transaction_no: String(formData.transaction_no).trim() || null,
                     created_by: me.id,
-                    payment_status: formData.payment_status,
+                    payment_status: isExternalTeam ? "Pending" : formData.payment_status,
                     status: formData.status,
                 }),
             });
@@ -315,6 +330,10 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
     const teamChoices = tournamentTeams.filter(
         (registration) => Number(registration.tournament_id) === Number(formData.tournament_id)
     );
+    const selectedRegistration = tournamentTeams.find(
+        (registration) => Number(registration.id) === Number(formData.tournament_team_id)
+    );
+    const isExternalTeam = selectedRegistration?.team_type === "External" || formData.team_type === "External";
 
     return (
         <div className="card shadow-sm">
@@ -463,67 +482,81 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                             </select>
                         </div>
 
-                        <div className="col-md-3 mb-3">
-                            <label className="form-label">Player Fee (₹)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                name="player_fee"
-                                className="form-control"
-                                value={formData.player_fee}
-                                onChange={handleChange}
-                            />
-                            {isEdit && (
-                                <div className="form-text">Cannot be less than the amount already paid.</div>
-                            )}
-                        </div>
-
-                        <div className="col-md-3 mb-3">
-                            <label className="form-label">Paid Amount (₹)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                max={formData.player_fee}
-                                step="0.01"
-                                name="paid_amount"
-                                className="form-control"
-                                value={formData.paid_amount}
-                                onChange={handleChange}
-                            />
-                        </div>
-                        {Number(formData.paid_amount) > 0 && !isEdit && (
+                        {isExternalTeam ? (
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label text-muted">Player Tournament Fee</label>
+                                <div className="alert alert-info py-2 mb-0 small">
+                                    <strong>External Team ({selectedRegistration?.team_name || "External"}):</strong> Individual player tournament fees are not applicable for external teams. Fees are managed at the team level.
+                                </div>
+                            </div>
+                        ) : (
                             <>
                                 <div className="col-md-3 mb-3">
-                                    <label className="form-label">Payment Mode</label>
-                                    <select name="payment_mode" className="form-select" value={formData.payment_mode} onChange={handleChange} required>
-                                        {PAYMENT_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
-                                    </select>
+                                    <label className="form-label">Player Tournament Fee (₹)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        name="player_fee"
+                                        className="form-control"
+                                        value={formData.player_fee}
+                                        onChange={handleChange}
+                                        placeholder="e.g. 1500"
+                                    />
+                                    {isEdit && (
+                                        <div className="form-text">Cannot be less than the amount already paid.</div>
+                                    )}
                                 </div>
+
                                 <div className="col-md-3 mb-3">
-                                    <label className="form-label">Transaction No. (optional)</label>
-                                    <input type="text" name="transaction_no" className="form-control" value={formData.transaction_no} onChange={handleChange} />
+                                    <label className="form-label">Paid Amount (₹)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max={formData.player_fee}
+                                        step="0.01"
+                                        name="paid_amount"
+                                        className="form-control"
+                                        value={formData.paid_amount}
+                                        onChange={handleChange}
+                                    />
                                 </div>
+                                {Number(formData.paid_amount) > 0 && !isEdit && (
+                                    <>
+                                        <div className="col-md-3 mb-3">
+                                            <label className="form-label">Payment Mode</label>
+                                            <select name="payment_mode" className="form-select" value={formData.payment_mode} onChange={handleChange} required>
+                                                {PAYMENT_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="col-md-3 mb-3">
+                                            <label className="form-label">Transaction No. (optional)</label>
+                                            <input type="text" name="transaction_no" className="form-control" value={formData.transaction_no} onChange={handleChange} />
+                                        </div>
+                                    </>
+                                )}
                             </>
                         )}
                     </div>
 
                     <div className="row">
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Payment Status</label>
-                            <select
-                                name="payment_status"
-                                className="form-select"
-                                value={formData.payment_status}
-                                onChange={handleChange}
-                            >
-                                {PAYMENT_STATUSES.map((s) => (
-                                    <option key={s} value={s}>{s}</option>
-                                ))}
-                            </select>
-                        </div>
+                        {!isExternalTeam && (
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">Payment Status</label>
+                                <select
+                                    name="payment_status"
+                                    className="form-select"
+                                    value={formData.payment_status}
+                                    onChange={handleChange}
+                                >
+                                    {PAYMENT_STATUSES.map((s) => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
-                        <div className="col-md-6 mb-3">
+                        <div className={isExternalTeam ? "col-md-12 mb-3" : "col-md-6 mb-3"}>
                             <label className="form-label">Status</label>
                             <select
                                 name="status"

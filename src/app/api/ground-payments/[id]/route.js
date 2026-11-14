@@ -18,7 +18,7 @@ const validPaymentModes = [
 
 async function checkBookingAccess(connection, bookingId, authUser) {
     const [rows] = await connection.query(
-        `SELECT gb.id, gb.user_id, gb.customer_phone, g.academy_id, g.branch_id
+        `SELECT gb.id, gb.customer_phone, g.academy_id, g.branch_id
          FROM cst_ground_bookings gb
          INNER JOIN cst_ground g ON g.id = gb.ground_id
          WHERE gb.id = ? AND g.is_deleted = 0 LIMIT 1`,
@@ -28,7 +28,7 @@ async function checkBookingAccess(connection, bookingId, authUser) {
     const b = rows[0];
     if (authUser.isSuperAdmin) return { allowed: true, booking: b };
     if (authUser.isPlayer) {
-        const isOwner = Number(b.user_id) === Number(authUser.id) || (b.customer_phone && b.customer_phone === authUser.phone);
+        const isOwner = Boolean(b.customer_phone && authUser.phone && b.customer_phone === authUser.phone);
         return { allowed: isOwner, booking: b };
     }
     if (Number(b.academy_id) !== Number(authUser.academy_id)) return { allowed: false, booking: b };
@@ -62,7 +62,7 @@ export async function GET(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            `SELECT gp.*, gb.user_id, gb.customer_phone, g.academy_id, g.branch_id
+            `SELECT gp.*, gb.customer_phone, g.academy_id, g.branch_id
              FROM cst_ground_payments gp
              INNER JOIN cst_ground_bookings gb ON gb.id = gp.booking_id
              INNER JOIN cst_ground g ON g.id = gb.ground_id
@@ -357,7 +357,7 @@ export async function PUT(request, { params }) {
         return NextResponse.json(
             {
                 success: false,
-                message: "Failed to update ground payment",
+                message: error.message || "Failed to update ground payment",
                 error: error.message,
             },
             { status: 500 }
@@ -480,7 +480,7 @@ export async function DELETE(request, { params }) {
         return NextResponse.json(
             {
                 success: false,
-                message: "Failed to delete ground payment",
+                message: error.message || "Failed to delete ground payment",
                 error: error.message,
             },
             { status: 500 }

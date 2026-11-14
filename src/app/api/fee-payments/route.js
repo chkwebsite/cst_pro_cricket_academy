@@ -129,10 +129,9 @@ async function recalculateFeeStatus(connection, feeStatusId) {
     await connection.execute(
         `UPDATE cst_fee_status
          SET paid_amount = ?,
-             balance_amount = ?,
              status = ?
          WHERE id = ?`,
-        [roundedPaid, roundedBalance, status, feeStatusId]
+        [roundedPaid, status, feeStatusId]
     );
 
     if (fee.fee_type === "Match Player" && fee.match_player_id) {

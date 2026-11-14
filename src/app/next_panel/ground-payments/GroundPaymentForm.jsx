@@ -150,7 +150,7 @@ export default function GroundPaymentForm({ id = null }) {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
-                throw new Error(data.message || "Something went wrong");
+                throw new Error(data.error || data.message || "Something went wrong");
             }
 
             alert(isEdit ? "Ground payment updated successfully" : "Ground payment added successfully");

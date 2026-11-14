@@ -46,6 +46,7 @@ export async function GET(request, context) {
                 m.tournament_id,
                 t.team_name,
                 t.team_code,
+                t.team_type,
                 ttp.user_id AS ttp_user_id,
                 COALESCE(u.first_name, ttpu.first_name) AS first_name,
                 COALESCE(u.last_name, ttpu.last_name) AS last_name,
@@ -129,9 +130,10 @@ export async function PUT(request, context) {
         await connection.beginTransaction();
 
         const [existingRows] = await connection.execute(
-            `SELECT mp.*, m.academy_id, m.branch_id
+            `SELECT mp.*, m.academy_id, m.branch_id, t.team_type
              FROM cst_match_players mp
              INNER JOIN cst_matches m ON m.id = mp.match_id
+             INNER JOIN cst_teams t ON t.id = mp.team_id
              WHERE mp.id = ?
              FOR UPDATE`,
             [Number(id)]
@@ -155,9 +157,12 @@ export async function PUT(request, context) {
                 { status: 403 }
             );
         }
-        const playerFee = body.player_fee === undefined
-            ? Number(old.player_fee || 0)
-            : Number(body.player_fee);
+        const isExternalTeam = old.team_type === "External";
+        const playerFee = isExternalTeam
+            ? 0
+            : (body.player_fee === undefined
+                ? Number(old.player_fee || 0)
+                : Number(body.player_fee));
 
         if (!Number.isFinite(playerFee) || playerFee < 0) {
             await connection.rollback();

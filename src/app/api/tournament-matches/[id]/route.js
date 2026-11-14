@@ -113,16 +113,13 @@ export async function GET(request, { params }) {
         const match = rows[0];
 
         // Check authentication
-        const authHeader = request.headers.get("authorization");
-        if (authHeader) {
-            const { user: authUser } = await getAuthenticatedUser(request);
-            if (authUser && !authUser.isSuperAdmin) {
-                if (match.academy_id && Number(match.academy_id) !== Number(authUser.academy_id)) {
-                    return NextResponse.json({ success: false, message: "Tournament match not found or access denied" }, { status: 404 });
-                }
-                if (authUser.isBranchAdmin && match.branch_id && Number(match.branch_id) !== Number(authUser.branch_id)) {
-                    return NextResponse.json({ success: false, message: "Tournament match not found or access denied" }, { status: 404 });
-                }
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (match.academy_id && Number(match.academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Tournament match not found or access denied" }, { status: 404 });
+            }
+            if (authUser.isBranchAdmin && match.branch_id && Number(match.branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Tournament match not found or access denied" }, { status: 404 });
             }
         }
 

@@ -106,6 +106,8 @@ export default function GroundBookingForm({
     });
     const [grounds, setGrounds] = useState([]);
     const [slots, setSlots] = useState([]); // all active slots; filtered by ground below
+    const [matches, setMatches] = useState([]);
+    const [tournamentsList, setTournamentsList] = useState([]);
 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
@@ -140,6 +142,40 @@ export default function GroundBookingForm({
             }
         })();
     }, [hasSessionUser, isSuperAdmin, isBranchAdmin, userAcademyId, userBranchId]);
+
+    // Matches and Tournaments for booking linkage
+    useEffect(() => {
+        if (!hasSessionUser) return;
+
+        const controller = new AbortController();
+        const loadMatchesAndTournaments = async () => {
+            try {
+                const matchParams = new URLSearchParams();
+                const tournParams = new URLSearchParams();
+                const academyParam = userAcademyId || "";
+                if (academyParam) {
+                    matchParams.set("academy_id", String(academyParam));
+                    tournParams.set("academy_id", String(academyParam));
+                }
+
+                const [mRes, tRes] = await Promise.all([
+                    fetch(`/api/matches?${matchParams.toString()}`, { signal: controller.signal }),
+                    fetch(`/api/tournaments?${tournParams.toString()}`, { signal: controller.signal }),
+                ]);
+
+                const [mJson, tJson] = await Promise.all([mRes.json(), tRes.json()]);
+                if (mRes.ok && mJson.success) setMatches(mJson.data || []);
+                if (tRes.ok && tJson.success) setTournamentsList(tJson.data || []);
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    console.error("Error loading matches/tournaments in booking form:", err);
+                }
+            }
+        };
+
+        loadMatchesAndTournaments();
+        return () => controller.abort();
+    }, [hasSessionUser, userAcademyId]);
 
     // Edit mode
     useEffect(() => {
@@ -363,8 +399,12 @@ export default function GroundBookingForm({
             branch_id: Number(branch_id),
             ground_id: Number(formData.ground_id),
             slot_id: Number(formData.slot_id),
-            match_id: formData.match_id ? Number(formData.match_id) : null,
-            tournament_id: formData.tournament_id ? Number(formData.tournament_id) : null,
+            match_id: formData.match_id && !isNaN(Number(formData.match_id))
+                ? Number(formData.match_id)
+                : (formData.match_id ? String(formData.match_id).trim() : null),
+            tournament_id: formData.tournament_id && !isNaN(Number(formData.tournament_id))
+                ? Number(formData.tournament_id)
+                : (formData.tournament_id ? String(formData.tournament_id).trim() : null),
             customer_name: formData.customer_name.trim(),
             customer_phone: formData.customer_phone.trim() || null,
             customer_email: formData.customer_email.trim() || null,
@@ -577,44 +617,42 @@ export default function GroundBookingForm({
 
                         <div className="col-md-4 mb-3">
                             <label className="form-label">Match ID (optional)</label>
-                            <input
-                                type="number"
+                            <select
                                 name="match_id"
-                                className="form-control"
-                                min="1"
+                                className="form-select"
                                 value={formData.match_id}
                                 onChange={handleChange}
-                                placeholder="Link to a match"
-                            />
+                            >
+                                <option value="">Select match</option>
+                                {formData.match_id && !matches.some((m) => String(m.id) === String(formData.match_id)) && (
+                                    <option value={formData.match_id}>Match #{formData.match_id}</option>
+                                )}
+                                {matches.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                        {m.match_no || `Match #${m.id}`} — {m.team_a_name} vs {m.team_b_name}{m.match_date ? ` (${String(m.match_date).slice(0, 10)})` : ""}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="col-md-4 mb-3">
                             <label className="form-label">Tournament ID (optional)</label>
-                            {embedded ? (
-                                <select
-                                    name="tournament_id"
-                                    className="form-select"
-                                    value={formData.tournament_id}
-                                    onChange={handleChange}
-                                >
-                                    <option value="">Choose tournament</option>
-                                    {tournaments.map((tournament) => (
-                                        <option key={tournament.id} value={tournament.id}>
-                                            {tournament.tournament_name}{tournament.tournament_code ? ` (${tournament.tournament_code})` : ""}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <input
-                                    type="number"
-                                    name="tournament_id"
-                                    className="form-control"
-                                    min="1"
-                                    value={formData.tournament_id}
-                                    onChange={handleChange}
-                                    placeholder="Link to a tournament"
-                                />
-                            )}
+                            <select
+                                name="tournament_id"
+                                className="form-select"
+                                value={formData.tournament_id}
+                                onChange={handleChange}
+                            >
+                                <option value="">Choose tournament</option>
+                                {formData.tournament_id && !(embedded ? tournaments : tournamentsList).some((t) => String(t.id) === String(formData.tournament_id)) && (
+                                    <option value={formData.tournament_id}>Tournament #{formData.tournament_id}</option>
+                                )}
+                                {(embedded ? tournaments : tournamentsList).map((tournament) => (
+                                    <option key={tournament.id} value={tournament.id}>
+                                        {tournament.tournament_name}{tournament.tournament_code ? ` (${tournament.tournament_code})` : ""}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 

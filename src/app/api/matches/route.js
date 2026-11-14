@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthUser } from "@/app/components/lib/rbac";
+import { getNextMatchNumber } from "@/app/components/lib/matches";
 
 const isValidMatchDate = (value) => {
     if (typeof value !== "string") {
@@ -88,6 +89,16 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
+        if (searchParams.get("next_no") === "true") {
+            const authUser = await getAuthUser(request);
+            const academyIdParam = searchParams.get("academy_id");
+            const academyId =
+                academyIdParam ||
+                (authUser && !authUser.isSuperAdmin ? authUser.academy_id : null);
+            const nextInfo = await getNextMatchNumber({ academyId, connection });
+            return NextResponse.json(nextInfo);
+        }
+
         const filters = {
             id: searchParams.get("id"),
             academy_id: searchParams.get("academy_id"),
@@ -116,6 +127,7 @@ export async function GET(request) {
         m.team_b_id,
         m.match_no,
         m.match_type,
+        m.match_fee,
         m.match_date,
         m.match_time,
         m.ground_id,
@@ -132,12 +144,21 @@ export async function GET(request) {
         b.branch_name,
 
         t.tournament_name,
+        (SELECT ttp.player_fee
+         FROM cst_tournament_team_players ttp
+         JOIN cst_tournament_teams tt ON tt.id = ttp.tournament_team_id
+         WHERE tt.tournament_id = m.tournament_id
+           AND (tt.team_id = m.team_a_id OR tt.team_id = m.team_b_id)
+           AND ttp.player_fee > 0
+         LIMIT 1) AS tournament_player_fee,
 
         ta.team_name AS team_a_name,
-            ta.team_code AS team_a_code,
+        ta.team_code AS team_a_code,
+        ta.team_type AS team_a_type,
 
-                tb.team_name AS team_b_name,
-                    tb.team_code AS team_b_code,
+        tb.team_name AS team_b_name,
+        tb.team_code AS team_b_code,
+        tb.team_type AS team_b_type,
 
                         tw.team_name AS toss_winner_team_name,
 
@@ -350,6 +371,7 @@ export async function POST(request) {
             team_b_id,
             match_no,
             match_type,
+            match_fee,
             match_date,
             match_time,
             ground_id,
@@ -413,6 +435,16 @@ export async function POST(request) {
                     success: false,
                     message: "Invalid match status",
                 },
+                { status: 400 }
+            );
+        }
+
+        const finalMatchFee = match_fee !== undefined && match_fee !== null && match_fee !== ""
+            ? Number(match_fee)
+            : 0;
+        if (!Number.isFinite(finalMatchFee) || finalMatchFee < 0) {
+            return NextResponse.json(
+                { success: false, message: "match_fee must be a positive number or zero" },
                 { status: 400 }
             );
         }
@@ -860,6 +892,7 @@ export async function POST(request) {
             team_b_id,
             match_no,
             match_type,
+            match_fee,
             match_date,
             match_time,
             ground_id,
@@ -870,7 +903,7 @@ export async function POST(request) {
             remarks,
             created_by
         )
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
             [
                 resolvedAcademyId || null,
@@ -880,6 +913,7 @@ export async function POST(request) {
                 Number(team_b_id),
                 match_no || null,
                 match_type,
+                finalMatchFee,
                 match_date,
                 match_time || null,
                 ground_id || null,
@@ -928,6 +962,25 @@ export async function POST(request) {
                 );
             }
         }
+
+        const feeA = body.team_a_fee !== undefined && body.team_a_fee !== null && body.team_a_fee !== ""
+            ? Number(body.team_a_fee)
+            : 0;
+        const feeB = body.team_b_fee !== undefined && body.team_b_fee !== null && body.team_b_fee !== ""
+            ? Number(body.team_b_fee)
+            : 0;
+
+        await connection.execute(
+            `INSERT INTO cst_match_teams (match_id, team_id, team_side, match_fee, payment_status, status)
+             VALUES (?, ?, 'A', ?, 'Pending', 1)`,
+            [matchId, Number(team_a_id), feeA]
+        );
+
+        await connection.execute(
+            `INSERT INTO cst_match_teams (match_id, team_id, team_side, match_fee, payment_status, status)
+             VALUES (?, ?, 'B', ?, 'Pending', 1)`,
+            [matchId, Number(team_b_id), feeB]
+        );
 
         const [newMatch] = await connection.execute(
             "SELECT * FROM cst_matches WHERE id = ?",

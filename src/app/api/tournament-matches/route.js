@@ -153,29 +153,26 @@ export async function GET(request) {
         const conditions = ["1 = 1"];
         const params = [];
 
-        const authHeader = request.headers.get("authorization");
-        if (authHeader) {
-            const { user: authUser } = await getAuthenticatedUser(request);
-            if (authUser) {
-                if (authUser.isPlayer) {
-                    conditions.push("t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)");
-                    params.push(authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                    conditions.push("t.academy_id = ? AND t.branch_id = ?");
-                    params.push(authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                    conditions.push("t.academy_id = ?");
-                    params.push(authUser.academy_id);
-                    const branchIdParam = searchParams.get("branch_id");
-                    if (branchIdParam) {
-                        conditions.push("t.branch_id = ?");
-                        params.push(Number(branchIdParam));
-                    }
-                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
-                    conditions.push(`t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`);
-                    params.push(authUser.academy_id, ...allowed);
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                conditions.push("t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)");
+                params.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                conditions.push("t.academy_id = ? AND t.branch_id = ?");
+                params.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                conditions.push("t.academy_id = ?");
+                params.push(authUser.academy_id);
+                const branchIdParam = searchParams.get("branch_id");
+                if (branchIdParam) {
+                    conditions.push("t.branch_id = ?");
+                    params.push(Number(branchIdParam));
                 }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                conditions.push(`t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`);
+                params.push(authUser.academy_id, ...allowed);
             }
         }
 

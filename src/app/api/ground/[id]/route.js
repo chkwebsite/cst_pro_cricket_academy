@@ -293,7 +293,7 @@ export async function PUT(request, { params }) {
         }
 
         // ==========================================
-        // CHECK DUPLICATE GROUND CODE
+        // CHECK DUPLICATE GROUND CODE (scoped to academy)
         // ==========================================
 
         const [existingCode] = await connection.execute(
@@ -301,12 +301,14 @@ export async function PUT(request, { params }) {
             SELECT id
             FROM cst_ground
             WHERE ground_code = ?
+            AND academy_id = ?
             AND id != ?
             AND is_deleted = 0
             LIMIT 1
             `,
             [
                 ground_code.trim(),
+                Number(academy_id),
                 id
             ]
         );

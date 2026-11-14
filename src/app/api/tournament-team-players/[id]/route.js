@@ -48,6 +48,7 @@ export async function GET(request, { params }) {
         t.branch_id,
         tm.team_name,
         tm.team_code,
+        tm.team_type,
         u.first_name,
         u.last_name,
         u.email,
@@ -87,19 +88,16 @@ export async function GET(request, { params }) {
             );
         }
 
-        const authHeader = request.headers.get("authorization");
-        if (authHeader) {
-            const { user: authUser } = await getAuthenticatedUser(request);
-            if (authUser && !authUser.isSuperAdmin) {
-                if (rows[0].academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
-                    return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
-                }
-                if (authUser.isPlayer && Number(rows[0].user_id) !== Number(authUser.id)) {
-                    return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
-                }
-                if (authUser.isBranchAdmin && rows[0].branch_id && Number(rows[0].branch_id) !== Number(authUser.branch_id)) {
-                    return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
-                }
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser && !authUser.isSuperAdmin) {
+            if (rows[0].academy_id && Number(rows[0].academy_id) !== Number(authUser.academy_id)) {
+                return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
+            }
+            if (authUser.isPlayer && Number(rows[0].user_id) !== Number(authUser.id)) {
+                return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
+            }
+            if (authUser.isBranchAdmin && rows[0].branch_id && Number(rows[0].branch_id) !== Number(authUser.branch_id)) {
+                return NextResponse.json({ success: false, message: "Tournament team player not found or access denied" }, { status: 404 });
             }
         }
 
@@ -167,10 +165,11 @@ export async function PUT(request, { params }) {
         // Lock existing player
         const [existingRows] = await connection.execute(
             `
-            SELECT ttp.*, t.academy_id, t.branch_id
+            SELECT ttp.*, t.academy_id, t.branch_id, tm.team_type
             FROM cst_tournament_team_players ttp
             INNER JOIN cst_tournament_teams tt ON tt.id = ttp.tournament_team_id
             INNER JOIN cst_tournaments t ON t.id = tt.tournament_id
+            INNER JOIN cst_teams tm ON tm.id = ttp.team_id
             WHERE ttp.id = ?
             AND ttp.is_deleted = 0
             FOR UPDATE
@@ -234,13 +233,19 @@ export async function PUT(request, { params }) {
 
         const playerRole = body.player_role ?? existing.player_role;
 
-        const playerFee = body.player_fee !== undefined
-            ? Number(body.player_fee)
-            : Number(existing.player_fee);
+        const isExternalTeam = existing.team_type === "External";
 
-        const requestedPaidAmount = body.paid_amount !== undefined
-            ? Number(body.paid_amount)
-            : null;
+        const playerFee = isExternalTeam
+            ? 0
+            : (body.player_fee !== undefined
+                ? Number(body.player_fee)
+                : Number(existing.player_fee || 0));
+
+        const requestedPaidAmount = isExternalTeam
+            ? 0
+            : (body.paid_amount !== undefined
+                ? Number(body.paid_amount)
+                : null);
 
         const paymentStatus = body.payment_status ?? existing.payment_status;
 

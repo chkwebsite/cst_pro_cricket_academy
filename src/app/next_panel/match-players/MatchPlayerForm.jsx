@@ -53,6 +53,15 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
     const [error, setError] = useState("");
 
     const selectedMatch = matches.find((m) => Number(m.id) === Number(formData.match_id));
+    const isSelectedTeamA = selectedMatch && Number(formData.team_id) === Number(selectedMatch.team_a_id);
+    const isSelectedTeamB = selectedMatch && Number(formData.team_id) === Number(selectedMatch.team_b_id);
+    const selectedTeamType = isSelectedTeamA
+        ? selectedMatch.team_a_type
+        : isSelectedTeamB
+        ? selectedMatch.team_b_type
+        : "";
+    const isExternalTeam = selectedTeamType === "External";
+
     const source = PLAYER_SOURCES.find((s) => s.value === formData.player_source) || {
         label: "Tournament team player (existing record)",
     };
@@ -62,19 +71,26 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
         : [];
 
     useEffect(() => {
+        if (!me.ready) return;
         const controller = new AbortController();
         (async () => {
             try {
-                const res = await fetch("/api/matches", { signal: controller.signal });
+                const scoped = me.role !== "super_admin";
+                const url = scoped && me.academyId ? `/api/matches?academy_id=${me.academyId}` : "/api/matches";
+                const res = await fetch(url, { signal: controller.signal });
                 const result = await res.json();
                 if (!res.ok || !result.success) throw new Error(result.message || "Unable to load matches");
-                setMatches(result.data || []);
+                let rows = result.data || [];
+                if (scoped && me.academyId) {
+                    rows = rows.filter((m) => !m.academy_id || Number(m.academy_id) === Number(me.academyId));
+                }
+                setMatches(rows);
             } catch (err) {
                 if (err.name !== "AbortError") setError(err.message);
             }
         })();
         return () => controller.abort();
-    }, []);
+    }, [me.ready, me.role, me.academyId]);
 
     useEffect(() => {
         if (!formData.match_id) return;
@@ -150,6 +166,24 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
         loadOutsidePlayers();
         return () => controller.abort();
     }, [formData.player_source]);
+
+    // Auto-fill player fee when match and an academy team (from any branch) are selected
+    useEffect(() => {
+        if (isEdit || !formData.match_id || !formData.team_id || !selectedMatch) return;
+        if (isExternalTeam) return;
+
+        const matchFee = Number(selectedMatch.match_fee);
+        const tournFee = Number(selectedMatch.tournament_player_fee);
+        const autoFee = (Number.isFinite(matchFee) && matchFee > 0)
+            ? matchFee
+            : (Number.isFinite(tournFee) && tournFee > 0)
+            ? tournFee
+            : 0;
+
+        if (autoFee > 0 && Number(formData.player_fee) === 0) {
+            setFormData((prev) => ({ ...prev, player_fee: autoFee }));
+        }
+    }, [isEdit, formData.match_id, formData.team_id, selectedMatch, isExternalTeam]);
 
     // Edit mode
     useEffect(() => {
@@ -235,10 +269,33 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                 next.team_id = "";
                 next.player_ref = "";
                 next.jersey_no = "";
+                next.player_fee = 0;
+                next.paid_amount = 0;
             }
             if (name === "team_id") {
                 next.player_ref = "";
                 next.jersey_no = "";
+
+                const currentMatch = matches.find((m) => Number(m.id) === Number(formData.match_id));
+                const isTeamA = currentMatch && Number(value) === Number(currentMatch.team_a_id);
+                const isTeamB = currentMatch && Number(value) === Number(currentMatch.team_b_id);
+                const teamType = isTeamA ? currentMatch.team_a_type : isTeamB ? currentMatch.team_b_type : "";
+
+                if (teamType === "External") {
+                    next.player_fee = 0;
+                    next.paid_amount = 0;
+                } else if (value && currentMatch) {
+                    const matchFee = Number(currentMatch.match_fee);
+                    const tournFee = Number(currentMatch.tournament_player_fee);
+                    const autoFee = (Number.isFinite(matchFee) && matchFee > 0)
+                        ? matchFee
+                        : (Number.isFinite(tournFee) && tournFee > 0)
+                        ? tournFee
+                        : 0;
+                    if (autoFee > 0) {
+                        next.player_fee = autoFee;
+                    }
+                }
             }
             if (name === "player_source") {
                 next.player_ref = "";
@@ -271,12 +328,12 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
         if (!Number.isInteger(teamId) || teamId <= 0) return setError("Please choose a team");
         if (!Number.isInteger(ref) || ref <= 0) return setError(`Enter a valid ${source.label} ID`);
 
-        const playerFee = Number(formData.player_fee);
-        if (!Number.isFinite(playerFee) || playerFee < 0) return setError("Player fee must be zero or greater");
-        const paidAmount = isEdit ? 0 : Number(formData.paid_amount);
-        if (!isEdit) {
+        const playerFee = isExternalTeam ? 0 : Number(formData.player_fee);
+        if (!isExternalTeam && (!Number.isFinite(playerFee) || playerFee < 0)) return setError("Player match fee must be zero or greater");
+        const paidAmount = isExternalTeam || isEdit ? 0 : Number(formData.paid_amount);
+        if (!isExternalTeam && !isEdit) {
             if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > playerFee) {
-                return setError("Paid amount must be between zero and player fee");
+                return setError("Paid amount must be between zero and player match fee");
             }
             if (paidAmount > 0 && !formData.payment_mode) {
                 return setError("Payment mode is required when an initial amount is paid");
@@ -381,57 +438,69 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                     </div>
 
                     <div className="row">
-                        <div className="col-md-4 mb-3">
-                            <label className="form-label">Player Fee (₹)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                name="player_fee"
-                                className="form-control"
-                                value={formData.player_fee}
-                                onChange={handleChange}
-                            />
-                        </div>
-                        {isEdit && (
-                            <>
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">Paid Amount (₹)</label>
-                                    <input type="text" className="form-control bg-light" value={formData.paid_amount} readOnly />
+                        {isExternalTeam ? (
+                            <div className="col-12 mb-3">
+                                <label className="form-label text-muted">Player Match Fee</label>
+                                <div className="alert alert-info py-2 mb-0 small">
+                                    <strong>External Team:</strong> Individual player match fees are not applicable for external teams. Fees are managed at the team level.
                                 </div>
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">Payment Status</label>
-                                    <input type="text" className="form-control bg-light" value={formData.payment_status} readOnly />
-                                </div>
-                            </>
-                        )}
-                        {!isEdit && (
-                            <div className="col-md-4 mb-3">
-                                <label className="form-label">Paid Amount (₹)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={formData.player_fee}
-                                    step="0.01"
-                                    name="paid_amount"
-                                    className="form-control"
-                                    value={formData.paid_amount}
-                                    onChange={handleChange}
-                                />
                             </div>
-                        )}
-                        {!isEdit && Number(formData.paid_amount) > 0 && (
+                        ) : (
                             <>
                                 <div className="col-md-4 mb-3">
-                                    <label className="form-label">Payment Mode</label>
-                                    <select name="payment_mode" className="form-select" value={formData.payment_mode} onChange={handleChange} required>
-                                        {PAYMENT_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
-                                    </select>
+                                    <label className="form-label">Player Match Fee (₹)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        name="player_fee"
+                                        className="form-control"
+                                        value={formData.player_fee}
+                                        onChange={handleChange}
+                                        placeholder="e.g. 500"
+                                    />
                                 </div>
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">Transaction No. (optional)</label>
-                                    <input type="text" name="transaction_no" className="form-control" value={formData.transaction_no} onChange={handleChange} />
-                                </div>
+                                {isEdit && (
+                                    <>
+                                        <div className="col-md-4 mb-3">
+                                            <label className="form-label">Paid Amount (₹)</label>
+                                            <input type="text" className="form-control bg-light" value={formData.paid_amount} readOnly />
+                                        </div>
+                                        <div className="col-md-4 mb-3">
+                                            <label className="form-label">Payment Status</label>
+                                            <input type="text" className="form-control bg-light" value={formData.payment_status} readOnly />
+                                        </div>
+                                    </>
+                                )}
+                                {!isEdit && (
+                                    <div className="col-md-4 mb-3">
+                                        <label className="form-label">Paid Amount (₹)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max={formData.player_fee}
+                                            step="0.01"
+                                            name="paid_amount"
+                                            className="form-control"
+                                            value={formData.paid_amount}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                )}
+                                {!isEdit && Number(formData.paid_amount) > 0 && (
+                                    <>
+                                        <div className="col-md-4 mb-3">
+                                            <label className="form-label">Payment Mode</label>
+                                            <select name="payment_mode" className="form-select" value={formData.payment_mode} onChange={handleChange} required>
+                                                {PAYMENT_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="col-md-4 mb-3">
+                                            <label className="form-label">Transaction No. (optional)</label>
+                                            <input type="text" name="transaction_no" className="form-control" value={formData.transaction_no} onChange={handleChange} />
+                                        </div>
+                                    </>
+                                )}
                             </>
                         )}
                     </div>

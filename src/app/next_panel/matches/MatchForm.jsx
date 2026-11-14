@@ -27,11 +27,14 @@ const isTodayMatch = (dateVal) => {
 const EMPTY_FORM = {
     match_no: "",
     match_type: "Friendly",
+    match_fee: "",
     status: "Scheduled",
     match_date: "",
     match_time: "",
     team_a_id: "",
     team_b_id: "",
+    team_a_fee: "",
+    team_b_fee: "",
     academy_id: "",
     branch_id: "",
     tournament_id: "",
@@ -45,7 +48,7 @@ const EMPTY_FORM = {
 // optional ID field -> positive integer or null
 const optionalId = (value) => (String(value).trim() === "" ? null : Number(value));
 
-export default function MatchForm({ id = null, returnTo = "/next_panel/matches" }) {
+export default function MatchForm({ id = null, returnTo = "/next_panel/matches", initialMatchNo = "" }) {
     const router = useRouter();
     const isEdit = Boolean(id);
     const me = useCurrentUser();
@@ -54,7 +57,12 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
     const { tournaments, error: tournamentError } = useTournamentOptions(me);
     const isSuper = me.role === ROLES.SUPER;
 
-    const [formData, setFormData] = useState(EMPTY_FORM);
+    const [suggestedMatchNo, setSuggestedMatchNo] = useState(initialMatchNo || "M-001");
+    const [manualMatchNo, setManualMatchNo] = useState(false);
+    const [formData, setFormData] = useState(() => ({
+        ...EMPTY_FORM,
+        match_no: !id && initialMatchNo ? initialMatchNo : "",
+    }));
     const [bookings, setBookings] = useState([]);
     const [grounds, setGrounds] = useState([]);
     const [bookingsLoading, setBookingsLoading] = useState(false);
@@ -247,6 +255,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                 setFormData({
                     match_no: d.match_no || "",
                     match_type: d.match_type || "Friendly",
+                    match_fee: d.match_fee !== null && d.match_fee !== undefined ? String(d.match_fee) : "",
                     status: initialStatus,
                     match_date: dateStr,
                     match_time: d.booking_id && d.match_time ? String(d.match_time).slice(0, 5) : "",
@@ -270,12 +279,74 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
         getMatch();
     }, [id]);
 
+    // Keep initial match number synced for new match if supplied via prop
+    useEffect(() => {
+        if (initialMatchNo && !isEdit) {
+            setSuggestedMatchNo(initialMatchNo);
+            setFormData((prev) => {
+                if (!manualMatchNo || !prev.match_no) {
+                    return { ...prev, match_no: initialMatchNo };
+                }
+                return prev;
+            });
+        }
+    }, [initialMatchNo, isEdit, manualMatchNo]);
+
+    // Fetch latest next match number on client (handles academy change and client-side navigation)
+    useEffect(() => {
+        if (isEdit) return;
+
+        const controller = new AbortController();
+        const fetchNextNo = async () => {
+            try {
+                const params = new URLSearchParams();
+                if (academyValue) params.set("academy_id", academyValue);
+                const query = params.toString();
+                const res = await fetch(`/api/matches/next-no${query ? `?${query}` : ""}`, {
+                    signal: controller.signal,
+                });
+                const result = await res.json();
+                if (result.success && result.next_match_no) {
+                    setSuggestedMatchNo(result.next_match_no);
+                    setFormData((prev) => {
+                        // Auto-fill if user hasn't manually entered a custom number or input is empty
+                        if (!manualMatchNo || !prev.match_no) {
+                            return { ...prev, match_no: result.next_match_no };
+                        }
+                        return prev;
+                    });
+                }
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    console.error("Failed to fetch next match number:", err);
+                }
+            }
+        };
+
+        fetchNextNo();
+        return () => controller.abort();
+    }, [isEdit, academyValue, manualMatchNo]);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (name === "match_no") {
+            setManualMatchNo(true);
+        }
+        if (name === "academy_id") {
+            setManualMatchNo(false);
+        }
         setFormData((prev) => {
             const next = { ...prev, [name]: value };
             if (name === "match_type" && value !== "Tournament") {
                 next.tournament_id = "";
+            }
+            if (name === "tournament_id" && value) {
+                const tourney = tournaments.find((t) => Number(t.id) === Number(value));
+                if (tourney && tourney.team_fee != null && Number(tourney.team_fee) > 0) {
+                    const feeStr = String(Number(tourney.team_fee));
+                    if (!prev.team_a_fee) next.team_a_fee = feeStr;
+                    if (!prev.team_b_fee) next.team_b_fee = feeStr;
+                }
             }
             if (name === "team_a_id" && value && Number(value) === Number(prev.team_b_id)) {
                 next.team_b_id = "";
@@ -361,11 +432,14 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                 body: JSON.stringify({
                     match_no: formData.match_no.trim() || null,
                     match_type: formData.match_type,
+                    match_fee: formData.match_fee !== "" ? Number(formData.match_fee) : 0,
                     status: submitStatus,
                     match_date: formData.match_date,
                     match_time: formData.match_time || null,
                     team_a_id: teamA,
                     team_b_id: teamB,
+                    team_a_fee: formData.team_a_fee !== "" ? Number(formData.team_a_fee) : null,
+                    team_b_fee: formData.team_b_fee !== "" ? Number(formData.team_b_fee) : null,
                     academy_id: optionalId(academyValue),
                     branch_id: optionalId(branchValue),
                     tournament_id: optionalId(formData.tournament_id),
@@ -429,10 +503,13 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                                 <button
                                     type="button"
                                     className="btn btn-outline-secondary"
-                                    onClick={() => setFormData((prev) => ({ ...prev, match_no: "M-001" }))}
-                                    title="Insert M-001"
+                                    onClick={() => {
+                                        setManualMatchNo(false);
+                                        setFormData((prev) => ({ ...prev, match_no: suggestedMatchNo || "M-001" }));
+                                    }}
+                                    title={`Auto-fill ${suggestedMatchNo || "M-001"}`}
                                 >
-                                    M-001
+                                    {suggestedMatchNo || "M-001"}
                                 </button>
                             </div>
                         </div>
@@ -465,6 +542,25 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                             </select>
                         </div>
                     </div>
+
+                    {(formData.match_type === "Practice" || formData.match_type === "Friendly") && (
+                        <div className="row">
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">Match Fee (₹)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    name="match_fee"
+                                    className="form-control"
+                                    value={formData.match_fee}
+                                    onChange={handleChange}
+                                    placeholder="e.g. 500"
+                                />
+                                <div className="form-text">Per-player match fee for this {formData.match_type} match (auto-populates when adding academy players).</div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
@@ -501,6 +597,36 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                    </div>
+
+                    <div className="row">
+                        <div className="col-md-6 mb-3">
+                            <label className="form-label">Team A Match Fee (₹) (optional)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                name="team_a_fee"
+                                className="form-control"
+                                value={formData.team_a_fee}
+                                onChange={handleChange}
+                                placeholder="Auto-populated or optional"
+                            />
+                        </div>
+
+                        <div className="col-md-6 mb-3">
+                            <label className="form-label">Team B Match Fee (₹) (optional)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                name="team_b_fee"
+                                className="form-control"
+                                value={formData.team_b_fee}
+                                onChange={handleChange}
+                                placeholder="Auto-populated or optional"
+                            />
                         </div>
                     </div>
 
@@ -568,22 +694,38 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches" 
                         </div>
 
                         {formData.match_type === "Tournament" && (
-                            <div className="col-md-4 mb-3">
-                                <label className="form-label">Tournament ID (optional)</label>
-                                <select
-                                    name="tournament_id"
-                                    className="form-select"
-                                    value={formData.tournament_id}
-                                    onChange={handleChange}
-                                >
-                                    <option value="">Choose Tournament</option>
-                                    {tournamentOptions.map((tournament) => (
-                                        <option key={tournament.id} value={tournament.id}>
-                                            {tournament.tournament_name}{tournament.tournament_code ? ` (${tournament.tournament_code})` : ""}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <>
+                                <div className="col-md-4 mb-3">
+                                    <label className="form-label">Tournament ID (optional)</label>
+                                    <select
+                                        name="tournament_id"
+                                        className="form-select"
+                                        value={formData.tournament_id}
+                                        onChange={handleChange}
+                                    >
+                                        <option value="">Choose Tournament</option>
+                                        {tournamentOptions.map((tournament) => (
+                                            <option key={tournament.id} value={tournament.id}>
+                                                {tournament.tournament_name}{tournament.tournament_code ? ` (${tournament.tournament_code})` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-md-4 mb-3">
+                                    <label className="form-label">Match Fee (₹) (optional)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        name="match_fee"
+                                        className="form-control"
+                                        value={formData.match_fee}
+                                        onChange={handleChange}
+                                        placeholder="e.g. 500"
+                                    />
+                                    <div className="form-text">Per-player fee for this tournament match.</div>
+                                </div>
+                            </>
                         )}
                     </div>
 

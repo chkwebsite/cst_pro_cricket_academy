@@ -63,8 +63,8 @@ export async function GET(request) {
 
         // Role-based Tenant Scoping
         if (authUser.isPlayer) {
-            where += " AND (gb.user_id = ? OR gb.customer_phone = ?)";
-            params.push(authUser.id, authUser.phone || "");
+            where += " AND (gb.customer_phone IS NOT NULL AND gb.customer_phone = ?)";
+            params.push(authUser.phone || "");
         } else if (authUser.isBranchAdmin && authUser.branch_id) {
             where += " AND g.branch_id = ? AND g.academy_id = ?";
             params.push(authUser.branch_id, authUser.academy_id);
@@ -571,33 +571,78 @@ export async function POST(request) {
         // MATCH VALIDATION
         // ==========================================
 
+        let resolvedMatchId = null;
+
         if (match_id) {
+            const rawMatch = String(match_id).trim();
+            const numMatch = Number(rawMatch);
+            const isValidNum = Number.isInteger(numMatch) && numMatch > 0;
+            const formattedM = isValidNum ? `M-${String(numMatch).padStart(3, "0")}` : "";
+
             const [matchRows] = await connection.query(
                 `
-                SELECT id
+                SELECT id, academy_id, branch_id, match_no
                 FROM cst_matches
-                WHERE id = ?
-                AND academy_id = ?
-                AND branch_id = ?
+                WHERE (
+                    id = ?
+                    OR match_no = ?
+                    OR match_no = ?
+                    OR match_no = ?
+                )
+                AND (academy_id = ? OR academy_id IS NULL)
+                AND (branch_id = ? OR branch_id IS NULL OR ? IS NULL)
                 LIMIT 1
                 `,
                 [
-                    match_id,
+                    isValidNum ? numMatch : -1,
+                    rawMatch,
+                    formattedM,
+                    `M-${rawMatch}`,
                     academy_id,
-                    branch_id
+                    branch_id,
+                    branch_id,
                 ]
             );
 
             if (matchRows.length === 0) {
-                await connection.rollback();
-
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid match for selected academy/branch"
-                    },
-                    { status: 400 }
+                // Also check if match belongs to the same academy even if branch differs or ground is hosted
+                const [academyMatchRows] = await connection.query(
+                    `
+                    SELECT id, academy_id, branch_id, match_no
+                    FROM cst_matches
+                    WHERE (
+                        id = ?
+                        OR match_no = ?
+                        OR match_no = ?
+                        OR match_no = ?
+                    )
+                    AND (academy_id = ? OR academy_id IS NULL)
+                    LIMIT 1
+                    `,
+                    [
+                        isValidNum ? numMatch : -1,
+                        rawMatch,
+                        formattedM,
+                        `M-${rawMatch}`,
+                        academy_id,
+                    ]
                 );
+
+                if (academyMatchRows.length === 0) {
+                    await connection.rollback();
+
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: "Invalid match for selected academy/branch"
+                        },
+                        { status: 400 }
+                    );
+                }
+
+                resolvedMatchId = academyMatchRows[0].id;
+            } else {
+                resolvedMatchId = matchRows[0].id;
             }
         }
 
@@ -605,33 +650,64 @@ export async function POST(request) {
         // TOURNAMENT VALIDATION
         // ==========================================
 
+        let resolvedTournamentId = null;
+
         if (tournament_id) {
+            const rawTourn = String(tournament_id).trim();
+            const numTourn = Number(rawTourn);
+            const isValidTournNum = Number.isInteger(numTourn) && numTourn > 0;
+
             const [tournamentRows] = await connection.query(
                 `
                 SELECT id
                 FROM cst_tournaments
-                WHERE id = ?
-                AND academy_id = ?
-                AND branch_id = ?
+                WHERE (id = ? OR tournament_code = ?)
+                AND (academy_id = ? OR academy_id IS NULL)
+                AND (branch_id = ? OR branch_id IS NULL OR ? IS NULL)
+                AND is_deleted = 0
                 LIMIT 1
                 `,
                 [
-                    tournament_id,
+                    isValidTournNum ? numTourn : -1,
+                    rawTourn,
                     academy_id,
-                    branch_id
+                    branch_id,
+                    branch_id,
                 ]
             );
 
             if (tournamentRows.length === 0) {
-                await connection.rollback();
-
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid tournament for selected academy/branch"
-                    },
-                    { status: 400 }
+                const [acadTournRows] = await connection.query(
+                    `
+                    SELECT id
+                    FROM cst_tournaments
+                    WHERE (id = ? OR tournament_code = ?)
+                    AND (academy_id = ? OR academy_id IS NULL)
+                    AND is_deleted = 0
+                    LIMIT 1
+                    `,
+                    [
+                        isValidTournNum ? numTourn : -1,
+                        rawTourn,
+                        academy_id,
+                    ]
                 );
+
+                if (acadTournRows.length === 0) {
+                    await connection.rollback();
+
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: "Invalid tournament for selected academy/branch"
+                        },
+                        { status: 400 }
+                    );
+                }
+
+                resolvedTournamentId = acadTournRows[0].id;
+            } else {
+                resolvedTournamentId = tournamentRows[0].id;
             }
         }
 
@@ -701,8 +777,8 @@ export async function POST(request) {
                 ground_id,
                 slot_id,
 
-                match_id,
-                tournament_id,
+                resolvedMatchId,
+                resolvedTournamentId || tournament_id,
 
                 customer_name,
                 customer_phone,
@@ -722,6 +798,20 @@ export async function POST(request) {
         );
 
         const bookingId = bookingResult.insertId;
+
+        // Auto-link match with booking
+        if (resolvedMatchId) {
+            try {
+                await connection.query(
+                    `UPDATE cst_matches
+                     SET booking_id = ?, ground_id = ?, updated_at = NOW()
+                     WHERE id = ? AND booking_id IS NULL`,
+                    [bookingId, Number(ground_id), resolvedMatchId]
+                );
+            } catch (linkErr) {
+                console.error("Link match with booking error:", linkErr);
+            }
+        }
 
         // ==========================================
         // INSERT PAYMENT

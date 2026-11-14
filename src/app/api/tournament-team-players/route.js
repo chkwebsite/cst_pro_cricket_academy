@@ -69,6 +69,7 @@ export async function GET(request) {
 
         tm.team_name,
         tm.team_code,
+        tm.team_type,
 
         t.academy_id,
         t.branch_id,
@@ -169,31 +170,28 @@ export async function GET(request) {
             values.push(filters.status);
         }
 
-        const authHeader = request.headers.get("authorization");
-        if (authHeader) {
-            const { user: authUser } = await getAuthenticatedUser(request);
-            if (authUser) {
-                if (authUser.isPlayer) {
-                    sql += ` AND (ttp.user_id = ? OR (t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)))`;
-                    values.push(authUser.id, authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                    sql += ` AND t.academy_id = ? AND t.branch_id = ?`;
-                    values.push(authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                    sql += ` AND t.academy_id = ?`;
-                    values.push(authUser.academy_id);
-                    if (filters.branch_id) {
-                        sql += ` AND t.branch_id = ?`;
-                        values.push(filters.branch_id);
-                    }
-                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
-                    sql += ` AND t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`;
-                    values.push(authUser.academy_id, ...allowed);
-                } else {
-                    if (filters.academy_id) { sql += ` AND t.academy_id = ?`; values.push(filters.academy_id); }
-                    if (filters.branch_id) { sql += ` AND t.branch_id = ?`; values.push(filters.branch_id); }
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                sql += ` AND (ttp.user_id = ? OR (t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)))`;
+                values.push(authUser.id, authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += ` AND t.academy_id = ? AND t.branch_id = ?`;
+                values.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += ` AND t.academy_id = ?`;
+                values.push(authUser.academy_id);
+                if (filters.branch_id) {
+                    sql += ` AND t.branch_id = ?`;
+                    values.push(filters.branch_id);
                 }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                sql += ` AND t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                values.push(authUser.academy_id, ...allowed);
+            } else {
+                if (filters.academy_id) { sql += ` AND t.academy_id = ?`; values.push(filters.academy_id); }
+                if (filters.branch_id) { sql += ` AND t.branch_id = ?`; values.push(filters.branch_id); }
             }
         } else {
             if (filters.academy_id) {
@@ -426,7 +424,8 @@ export async function POST(request) {
                 t.academy_id,
                 t.branch_id,
                 t.is_deleted AS tournament_deleted,
-                    tm.is_deleted AS team_deleted
+                tm.is_deleted AS team_deleted,
+                tm.team_type
         FROM cst_tournament_teams tt
         INNER JOIN cst_tournaments t
             ON t.id = tt.tournament_id
@@ -645,6 +644,11 @@ export async function POST(request) {
             }
         }
 
+        const isExternalTeam = registration.team_type === "External";
+        const finalPlayerFee = isExternalTeam ? 0 : playerFee;
+        const finalPaidAmount = isExternalTeam ? 0 : paidAmount;
+        const finalPaymentStatus = isExternalTeam ? "Pending" : payment_status;
+
         // Insert tournament team player
         const [playerResult] = await connection.execute(
             `
@@ -672,79 +676,82 @@ export async function POST(request) {
                 outsidePlayerId,
                 jersey_no || null,
                 player_role,
-                playerFee,
-                payment_status,
+                finalPlayerFee,
+                finalPaymentStatus,
                 Number(status),
             ]
         );
 
         const tournamentTeamPlayerId = playerResult.insertId;
 
-        // Map player payment status to fee status
-        const feeStatus = playerFee === 0 || paidAmount >= playerFee
-            ? "Paid"
-            : paidAmount > 0
-                ? "Partial"
-                : "Pending";
+        // Fee ledger and payment records apply ONLY to Academy and Branch teams, never External teams
+        if (!isExternalTeam) {
+            // Map player payment status to fee status
+            const feeStatus = finalPlayerFee === 0 || finalPaidAmount >= finalPlayerFee
+                ? "Paid"
+                : finalPaidAmount > 0
+                    ? "Partial"
+                    : "Pending";
 
-        // Insert generic fee ledger record
-        const [feeStatusResult] = await connection.execute(
-            `
-        INSERT INTO cst_fee_status
-        (
-            academy_id,
-            branch_id,
-            fee_type,
-            tournament_id,
-            tournament_team_id,
-            tournament_team_player_id,
-            user_id,
-            outside_player_id,
-            fee_amount,
-            paid_amount,
-            status,
-            remarks
-        )
-    VALUES(?, ?, 'Tournament Player', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-            [
-                registration.academy_id,
-                registration.branch_id,
-                registration.tournament_id,
-                tournamentTeamId,
-                tournamentTeamPlayerId,
-                userId,
-                outsidePlayerId,
-                playerFee,
-                paidAmount,
-                feeStatus,
-                "Tournament player registration fee",
-            ]
-        );
-
-        if (paidAmount > 0) {
-            await connection.execute(
+            // Insert generic fee ledger record
+            const [feeStatusResult] = await connection.execute(
                 `
-                INSERT INTO cst_fee_payments (
-                    fee_status_id,
-                    amount,
-                    payment_mode,
-                    transaction_no,
-                    payment_date,
-                    status,
-                    remarks,
-                    created_by
-                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'Paid', ?, ?)
-                `,
+            INSERT INTO cst_fee_status
+            (
+                academy_id,
+                branch_id,
+                fee_type,
+                tournament_id,
+                tournament_team_id,
+                tournament_team_player_id,
+                user_id,
+                outside_player_id,
+                fee_amount,
+                paid_amount,
+                status,
+                remarks
+            )
+        VALUES(?, ?, 'Tournament Player', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
                 [
-                    feeStatusResult.insertId,
-                    paidAmount,
-                    paymentMode,
-                    transaction_no ? String(transaction_no).trim() : null,
-                    "Initial tournament player registration payment",
-                    createdBy,
+                    registration.academy_id,
+                    registration.branch_id,
+                    registration.tournament_id,
+                    tournamentTeamId,
+                    tournamentTeamPlayerId,
+                    userId,
+                    outsidePlayerId,
+                    finalPlayerFee,
+                    finalPaidAmount,
+                    feeStatus,
+                    "Tournament player registration fee",
                 ]
             );
+
+            if (finalPaidAmount > 0) {
+                await connection.execute(
+                    `
+                    INSERT INTO cst_fee_payments (
+                        fee_status_id,
+                        amount,
+                        payment_mode,
+                        transaction_no,
+                        payment_date,
+                        status,
+                        remarks,
+                        created_by
+                    ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'Paid', ?, ?)
+                    `,
+                    [
+                        feeStatusResult.insertId,
+                        finalPaidAmount,
+                        paymentMode,
+                        transaction_no ? String(transaction_no).trim() : null,
+                        "Initial tournament player registration payment",
+                        createdBy,
+                    ]
+                );
+            }
         }
 
         // Get inserted player

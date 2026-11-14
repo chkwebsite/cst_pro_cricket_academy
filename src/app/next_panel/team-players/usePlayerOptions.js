@@ -6,7 +6,7 @@ import { ROLES } from "../teams/useCurrentUser";
 const ACADEMY_PLAYERS_API = "/api/admission-players";
 
 const userLabel = (u) =>
-    u.name || [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || u.email || `User #${u.id}`;
+    u.name || [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || u.email || `User #${u.user_id || u.id}`;
 
 /*
 | Loads the two kinds of players a team can have:
@@ -30,15 +30,15 @@ export default function usePlayerOptions(me) {
             const errors = [];
 
             try {
-                const params = new URLSearchParams({ role_id: "7" });
-                if (scoped) params.set("academy_id", me.academyId);
+                const params = new URLSearchParams({ status: "1" });
+                if (scoped && me.academyId) params.set("academy_id", me.academyId);
 
                 const res = await fetch(`${ACADEMY_PLAYERS_API}?${params.toString()}`, opts);
                 const json = await res.json();
                 if (!res.ok || !json.success) throw new Error(json.message || "Unable to load academy players");
 
                 const rows = (json.data || []).filter(
-                    (player) => Number(player.role_id) === 7 && player.user_id
+                    (player) => player.user_id && (!player.role_name || player.role_name.toLowerCase().includes("player"))
                 );
                 setUsers(rows.map((player) => ({
                     id: player.user_id,

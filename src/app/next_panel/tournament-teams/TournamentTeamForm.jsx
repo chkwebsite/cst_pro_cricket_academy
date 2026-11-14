@@ -110,8 +110,9 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
 
         if (name === "tournament_id" && !isEdit) {
             const t = tournaments.find((x) => Number(x.id) === Number(value));
-            // new tournament -> reset team, prefill its fee
-            return setFormData((prev) => ({ ...prev, tournament_id: value, team_id: "", team_fee: t?.team_fee ?? "" }));
+            const autoFee = t?.team_fee != null && Number(t.team_fee) > 0 ? String(Number(t.team_fee)) : "";
+            // new tournament -> reset team, prefill its fee automatically
+            return setFormData((prev) => ({ ...prev, tournament_id: value, team_id: "", team_fee: autoFee }));
         }
 
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -120,8 +121,12 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
     // ---------- dropdown options (create) ----------
     const tournament = tournaments.find((x) => Number(x.id) === Number(formData.tournament_id));
 
+    // Active tournaments belonging to authorized scope (not completed or cancelled)
     const tournamentChoices = tournaments.filter(
-        (t) => t.status === OPEN_STATUS && (!isBranchAdmin || Number(t.branch_id) === Number(me.branchId))
+        (t) =>
+            t.status !== "Completed" &&
+            t.status !== "Cancelled" &&
+            (!isBranchAdmin || !t.branch_id || Number(t.branch_id) === Number(me.branchId))
     );
 
     const registeredTeamIds = new Set(registrations.map((r) => Number(r.team_id)));
@@ -135,7 +140,8 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
               (t) =>
                   Number(t.status) === 1 &&
                   !registeredTeamIds.has(Number(t.id)) &&
-                  (!isBranchAdmin || Number(t.branch_id) === Number(me.branchId))
+                  (isSuper || !tournament.academy_id || Number(t.academy_id) === Number(tournament.academy_id)) &&
+                  (!isBranchAdmin || !t.branch_id || Number(t.branch_id) === Number(me.branchId))
           );
 
     const registrationTournamentId = formData.tournament_id || current?.tournament_id;
@@ -256,6 +262,7 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                                         <option key={t.id} value={t.id}>
                                             {t.tournament_name}
                                             {t.tournament_code ? ` (${t.tournament_code})` : ""}
+                                            {t.status && t.status !== "Registration Open" ? ` - [${t.status}]` : ""}
                                         </option>
                                     ))}
                                 </select>
@@ -263,7 +270,9 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                             <div className="form-text">
                                 {isEdit
                                     ? "Tournament and team cannot be changed. Remove and register again instead."
-                                    : "Only tournaments with status “Registration Open” are listed."}
+                                    : tournamentChoices.length === 0
+                                    ? "No active tournaments available for your academy."
+                                    : "Active tournaments belonging to your academy are listed."}
                             </div>
                         </div>
 
@@ -346,8 +355,15 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                                 step="0.01"
                                 value={formData.team_fee}
                                 onChange={handleChange}
-                                placeholder="Tournament fee if empty"
+                                placeholder="Auto-populated from tournament fee"
                             />
+                            {tournament?.team_fee != null && Number(tournament.team_fee) > 0 ? (
+                                <div className="form-text text-success">
+                                    Tournament configured fee: ₹{Number(tournament.team_fee).toLocaleString("en-IN")}
+                                </div>
+                            ) : (
+                                <div className="form-text">Tournament fee if empty</div>
+                            )}
                         </div>
                     </div>
 

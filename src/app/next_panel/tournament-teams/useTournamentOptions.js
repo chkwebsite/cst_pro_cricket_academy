@@ -23,14 +23,20 @@ export default function useTournamentOptions(me) {
 
         (async () => {
             try {
-                const url = scoped ? `${TOURNAMENTS_API}?academy_id=${me.academyId}` : TOURNAMENTS_API;
+                const branchParam = me.role === ROLES.BRANCH && me.branchId ? `&branch_id=${me.branchId}` : "";
+                const url = scoped ? `${TOURNAMENTS_API}?academy_id=${me.academyId}${branchParam}` : TOURNAMENTS_API;
                 const res = await fetch(url, { signal: controller.signal });
                 const json = await res.json();
                 if (!res.ok || !json.success) throw new Error(json.message || "Unable to load tournaments");
 
                 let rows = json.data || [];
                 // Even if the API ignores ?academy_id, never show other academies
-                if (scoped) rows = rows.filter((t) => Number(t.academy_id) === Number(me.academyId));
+                if (scoped) {
+                    rows = rows.filter((t) => Number(t.academy_id) === Number(me.academyId));
+                    if (me.role === ROLES.BRANCH && me.branchId) {
+                        rows = rows.filter((t) => !t.branch_id || Number(t.branch_id) === Number(me.branchId));
+                    }
+                }
                 setTournaments(rows);
             } catch (err) {
                 if (err.name !== "AbortError") setError(err.message);
@@ -38,7 +44,7 @@ export default function useTournamentOptions(me) {
         })();
 
         return () => controller.abort();
-    }, [me.ready, me.role, me.academyId]);
+    }, [me.ready, me.role, me.academyId, me.branchId]);
 
     return { tournaments, error };
 }

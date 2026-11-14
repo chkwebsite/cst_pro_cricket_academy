@@ -8,10 +8,7 @@ function isBookingAuthorized(booking, authUser) {
     if (Number(booking.academy_id) !== Number(authUser.academy_id)) return false;
 
     if (authUser.isPlayer) {
-        return (
-            Number(booking.user_id) === Number(authUser.id) ||
-            (booking.customer_phone && booking.customer_phone === authUser.phone)
-        );
+        return Boolean(booking.customer_phone && authUser.phone && booking.customer_phone === authUser.phone);
     }
 
     if (authUser.isAcademyAdmin) return true;
@@ -45,7 +42,6 @@ export async function GET(request, { params }) {
             SELECT
                 gb.id,
                 gb.booking_no,
-                gb.user_id,
 
                 gb.ground_id,
                 g.ground_name,
@@ -191,6 +187,7 @@ export async function PUT(request, { params }) {
             `
             SELECT
                 gb.id,
+                gb.customer_phone,
                 gb.ground_id,
                 gb.slot_id,
                 gb.booking_date,

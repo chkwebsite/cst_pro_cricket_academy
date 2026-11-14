@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
+import OutsidePlayerForm from "../outside-players/OutsidePlayerForm";
 import useCurrentUser, { ROLES } from "../teams/useCurrentUser";
 import useTeamOptions from "./useTeamOptions";
 import usePlayerOptions from "./usePlayerOptions";
@@ -38,6 +40,8 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [current, setCurrent] = useState(null); // the saved record (edit) - fallback labels
     const [playerSearch, setPlayerSearch] = useState("");
+    const [extraOutsidePlayers, setExtraOutsidePlayers] = useState([]);
+    const [showOutsidePlayerModal, setShowOutsidePlayerModal] = useState(false);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [forbidden, setForbidden] = useState(false);
@@ -110,7 +114,12 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
     const selectedPlayerId = Number(isUserSource ? formData.user_id : formData.outside_player_id);
     const search = playerSearch.trim().toLowerCase();
 
-    let playerChoices = (isUserSource ? users : outsidePlayers).filter(
+    const allOutsidePlayers = [
+        ...extraOutsidePlayers,
+        ...outsidePlayers.filter((p) => !extraOutsidePlayers.some((e) => Number(e.id) === Number(p.id))),
+    ];
+
+    let playerChoices = (isUserSource ? users : allOutsidePlayers).filter(
         (p) =>
             !search ||
             Number(p.id) === selectedPlayerId ||
@@ -185,6 +194,7 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
     const loadError = teamError || playerError;
 
     return (
+        <>
         <div className="card shadow-sm">
             <div className="card-header">
                 <h5 className="mb-0">{isEdit ? "Edit Team Player" : "Add Team Player"}</h5>
@@ -246,21 +256,32 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                             />
                         </div>
                         <div className="col-md-8 mb-3">
-                            <select
-                                name={isUserSource ? "user_id" : "outside_player_id"}
-                                className="form-select"
-                                value={isUserSource ? formData.user_id : formData.outside_player_id}
-                                onChange={handleChange}
-                                required
-                            >
-                                <option value="">{isUserSource ? "Choose Academy Player" : "Choose Outside Player"}</option>
-                                {playerChoices.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.label}
-                                        {p.email ? ` — ${p.email}` : ""}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="d-flex flex-column flex-sm-row gap-2">
+                                <select
+                                    name={isUserSource ? "user_id" : "outside_player_id"}
+                                    className="form-select flex-grow-1"
+                                    value={isUserSource ? formData.user_id : formData.outside_player_id}
+                                    onChange={handleChange}
+                                    required
+                                >
+                                    <option value="">{isUserSource ? "Choose Academy Player" : "Choose Outside Player"}</option>
+                                    {playerChoices.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.label}
+                                            {p.email ? ` — ${p.email}` : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                                {!isUserSource && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-primary text-nowrap d-inline-flex align-items-center justify-content-center"
+                                        onClick={() => setShowOutsidePlayerModal(true)}
+                                    >
+                                        <Plus size={16} className="me-1" /> Add New Outside Player
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -331,5 +352,64 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                 </form>
             </div>
         </div>
+
+        {showOutsidePlayerModal && (
+            <>
+                <div
+                    className="modal d-block"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="team-player-outside-title"
+                    tabIndex="-1"
+                    style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowOutsidePlayerModal(false);
+                    }}
+                >
+                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+                        <div className="modal-content shadow">
+                            <div className="modal-header">
+                                <h5 className="modal-title" id="team-player-outside-title">
+                                    Add New Outside Player
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    aria-label="Close"
+                                    onClick={() => setShowOutsidePlayerModal(false)}
+                                />
+                            </div>
+                            <div className="modal-body p-4">
+                                <OutsidePlayerForm
+                                    embedded
+                                    onCancel={() => setShowOutsidePlayerModal(false)}
+                                    onCreated={(player) => {
+                                        const newOption = {
+                                            id: player.id,
+                                            label: player.player_name || `Outside Player #${player.id}`,
+                                            email: player.email || "",
+                                        };
+                                        setExtraOutsidePlayers((prev) => [
+                                            newOption,
+                                            ...prev.filter((p) => Number(p.id) !== Number(player.id)),
+                                        ]);
+                                        setPlayerSearch("");
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            source: "outside",
+                                            outside_player_id: String(player.id),
+                                            user_id: "",
+                                        }));
+                                        setShowOutsidePlayerModal(false);
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="modal-backdrop show" onClick={() => setShowOutsidePlayerModal(false)} />
+            </>
+        )}
+        </>
     );
 }

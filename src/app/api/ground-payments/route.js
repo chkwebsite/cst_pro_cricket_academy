@@ -10,7 +10,7 @@ import {
 
 async function checkBookingAccess(connection, bookingId, authUser) {
     const [rows] = await connection.query(
-        `SELECT gb.id, gb.user_id, gb.customer_phone, g.academy_id, g.branch_id
+        `SELECT gb.id, gb.customer_phone, g.academy_id, g.branch_id
          FROM cst_ground_bookings gb
          INNER JOIN cst_ground g ON g.id = gb.ground_id
          WHERE gb.id = ? AND g.is_deleted = 0 LIMIT 1`,
@@ -20,7 +20,7 @@ async function checkBookingAccess(connection, bookingId, authUser) {
     const b = rows[0];
     if (authUser.isSuperAdmin) return { allowed: true, booking: b };
     if (authUser.isPlayer) {
-        const isOwner = Number(b.user_id) === Number(authUser.id) || (b.customer_phone && b.customer_phone === authUser.phone);
+        const isOwner = Boolean(b.customer_phone && authUser.phone && b.customer_phone === authUser.phone);
         return { allowed: isOwner, booking: b };
     }
     if (Number(b.academy_id) !== Number(authUser.academy_id)) return { allowed: false, booking: b };
@@ -72,8 +72,8 @@ export async function GET(request) {
 
         // Tenant Scoping
         if (authUser.isPlayer) {
-            sql += " AND (gb.user_id = ? OR (gb.customer_phone IS NOT NULL AND gb.customer_phone = ?))";
-            values.push(authUser.id, authUser.phone || "");
+            sql += " AND (gb.customer_phone IS NOT NULL AND gb.customer_phone = ?)";
+            values.push(authUser.phone || "");
         } else if (authUser.isBranchAdmin && authUser.branch_id) {
             sql += " AND g.academy_id = ? AND g.branch_id = ?";
             values.push(authUser.academy_id, authUser.branch_id);
@@ -354,7 +354,7 @@ export async function POST(request) {
         return NextResponse.json(
             {
                 success: false,
-                message: "Failed to add ground payment",
+                message: error.message || "Failed to add ground payment",
                 error: error.message,
             },
             { status: 500 }

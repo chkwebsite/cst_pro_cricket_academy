@@ -209,7 +209,7 @@ export async function GET(request) {
             LEFT JOIN cst_academy a
                 ON a.id = t.academy_id
 
-            INNER JOIN cst_branch b
+            LEFT JOIN cst_branch b
                 ON b.id = t.branch_id
 
             LEFT JOIN cst_users u

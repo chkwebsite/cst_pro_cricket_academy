@@ -85,10 +85,20 @@ export async function GET(request, { params }) {
         a.academy_name,
         b.branch_name,
         t.tournament_name,
+        (SELECT ttp.player_fee
+         FROM cst_tournament_team_players ttp
+         JOIN cst_tournament_teams tt ON tt.id = ttp.tournament_team_id
+         WHERE tt.tournament_id = m.tournament_id
+           AND (tt.team_id = m.team_a_id OR tt.team_id = m.team_b_id)
+           AND ttp.player_fee > 0
+         LIMIT 1) AS tournament_player_fee,
         ta.team_name AS team_a_name,
-            ta.team_code AS team_a_code,
-                tb.team_name AS team_b_name,
-                    tb.team_code AS team_b_code,
+        ta.team_code AS team_a_code,
+        ta.team_type AS team_a_type,
+
+        tb.team_name AS team_b_name,
+        tb.team_code AS team_b_code,
+        tb.team_type AS team_b_type,
                         tw.team_name AS toss_winner_team_name,
                             g.ground_name,
                             gb.booking_no
@@ -262,6 +272,9 @@ export async function PUT(request, { params }) {
             : old.match_no;
 
         const match_type = body.match_type ?? old.match_type;
+        const match_fee = body.match_fee !== undefined
+            ? Number(body.match_fee)
+            : old.match_fee !== null ? Number(old.match_fee) : 0;
         const match_date = body.match_date ?? old.match_date;
         const match_time = body.match_time !== undefined
             ? body.match_time
@@ -718,6 +731,7 @@ export async function PUT(request, { params }) {
         team_b_id = ?,
         match_no = ?,
         match_type = ?,
+        match_fee = ?,
         match_date = ?,
         match_time = ?,
         ground_id = ?,
@@ -737,6 +751,7 @@ export async function PUT(request, { params }) {
                 Number(team_b_id),
                 match_no || null,
                 match_type,
+                Number.isFinite(match_fee) && match_fee >= 0 ? match_fee : 0,
                 String(match_date).slice(0, 10),
                 match_time || null,
                 ground_id || null,
@@ -749,6 +764,25 @@ export async function PUT(request, { params }) {
                 matchId,
             ]
         );
+
+        if (body.team_a_fee !== undefined && body.team_a_fee !== null && body.team_a_fee !== "") {
+            const feeA = Number(body.team_a_fee);
+            if (Number.isFinite(feeA) && feeA >= 0) {
+                await connection.execute(
+                    `UPDATE cst_match_teams SET match_fee = ? WHERE match_id = ? AND team_side = 'A'`,
+                    [feeA, matchId]
+                );
+            }
+        }
+        if (body.team_b_fee !== undefined && body.team_b_fee !== null && body.team_b_fee !== "") {
+            const feeB = Number(body.team_b_fee);
+            if (Number.isFinite(feeB) && feeB >= 0) {
+                await connection.execute(
+                    `UPDATE cst_match_teams SET match_fee = ? WHERE match_id = ? AND team_side = 'B'`,
+                    [feeB, matchId]
+                );
+            }
+        }
 
         const [updatedRows] = await connection.execute(
             "SELECT * FROM cst_matches WHERE id = ?",

@@ -80,31 +80,28 @@ export async function GET(request) {
         const params = [];
 
         // Check authentication
-        const authHeader = request.headers.get("authorization");
-        if (authHeader) {
-            const { user: authUser } = await getAuthenticatedUser(request);
-            if (authUser) {
-                if (authUser.isPlayer) {
-                    sql += ` AND t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)`;
-                    params.push(authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                    sql += ` AND t.academy_id = ? AND t.branch_id = ?`;
-                    params.push(authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                    sql += ` AND t.academy_id = ?`;
-                    params.push(authUser.academy_id);
-                    if (branch_id) {
-                        sql += ` AND t.branch_id = ?`;
-                        params.push(Number(branch_id));
-                    }
-                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
-                    sql += ` AND t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`;
-                    params.push(authUser.academy_id, ...allowed);
-                } else {
-                    if (academy_id) { sql += ` AND t.academy_id = ?`; params.push(Number(academy_id)); }
-                    if (branch_id) { sql += ` AND t.branch_id = ?`; params.push(Number(branch_id)); }
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                sql += ` AND t.academy_id = ? AND (t.branch_id = ? OR t.branch_id IS NULL)`;
+                params.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += ` AND t.academy_id = ? AND t.branch_id = ?`;
+                params.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += ` AND t.academy_id = ?`;
+                params.push(authUser.academy_id);
+                if (branch_id) {
+                    sql += ` AND t.branch_id = ?`;
+                    params.push(Number(branch_id));
                 }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                sql += ` AND t.academy_id = ? AND t.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                params.push(authUser.academy_id, ...allowed);
+            } else {
+                if (academy_id) { sql += ` AND t.academy_id = ?`; params.push(Number(academy_id)); }
+                if (branch_id) { sql += ` AND t.branch_id = ?`; params.push(Number(branch_id)); }
             }
         } else {
             if (academy_id) { sql += ` AND t.academy_id = ?`; params.push(Number(academy_id)); }
@@ -322,9 +319,16 @@ export async function POST(request) {
             }
         }
 
-        const finalTeamFee = team_fee !== undefined && team_fee !== null && team_fee !== ""
+        const finalTeamFee = team_fee !== undefined && team_fee !== null && String(team_fee).trim() !== ""
             ? Number(team_fee)
             : Number(tournament.team_fee || 0);
+
+        if (!Number.isFinite(finalTeamFee) || finalTeamFee < 0) {
+            return NextResponse.json(
+                { success: false, message: "Team fee cannot be negative" },
+                { status: 400 }
+            );
+        }
 
         const finalRegNo = registration_no && registration_no.trim()
             ? registration_no.trim().toUpperCase()

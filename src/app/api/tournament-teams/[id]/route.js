@@ -103,15 +103,12 @@ export async function GET(request, { params }) {
         const registration = rows[0];
 
         // Check authentication
-        const authHeader = request.headers.get("authorization");
-        if (authHeader) {
-            const { user: authUser } = await getAuthenticatedUser(request);
-            if (authUser && !isTournamentAuthorized(registration, authUser)) {
-                return NextResponse.json(
-                    { success: false, message: "Tournament team not found or access denied" },
-                    { status: 404 }
-                );
-            }
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser && !isTournamentAuthorized(registration, authUser)) {
+            return NextResponse.json(
+                { success: false, message: "Tournament team not found or access denied" },
+                { status: 404 }
+            );
         }
 
         return NextResponse.json({
@@ -196,6 +193,16 @@ export async function PUT(request, { params }) {
             status
         } = body;
 
+        if (team_fee !== undefined && team_fee !== null && team_fee !== "") {
+            const parsedFee = Number(team_fee);
+            if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+                return NextResponse.json(
+                    { success: false, message: "Team fee cannot be negative" },
+                    { status: 400 }
+                );
+            }
+        }
+
         await connection.query(
             `
             UPDATE cst_tournament_teams
@@ -210,7 +217,7 @@ export async function PUT(request, { params }) {
             [
                 registration_no || null,
                 registered_date || null,
-                team_fee !== undefined ? Number(team_fee) : null,
+                team_fee !== undefined && team_fee !== null && team_fee !== "" ? Number(team_fee) : null,
                 payment_status || null,
                 status || null,
                 regId

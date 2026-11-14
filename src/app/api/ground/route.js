@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
+import { getNextGroundCode } from "@/app/components/lib/grounds";
 
 
 // ======================================================
@@ -21,6 +22,16 @@ export async function GET(request) {
         connection = await pool.getConnection();
 
         const { searchParams } = new URL(request.url);
+
+        if (searchParams.get("next_code") === "true" || searchParams.get("next_no") === "true") {
+            const { user: authUser } = await getAuthenticatedUser(request);
+            const academyIdParam = searchParams.get("academy_id");
+            const academyId =
+                academyIdParam ||
+                (authUser && !authUser.isSuperAdmin ? authUser.academy_id : null);
+            const nextInfo = await getNextGroundCode({ academyId, connection });
+            return NextResponse.json(nextInfo);
+        }
 
         const name = searchParams.get("name")?.trim() || "";
         const code = searchParams.get("code")?.trim() || "";
@@ -306,7 +317,7 @@ export async function POST(request) {
         }
 
         // ==========================================
-        // CHECK DUPLICATE GROUND CODE
+        // CHECK DUPLICATE GROUND CODE (scoped to academy)
         // ==========================================
 
         const [existingCode] = await connection.execute(
@@ -314,10 +325,11 @@ export async function POST(request) {
             SELECT id
             FROM cst_ground
             WHERE ground_code = ?
+            AND academy_id = ?
             AND is_deleted = 0
             LIMIT 1
             `,
-            [ground_code.trim()]
+            [ground_code.trim(), Number(academy_id)]
         );
 
         if (existingCode.length > 0) {

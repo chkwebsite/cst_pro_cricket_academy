@@ -55,24 +55,21 @@ export async function GET(request) {
         const conditions = [];
         const values = [];
 
-        const authHeader = request.headers.get("authorization");
-        if (authHeader) {
-            const { user: authUser } = await getAuthenticatedUser(request);
-            if (authUser) {
-                if (authUser.isPlayer) {
-                    conditions.push("(m.academy_id = ? AND (m.branch_id = ? OR m.branch_id IS NULL))");
-                    values.push(authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isBranchAdmin && authUser.branch_id) {
-                    conditions.push("(m.academy_id = ? AND m.branch_id = ?)");
-                    values.push(authUser.academy_id, authUser.branch_id);
-                } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-                    conditions.push("m.academy_id = ?");
-                    values.push(authUser.academy_id);
-                } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-                    const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
-                    conditions.push(`m.academy_id = ? AND m.branch_id IN (${allowed.map(() => "?").join(",")})`);
-                    values.push(authUser.academy_id, ...allowed);
-                }
+        const { user: authUser } = await getAuthenticatedUser(request);
+        if (authUser) {
+            if (authUser.isPlayer) {
+                conditions.push("(m.academy_id = ? AND (m.branch_id = ? OR m.branch_id IS NULL))");
+                values.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                conditions.push("(m.academy_id = ? AND m.branch_id = ?)");
+                values.push(authUser.academy_id, authUser.branch_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                conditions.push("m.academy_id = ?");
+                values.push(authUser.academy_id);
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                const allowed = (authUser.assignedBranchIds || [authUser.branch_id]).map(Number);
+                conditions.push(`m.academy_id = ? AND m.branch_id IN (${allowed.map(() => "?").join(",")})`);
+                values.push(authUser.academy_id, ...allowed);
             }
         }
 
@@ -105,6 +102,7 @@ export async function GET(request) {
                 mt.created_at,
                 t.team_name,
                 t.team_code,
+                t.team_type,
                 m.match_no,
                 m.match_date,
                 m.academy_id,

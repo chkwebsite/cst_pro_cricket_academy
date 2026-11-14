@@ -3,6 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useUser } from "../components/UserContext";
 
 const CODE_PREFIX = "GD-CODE-";
 
@@ -20,11 +21,21 @@ const EMPTY_FORM = {
     status: 1,
 };
 
-export default function GroundForm({ id = null }) {
+export default function GroundForm({ id = null, initialGroundCode = "", defaultAcademyId = "" }) {
     const router = useRouter();
     const isEdit = Boolean(id);
+    const { user } = useUser();
+    const isSuper = user?.role === "super_admin" || user?.role_name === "Super Admin" || user?.user_type === "super_admin";
+    const userAcademyId = user?.academy_id ? String(user.academy_id) : "";
 
-    const [formData, setFormData] = useState(EMPTY_FORM);
+    const [suggestedGroundCode, setSuggestedGroundCode] = useState(initialGroundCode || "GD-CODE-001");
+    const [manualCode, setManualCode] = useState(false);
+    const [formData, setFormData] = useState(() => ({
+        ...EMPTY_FORM,
+        academy_id: !id && (defaultAcademyId || userAcademyId) ? Number(defaultAcademyId || userAcademyId) : "",
+        ground_code: !id && initialGroundCode ? initialGroundCode : "",
+    }));
+
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [academies, setAcademies] = useState([]);
@@ -33,27 +44,87 @@ export default function GroundForm({ id = null }) {
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState("");
 
-    // GENERATE NEXT GROUND CODE  ->  GD-code-001, GD-code-002, ...
+    // Auto-set academy_id for non-super admins once user session is ready
+    useEffect(() => {
+        if (!isEdit && !formData.academy_id && userAcademyId) {
+            setFormData((prev) => ({
+                ...prev,
+                academy_id: Number(userAcademyId),
+            }));
+        }
+    }, [isEdit, userAcademyId, formData.academy_id]);
+
+    // Keep initial ground code in sync if passed from server component
+    useEffect(() => {
+        if (initialGroundCode && !isEdit) {
+            setSuggestedGroundCode(initialGroundCode);
+            setFormData((prev) => {
+                if (!manualCode || !prev.ground_code) {
+                    return { ...prev, ground_code: initialGroundCode };
+                }
+                return prev;
+            });
+        }
+    }, [initialGroundCode, isEdit, manualCode]);
+
+    // Automatically fetch next ground code academy-wise whenever academy changes
+    useEffect(() => {
+        if (isEdit) return;
+
+        const controller = new AbortController();
+        const fetchNextCode = async () => {
+            try {
+                const currentAcademyId = formData.academy_id || defaultAcademyId || userAcademyId || "";
+                const params = new URLSearchParams();
+                if (currentAcademyId) params.set("academy_id", String(currentAcademyId));
+                const query = params.toString();
+
+                const res = await fetch(`/api/ground/next-code${query ? `?${query}` : ""}`, {
+                    signal: controller.signal,
+                });
+                const result = await res.json();
+                if (result.success && result.next_ground_code) {
+                    setSuggestedGroundCode(result.next_ground_code);
+                    setFormData((prev) => {
+                        // If user hasn't typed a custom code or input is empty, auto-fill
+                        if (!manualCode || !prev.ground_code) {
+                            return { ...prev, ground_code: result.next_ground_code };
+                        }
+                        return prev;
+                    });
+                }
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    console.error("Failed to fetch next ground code:", err);
+                }
+            }
+        };
+
+        fetchNextCode();
+        return () => controller.abort();
+    }, [isEdit, formData.academy_id, defaultAcademyId, userAcademyId, manualCode]);
+
+    // GENERATE / REFRESH NEXT GROUND CODE ACADEMY-WISE
     const handleGenerateCode = async () => {
         try {
             setGenerating(true);
             setError("");
+            setManualCode(false);
 
-            const res = await fetch("/api/ground");
+            const currentAcademyId = formData.academy_id || defaultAcademyId || userAcademyId || "";
+            const params = new URLSearchParams();
+            if (currentAcademyId) params.set("academy_id", String(currentAcademyId));
+            const query = params.toString();
+
+            const res = await fetch(`/api/ground/next-code${query ? `?${query}` : ""}`);
             const json = await res.json();
 
             if (!res.ok || !json.success) {
                 throw new Error(json.message || "Unable to generate ground code");
             }
 
-            // Find the highest existing GD-code-XXX number
-            const pattern = /^GD-CODE-(\d+)$/i;
-            const maxNumber = (json.data || []).reduce((max, g) => {
-                const match = pattern.exec(g.ground_code || "");
-                return match ? Math.max(max, parseInt(match[1], 10)) : max;
-            }, 0);
-
-            const nextCode = `${CODE_PREFIX}${String(maxNumber + 1).padStart(3, "0")}`;
+            const nextCode = json.next_ground_code || `${CODE_PREFIX}001`;
+            setSuggestedGroundCode(nextCode);
             setFormData((prev) => ({ ...prev, ground_code: nextCode }));
         } catch (err) {
             setError(err.message);
@@ -144,7 +215,11 @@ export default function GroundForm({ id = null }) {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (name === "ground_code") {
+            setManualCode(true);
+        }
         if (name === "academy_id") {
+            setManualCode(false);
             setFormData((prev) => ({
                 ...prev,
                 academy_id: value === "" ? "" : Number(value),
@@ -237,6 +312,7 @@ export default function GroundForm({ id = null }) {
                             className="form-select"
                             value={formData.academy_id}
                             onChange={handleChange}
+                            disabled={!isSuper && Boolean(userAcademyId)}
                             required
                         >
                             <option value="">Select Academy</option>
@@ -292,7 +368,7 @@ export default function GroundForm({ id = null }) {
                                     className="form-control"
                                     value={formData.ground_code}
                                     onChange={handleChange}
-                                    placeholder="GD-code-001"
+                                    placeholder="GD-CODE-001"
                                     disabled={isEdit}
                                     required
                                 />
@@ -302,8 +378,9 @@ export default function GroundForm({ id = null }) {
                                         className="btn btn-outline-primary"
                                         onClick={handleGenerateCode}
                                         disabled={generating}
+                                        title={`Generate next code (${suggestedGroundCode || "GD-CODE-001"})`}
                                     >
-                                        <RefreshCw size={16} className="me-1" />
+                                        <RefreshCw size={16} className={`me-1 ${generating ? "spin" : ""}`} />
                                         {generating ? "Generating..." : "Generate"}
                                     </button>
                                 )}
