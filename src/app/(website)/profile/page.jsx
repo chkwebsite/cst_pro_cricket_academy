@@ -173,7 +173,7 @@ function ProfileContent() {
                   {displayName}
                 </h3>
                 <span
-                  className="badge"
+                  className="badge position-static"
                   style={{
                     backgroundColor: "var(--navy)",
                     color: "var(--lime)",

@@ -840,3 +840,58 @@ tbody tr{transition:background .25s}tbody tr:hover{background:var(--cream)}
   color: #ffffff;
 }
 
+
+/* ==========================================================
+   13. COMPATIBILITY & ALIGNMENT FIXES
+   website.css (Bootstrap-era) and this file are loaded together.
+   These rules stop the two from fighting each other.
+   ========================================================== */
+
+/* Hero: website.css adds 70/130px padding on top of .hero__inner's own
+   90/170px, leaving ~300px of empty space under the hero content. */
+.hero{display:block;padding:0}
+
+/* Top bar: website.css padding stacked on the container padding. */
+.topbar{padding:0}
+
+/* Nav dropdown: bridge the 8px gap so the menu does not close while the
+   pointer travels from the trigger to the first item. */
+.dropdown::before{content:"";position:absolute;left:0;right:0;top:-10px;height:10px}
+
+/* Header cart button: .btn clips overflow, which cut off the item-count
+   bubble. Let it show and drop the shimmer that would spill out. */
+.header__cta .btn.position-relative{overflow:visible}
+.header__cta .btn.position-relative::after{display:none}
+
+/* Buttons: Bootstrap's .btn:hover / :focus-visible / :active read
+   --bs-btn-hover-* variables that our .btn--* variants never define, so
+   hovering made the background transparent and the text dark. */
+.btn--red:is(:hover,:focus-visible),.btn.btn--red:active{background:var(--red-d);color:#fff;border-color:var(--red-d)}
+.btn--navy:is(:hover,:focus-visible),.btn.btn--navy:active{background:#0b3a47;color:#fff;border-color:#0b3a47}
+.btn--ghost:is(:hover,:focus-visible),.btn.btn--ghost:active{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.6)}
+.btn--outline{color:var(--navy)}
+.btn--outline:is(:hover,:focus-visible),.btn.btn--outline:active{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+/* Footer social icons: website.css gave them a cream fill and side margins,
+   so the white icons vanished and the spacing was uneven. */
+.footer .social a{background:transparent;color:#fff;margin:0}
+.footer .social a:hover{background:var(--green);color:#fff}
+
+/* .card is also Bootstrap's .card. Drop its default border, and do not lift
+   form / checkout / policy cards on hover (only the design cards lift). */
+.card{border:0}
+.card:is(.rounded-4,.shadow-sm,.shadow-lg,.border):hover{transform:none}
+
+/* .badge: the absolute-positioned image badge must not hit Bootstrap
+   badges (bg-danger, bg-light ...), which were jumping to the top-left. */
+.badge[class*="bg-"],.badge.position-static{
+  position:static;top:auto;left:auto;z-index:auto;
+  padding:.35em .65em;border-radius:.375rem;
+  font-size:.75em;font-weight:700;letter-spacing:0;line-height:1;
+}
+
+/* Global resets (ul list-style, p margin) removed bullets, indent and
+   paragraph spacing from the long-form policy / terms pages. */
+.card.p-md-5 :is(ul,ol){list-style:revert;padding-left:1.5rem;margin:0 0 1rem}
+.card.p-md-5 li{margin-bottom:.4rem}
+.card.p-md-5 p:not([class]){margin-bottom:1rem}
