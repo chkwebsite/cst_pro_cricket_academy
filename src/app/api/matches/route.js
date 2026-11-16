@@ -160,10 +160,30 @@ export async function GET(request) {
         tb.team_code AS team_b_code,
         tb.team_type AS team_b_type,
 
-                        tw.team_name AS toss_winner_team_name,
+        (SELECT CONCAT(
+            COALESCE(total_runs, 0),
+            '/',
+            COALESCE(total_wickets, 0),
+            IF(total_overs IS NOT NULL AND total_overs != '' AND total_overs != '0', CONCAT(' (', total_overs, ' ov)'), '')
+         )
+         FROM cst_match_innings
+         WHERE match_id = m.id AND batting_team_id = m.team_a_id
+         ORDER BY innings_no DESC LIMIT 1) AS team_a_score,
 
-                            g.ground_name,
-                            gb.booking_no
+        (SELECT CONCAT(
+            COALESCE(total_runs, 0),
+            '/',
+            COALESCE(total_wickets, 0),
+            IF(total_overs IS NOT NULL AND total_overs != '' AND total_overs != '0', CONCAT(' (', total_overs, ' ov)'), '')
+         )
+         FROM cst_match_innings
+         WHERE match_id = m.id AND batting_team_id = m.team_b_id
+         ORDER BY innings_no DESC LIMIT 1) AS team_b_score,
+
+        tw.team_name AS toss_winner_team_name,
+
+        g.ground_name,
+        gb.booking_no
 
         FROM cst_matches m
 

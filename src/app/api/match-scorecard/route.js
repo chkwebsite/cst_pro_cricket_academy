@@ -10,9 +10,6 @@ export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
         const authUser = await getAuthenticatedUser(request);
-        if (!authUser) {
-            return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
-        }
 
         const match_id = searchParams.get("match_id");
         const innings_id = searchParams.get("innings_id");
@@ -43,51 +40,53 @@ export async function GET(request) {
 
         const values = [];
 
-        if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
-            if (authUser.academy_id) {
+        if (authUser) {
+            if (authUser.isPlayer || authUser.role === "PLAYER" || String(authUser.user_type || "").toLowerCase().includes("player")) {
+                if (authUser.academy_id) {
+                    sql += " AND m.academy_id = ?";
+                    values.push(authUser.academy_id);
+                }
+                sql += " AND m.id IN (SELECT match_id FROM cst_match_players WHERE user_id = ?)";
+                values.push(authUser.id);
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND m.branch_id = ? AND m.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
                 sql += " AND m.academy_id = ?";
                 values.push(authUser.academy_id);
-            }
-            sql += " AND m.id IN (SELECT match_id FROM cst_match_players WHERE user_id = ?)";
-            values.push(authUser.id);
-        } else if (authUser.isBranchAdmin && authUser.branch_id) {
-            sql += " AND m.branch_id = ? AND m.academy_id = ?";
-            values.push(authUser.branch_id, authUser.academy_id);
-        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-            sql += " AND m.academy_id = ?";
-            values.push(authUser.academy_id);
-            const branchIdParam = searchParams.get("branch_id");
-            if (branchIdParam) {
-                sql += " AND m.branch_id = ?";
-                values.push(Number(branchIdParam));
-            }
-        } else if (authUser.isAccountant && authUser.academy_id) {
-            sql += " AND m.academy_id = ?";
-            values.push(authUser.academy_id);
-            if (authUser.branch_id) {
-                sql += " AND m.branch_id = ?";
-                values.push(authUser.branch_id);
-            } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
-                sql += ` AND m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`;
-                values.push(...authUser.accessibleBranchIds);
-            }
-        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-            sql += " AND m.academy_id = ?";
-            values.push(authUser.academy_id);
-            if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
-                sql += ` AND (m.branch_id IS NULL OR m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`;
-                values.push(...authUser.accessibleBranchIds);
-            }
-        } else if (authUser.isSuperAdmin) {
-            const academyIdParam = searchParams.get("academy_id");
-            if (academyIdParam) {
+                const branchIdParam = searchParams.get("branch_id");
+                if (branchIdParam) {
+                    sql += " AND m.branch_id = ?";
+                    values.push(Number(branchIdParam));
+                }
+            } else if (authUser.isAccountant && authUser.academy_id) {
                 sql += " AND m.academy_id = ?";
-                values.push(Number(academyIdParam));
-            }
-            const branchIdParam = searchParams.get("branch_id");
-            if (branchIdParam) {
-                sql += " AND m.branch_id = ?";
-                values.push(Number(branchIdParam));
+                values.push(authUser.academy_id);
+                if (authUser.branch_id) {
+                    sql += " AND m.branch_id = ?";
+                    values.push(authUser.branch_id);
+                } else if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                    sql += ` AND m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")})`;
+                    values.push(...authUser.accessibleBranchIds);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND m.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                    sql += ` AND (m.branch_id IS NULL OR m.branch_id IN (${authUser.accessibleBranchIds.map(() => "?").join(",")}))`;
+                    values.push(...authUser.accessibleBranchIds);
+                }
+            } else if (authUser.isSuperAdmin) {
+                const academyIdParam = searchParams.get("academy_id");
+                if (academyIdParam) {
+                    sql += " AND m.academy_id = ?";
+                    values.push(Number(academyIdParam));
+                }
+                const branchIdParam = searchParams.get("branch_id");
+                if (branchIdParam) {
+                    sql += " AND m.branch_id = ?";
+                    values.push(Number(branchIdParam));
+                }
             }
         }
 
