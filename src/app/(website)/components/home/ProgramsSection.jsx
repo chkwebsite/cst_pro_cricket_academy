@@ -76,6 +76,30 @@ const FALLBACK_PROGRAMS = [
     unit: "/ camp",
     badge: "badge--navy",
   },
+  {
+    id: 5,
+    title: "High Performance Elite Batch",
+    code: "CST-ELT",
+    academy: "Sports Mantra Cricket Academy",
+    branch: "Match Arena",
+    desc: "BCCI coach led advanced masterclasses, video analysis, and competitive tournament prep.",
+    image: "/images/website/program-high-performance.jpg",
+    price: "₹3,500",
+    unit: "/ mo",
+    badge: "",
+  },
+  {
+    id: 6,
+    title: "1-on-1 Specialist Coaching",
+    code: "CST-1ON1",
+    academy: "CST Pro Cricket Academy",
+    branch: "All Campuses",
+    desc: "Personalized batting technique correction and bowling biomechanics assessment.",
+    image: "/images/website/program-one-to-one.jpg",
+    price: "₹4,000",
+    unit: "/ mo",
+    badge: "badge--navy",
+  },
 ];
 
 export default function ProgramsSection({
@@ -85,7 +109,6 @@ export default function ProgramsSection({
   actionLink = "/programs",
 }) {
   const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
-  const [currentSlide, setCurrentSlide] = useState(0);
   const sliderRef = useRef(null);
 
   useEffect(() => {
@@ -110,7 +133,14 @@ export default function ProgramsSection({
             unit: "/ mo",
             badge: idx % 2 === 1 ? "badge--navy" : "",
           }));
-          setPrograms(mapped);
+
+          // Supplement with fallbacks if fewer than 4 to keep slick slider smooth
+          if (mapped.length < 4) {
+            const remaining = FALLBACK_PROGRAMS.slice(mapped.length);
+            setPrograms([...mapped, ...remaining]);
+          } else {
+            setPrograms(mapped);
+          }
         }
       } catch (err) {
         // Fallback already in place
@@ -123,7 +153,7 @@ export default function ProgramsSection({
     };
   }, []);
 
-  // Slick Slider Settings: 4 records on desktop
+  // Slick Slider Settings: 4 records on desktop, fully responsive on tablets & mobile
   const sliderSettings = {
     dots: true,
     infinite: programs.length > 4,
@@ -133,8 +163,12 @@ export default function ProgramsSection({
     autoplay: true,
     autoplaySpeed: 4000,
     pauseOnHover: true,
+    swipe: true,
+    swipeToSlide: true,
+    touchMove: true,
+    touchThreshold: 10,
     arrows: false,
-    beforeChange: (_, next) => setCurrentSlide(next),
+    adaptiveHeight: false,
     responsive: [
       {
         breakpoint: 1200,
@@ -158,6 +192,7 @@ export default function ProgramsSection({
           slidesToShow: 1,
           slidesToScroll: 1,
           infinite: programs.length > 1,
+          dots: true,
         },
       },
     ],
@@ -166,7 +201,7 @@ export default function ProgramsSection({
   return (
     <section className="section section--cream position-relative overflow-hidden" id="programs">
       <div className="container">
-        {/* Section Header with Navigation Controls */}
+        {/* Section Header with Responsive Navigation Controls */}
         <div
           className="section-head section-head--left mb-4"
           data-reveal
@@ -175,11 +210,11 @@ export default function ProgramsSection({
             flexWrap: "wrap",
             justifyContent: "space-between",
             alignItems: "end",
-            gap: "20px",
+            gap: "16px",
             maxWidth: "none",
           }}
         >
-          <div>
+          <div style={{ flex: "1 1 280px" }}>
             <span className="eyebrow">{tag}</span>
             <h2 className="title mb-0">
               FIND YOUR PERFECT <em>TRAINING PROGRAM</em>
@@ -212,14 +247,14 @@ export default function ProgramsSection({
               </button>
             </div>
 
-            <Link className="btn btn--outline btn--sm ms-md-2" href={actionLink}>
+            <Link className="btn btn--outline btn--sm" href={actionLink}>
               All Programs →
             </Link>
           </div>
         </div>
 
-        {/* Slick Slider Container */}
-        <div className="position-relative" style={{ margin: "0 -12px" }}>
+        {/* Slick Slider Responsive Container */}
+        <div className="cst-slider-wrapper">
           <Slider ref={sliderRef} {...sliderSettings}>
             {programs.map((p, i) => (
               <div key={p.id || i} className="h-100">
@@ -278,7 +313,7 @@ export default function ProgramsSection({
                     </p>
 
                     <div className="program__meta mt-auto pt-2 border-top d-flex align-items-center justify-content-between">
-                      <span className="price fw-bold" style={{ color: "var(--red)", fontSize: "1.1rem" }}>
+                      <span className="price fw-bold" style={{ color: "var(--red)", fontSize: "1.05rem" }}>
                         {p.price} <small className="text-muted fw-normal" style={{ fontSize: "0.8rem" }}>{p.unit || "/ mo"}</small>
                       </span>
 

@@ -52,6 +52,24 @@ const FALLBACK_COACHES = [
     experience: 8,
     image: "/images/website/program-high-performance.jpg",
   },
+  {
+    id: 4,
+    name: "Sanjay Verma",
+    role: "Spin Bowling Mentor",
+    academy: "Sports Mantra Cricket Academy",
+    branch: "Sector 48 Campus",
+    experience: 12,
+    image: "/images/website/program-one-to-one.jpg",
+  },
+  {
+    id: 5,
+    name: "Manoj Rawat",
+    role: "Fielding & High Performance",
+    academy: "CST Pro Cricket Academy",
+    branch: "South Campus",
+    experience: 9,
+    image: "/assets/img/about-2.jpg",
+  },
 ];
 
 export default function CoachesSection({
@@ -103,8 +121,8 @@ export default function CoachesSection({
             };
           });
 
-          // If less than 3, add fallback to ensure nice 3-column slider display
-          if (mapped.length < 3) {
+          // If less than 4, add fallbacks to ensure rich responsive slider
+          if (mapped.length < 4) {
             const remaining = FALLBACK_COACHES.slice(mapped.length);
             setCoaches([...mapped, ...remaining]);
           } else {
@@ -121,7 +139,7 @@ export default function CoachesSection({
     };
   }, []);
 
-  // Slick Slider Settings: 3 records on desktop
+  // Slick Slider Settings: 3 records on desktop, responsive across tablets and phones
   const sliderSettings = {
     dots: true,
     infinite: coaches.length > 3,
@@ -131,7 +149,12 @@ export default function CoachesSection({
     autoplay: true,
     autoplaySpeed: 4000,
     pauseOnHover: true,
+    swipe: true,
+    swipeToSlide: true,
+    touchMove: true,
+    touchThreshold: 10,
     arrows: false,
+    adaptiveHeight: false,
     responsive: [
       {
         breakpoint: 992,
@@ -147,6 +170,7 @@ export default function CoachesSection({
           slidesToShow: 1,
           slidesToScroll: 1,
           infinite: coaches.length > 1,
+          dots: true,
         },
       },
     ],
@@ -155,7 +179,7 @@ export default function CoachesSection({
   return (
     <section className="section section--dark position-relative overflow-hidden" id="coaches">
       <div className="container">
-        {/* Section Header with Slider Navigation */}
+        {/* Section Header with Responsive Slider Navigation */}
         <div
           className="section-head section-head--left mb-4"
           data-reveal
@@ -164,11 +188,11 @@ export default function CoachesSection({
             flexWrap: "wrap",
             justifyContent: "space-between",
             alignItems: "end",
-            gap: "20px",
+            gap: "16px",
             maxWidth: "none",
           }}
         >
-          <div>
+          <div style={{ flex: "1 1 280px" }}>
             <span className="eyebrow">{tag}</span>
             <h2 className="title mb-0">
               LEARN FROM THE <em>BEST</em>
@@ -201,14 +225,14 @@ export default function CoachesSection({
               </button>
             </div>
 
-            <Link className="btn btn--ghost btn--sm ms-md-2" href="/coaches">
+            <Link className="btn btn--ghost btn--sm" href="/coaches">
               All Coaches →
             </Link>
           </div>
         </div>
 
-        {/* Slick Slider Container - 3 Records in Desktop Version */}
-        <div className="position-relative" style={{ margin: "0 -12px" }}>
+        {/* Slick Slider Responsive Container */}
+        <div className="cst-slider-wrapper">
           <Slider ref={sliderRef} {...sliderSettings}>
             {coaches.map((c, i) => {
               const numStr = String(i + 1).padStart(2, "0");
@@ -218,7 +242,7 @@ export default function CoachesSection({
                   <article
                     className="coach h-100 position-relative"
                     style={{
-                      minHeight: "440px",
+                      minHeight: "420px",
                       borderRadius: "22px",
                       overflow: "hidden",
                     }}

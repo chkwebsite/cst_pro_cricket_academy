@@ -74,6 +74,44 @@ const FALLBACK_BRANCHES = [
       "Night Floodlights",
     ],
   },
+  {
+    id: "branch-4",
+    name: "Sports Mantra Academy - Sec 48",
+    academy: "Sports Mantra Cricket Academy",
+    tag: "SKILLS HUB",
+    badgeClass: "badge--navy",
+    tagline: "Turf Practice & Bowling Automation",
+    address: "Sector 48, Sohna Road, Gurugram, Haryana, 122018",
+    phone: "8285831503",
+    hours: "Mon–Sat · 6:00 AM – 8:00 PM",
+    status: "OPEN TODAY",
+    image: "/images/uploads/grounds/1790854770381-164112.png",
+    facilities: [
+      "3 Turf Pitches",
+      "Automated Bowling Machine",
+      "Video Analysis",
+      "Fitness Studio",
+    ],
+  },
+  {
+    id: "branch-5",
+    name: "CST Cricket Arena - South Campus",
+    academy: "CST Pro Cricket Academy",
+    tag: "OUTDOOR COMPLEX",
+    badgeClass: "badge--red",
+    tagline: "Turf Match Ground & Coaching Center",
+    address: "Sohna South, Gurugram, Haryana, 122103",
+    phone: "9971109868",
+    hours: "All Days · 6:00 AM – 9:00 PM",
+    status: "OPEN TODAY",
+    image: "/images/uploads/grounds/1790854818236-328687.png",
+    facilities: [
+      "Curated Turf Pitch",
+      "High-Lux Lights",
+      "Indoor Nets",
+      "Player Lounge",
+    ],
+  },
 ];
 
 function resolveBranchImage(branch, idx) {
@@ -158,7 +196,9 @@ export default function BranchesSection({
                   ? "MAIN CAMPUS & HQ"
                   : idx === 1
                   ? "TRAINING CAMPUS"
-                  : "MATCH GROUND & COMPLEX",
+                  : idx === 2
+                  ? "MATCH GROUND & COMPLEX"
+                  : "BRANCH CAMPUS",
               badgeClass:
                 idx === 0 ? "badge--red" : idx === 1 ? "badge--navy" : "",
               tagline:
@@ -176,8 +216,8 @@ export default function BranchesSection({
             };
           });
 
-          // If less than 3 returned, supplement with fallbacks for smooth carousel
-          if (mapped.length < 3) {
+          // If less than 4 returned, supplement with fallbacks for smooth carousel
+          if (mapped.length < 4) {
             const remaining = FALLBACK_BRANCHES.slice(mapped.length);
             setBranches([...mapped, ...remaining]);
           } else {
@@ -195,7 +235,7 @@ export default function BranchesSection({
     };
   }, []);
 
-  // Slick Slider Settings: 3 records on desktop
+  // Slick Slider Settings: 3 records on desktop, responsive across tablets and phones
   const sliderSettings = {
     dots: true,
     infinite: branches.length > 3,
@@ -205,7 +245,12 @@ export default function BranchesSection({
     autoplay: true,
     autoplaySpeed: 4500,
     pauseOnHover: true,
+    swipe: true,
+    swipeToSlide: true,
+    touchMove: true,
+    touchThreshold: 10,
     arrows: false,
+    adaptiveHeight: false,
     responsive: [
       {
         breakpoint: 992,
@@ -221,6 +266,7 @@ export default function BranchesSection({
           slidesToShow: 1,
           slidesToScroll: 1,
           infinite: branches.length > 1,
+          dots: true,
         },
       },
     ],
@@ -247,7 +293,7 @@ export default function BranchesSection({
       </div>
 
       <div className="container" style={{ position: "relative", zIndex: 2 }}>
-        {/* Section Header with Navigation Controls */}
+        {/* Section Header with Responsive Navigation Controls */}
         <div
           className="section-head section-head--left mb-4"
           data-reveal
@@ -256,11 +302,11 @@ export default function BranchesSection({
             flexWrap: "wrap",
             justifyContent: "space-between",
             alignItems: "end",
-            gap: "20px",
+            gap: "16px",
             maxWidth: "none",
           }}
         >
-          <div>
+          <div style={{ flex: "1 1 280px" }}>
             <span className="eyebrow">{tag}</span>
             <h2 className="title mb-0">{title}</h2>
             <p className="lead mt-2 mb-0">{subtitle}</p>
@@ -292,14 +338,14 @@ export default function BranchesSection({
               </button>
             </div>
 
-            <Link className="btn btn--outline btn--sm ms-md-2" href="/branches">
+            <Link className="btn btn--outline btn--sm" href="/branches">
               All Branches →
             </Link>
           </div>
         </div>
 
-        {/* Slick Slider Container */}
-        <div className="position-relative" style={{ margin: "0 -12px" }}>
+        {/* Slick Slider Responsive Container */}
+        <div className="cst-slider-wrapper">
           <Slider ref={sliderRef} {...sliderSettings}>
             {branches.map((b, i) => (
               <div key={b.id || i} className="h-100">
@@ -351,7 +397,7 @@ export default function BranchesSection({
                   <div
                     className="branch__body d-flex flex-column flex-grow-1"
                     style={{
-                      padding: "22px 20px",
+                      padding: "20px 18px",
                     }}
                   >
                     <div className="d-flex align-items-center justify-content-between mb-2">
@@ -359,7 +405,7 @@ export default function BranchesSection({
                         <span className="branch__status-dot"></span>
                         {b.status}
                       </span>
-                      <small className="text-muted fw-semibold">
+                      <small className="text-muted fw-semibold text-truncate ms-2" title={b.academy}>
                         {b.academy}
                       </small>
                     </div>
@@ -368,7 +414,7 @@ export default function BranchesSection({
                       style={{
                         fontFamily: "var(--font)",
                         fontWeight: 700,
-                        fontSize: "19px",
+                        fontSize: "18px",
                         color: "var(--navy)",
                         marginBottom: "4px",
                         lineHeight: 1.3,
@@ -381,7 +427,7 @@ export default function BranchesSection({
                         fontSize: "12.5px",
                         color: "var(--green-d)",
                         fontWeight: 600,
-                        marginBottom: "12px",
+                        marginBottom: "10px",
                       }}
                     >
                       {b.tagline}
@@ -389,14 +435,14 @@ export default function BranchesSection({
 
                     {/* Location */}
                     <div className="branch__meta-row mb-2">
-                      <MapPin size={16} className="text-danger flex-shrink-0" />
-                      <span className="small text-muted">{b.address}</span>
+                      <MapPin size={15} className="text-danger flex-shrink-0" />
+                      <span className="small text-muted text-truncate" title={b.address}>{b.address}</span>
                     </div>
 
                     {/* Contact and hours */}
                     <div className="branch__meta-row mb-3">
-                      <Clock size={16} className="text-muted flex-shrink-0" />
-                      <span className="small text-muted">
+                      <Clock size={15} className="text-muted flex-shrink-0" />
+                      <span className="small text-muted text-truncate">
                         {b.phone} · {b.hours}
                       </span>
                     </div>
