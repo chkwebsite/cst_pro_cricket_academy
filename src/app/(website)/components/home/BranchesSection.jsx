@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import Slider from "react-slick";
+import { ChevronLeft, ChevronRight, MapPin, Phone, Clock, Navigation } from "lucide-react";
 
 const GROUND_PHOTOS = [
   "/images/uploads/grounds/1790854770374-50134.png",
@@ -15,6 +17,7 @@ const FALLBACK_BRANCHES = [
   {
     id: "branch-1",
     name: "CST Pro Cricket Academy (Main)",
+    academy: "CST Pro Cricket Academy",
     tag: "MAIN CAMPUS & HQ",
     badgeClass: "badge--red",
     tagline: "High-Performance Center & Headquarters",
@@ -34,6 +37,7 @@ const FALLBACK_BRANCHES = [
   {
     id: "branch-2",
     name: "Dhananjay Cricket Academy",
+    academy: "CST Pro Cricket Academy",
     tag: "TRAINING CAMPUS",
     badgeClass: "badge--navy",
     tagline: "Elite Practice Nets & Skill Hub",
@@ -53,6 +57,7 @@ const FALLBACK_BRANCHES = [
   {
     id: "branch-3",
     name: "Sports Mantra Match Ground",
+    academy: "Sports Mantra Cricket Academy",
     tag: "MATCH GROUND & COMPLEX",
     badgeClass: "",
     tagline: "Tournament Ground & Floodlit Arena",
@@ -114,11 +119,13 @@ export default function BranchesSection({
   subtitle = "Train close to home. Visit any branch for a free trial session.",
 }) {
   const [branches, setBranches] = useState(FALLBACK_BRANCHES);
+  const sliderRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
     async function loadBranches() {
       try {
+        // Fetch all active branches across all academies
         const res = await fetch("/api/branch?status=1");
         if (!res.ok) return;
         const json = await res.json();
@@ -131,13 +138,13 @@ export default function BranchesSection({
           : [];
 
         if (isMounted && rawBranches.length > 0) {
-          const mapped = rawBranches.slice(0, 3).map((b, idx) => {
+          const mapped = rawBranches.map((b, idx) => {
             const bName = b.branch_name || b.name || `Branch ${idx + 1}`;
             const addressParts = [
               b.address_line || b.address,
               b.city,
               b.state,
-              b.pincode,
+              b.pin_code || b.pincode,
             ]
               .filter(Boolean)
               .join(", ");
@@ -145,6 +152,7 @@ export default function BranchesSection({
             return {
               id: b.id || `branch-${idx}`,
               name: bName,
+              academy: b.academy_name || "Cricket Academy",
               tag:
                 idx === 0
                   ? "MAIN CAMPUS & HQ"
@@ -168,7 +176,7 @@ export default function BranchesSection({
             };
           });
 
-          // If less than 3 returned from API, supplement with fallbacks
+          // If less than 3 returned, supplement with fallbacks for smooth carousel
           if (mapped.length < 3) {
             const remaining = FALLBACK_BRANCHES.slice(mapped.length);
             setBranches([...mapped, ...remaining]);
@@ -187,13 +195,44 @@ export default function BranchesSection({
     };
   }, []);
 
+  // Slick Slider Settings: 3 records on desktop
+  const sliderSettings = {
+    dots: true,
+    infinite: branches.length > 3,
+    speed: 500,
+    slidesToShow: 3,
+    slidesToScroll: 1,
+    autoplay: true,
+    autoplaySpeed: 4500,
+    pauseOnHover: true,
+    arrows: false,
+    responsive: [
+      {
+        breakpoint: 992,
+        settings: {
+          slidesToShow: 2,
+          slidesToScroll: 1,
+          infinite: branches.length > 2,
+        },
+      },
+      {
+        breakpoint: 640,
+        settings: {
+          slidesToShow: 1,
+          slidesToScroll: 1,
+          infinite: branches.length > 1,
+        },
+      },
+    ],
+  };
+
   return (
     <section
       className="section"
       id="branches"
       style={{ position: "relative", overflow: "hidden", background: "var(--cream)" }}
     >
-      {/* Floating Bubble Wave Animation (10-15% Opacity) */}
+      {/* Floating Bubble Wave Animation */}
       <div className="bubble-wave-container" aria-hidden="true">
         <span className="bubble-wave-item b1"></span>
         <span className="bubble-wave-item b2"></span>
@@ -208,208 +247,203 @@ export default function BranchesSection({
       </div>
 
       <div className="container" style={{ position: "relative", zIndex: 2 }}>
-        <div className="section-head" data-reveal>
-          <span className="eyebrow">{tag}</span>
-          <h2 className="title">{title}</h2>
-          <p className="lead">{subtitle}</p>
-        </div>
-
+        {/* Section Header with Navigation Controls */}
         <div
-          className="grid grid--3"
+          className="section-head section-head--left mb-4"
+          data-reveal
           style={{
-            maxWidth: "1280px",
-            margin: "0 auto",
-            alignItems: "stretch",
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            alignItems: "end",
+            gap: "20px",
+            maxWidth: "none",
           }}
         >
-          {branches.map((b, i) => (
-            <article
-              className="card branch"
-              data-reveal
-              style={{
-                "--d": i,
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                background: "#ffffff",
-                boxShadow: "0 10px 30px -10px rgba(7, 30, 38, 0.08)",
-                transition: "transform 0.3s ease, box-shadow 0.3s ease",
-              }}
-              key={b.id || i}
-            >
-              {/* Media banner */}
-              <div
-                className="media"
-                style={{
-                  aspectRatio: "16/10",
-                  overflow: "hidden",
-                  position: "relative",
-                  background: "var(--navy)",
-                }}
+          <div>
+            <span className="eyebrow">{tag}</span>
+            <h2 className="title mb-0">{title}</h2>
+            <p className="lead mt-2 mb-0">{subtitle}</p>
+          </div>
+
+          {/* Slider Prev / Next Controls & View All */}
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <div className="d-flex align-items-center gap-2 bg-white p-1 px-2 rounded-pill shadow-sm border">
+              <button
+                type="button"
+                onClick={() => sliderRef.current?.slickPrev()}
+                className="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center p-0"
+                style={{ width: "36px", height: "36px", transition: "all 0.2s ease" }}
+                aria-label="Previous Branches"
+                title="Previous Branches"
               >
-                <span
-                  className={`badge ${b.badgeClass}`}
-                  style={{
-                    position: "absolute",
-                    top: "14px",
-                    left: "14px",
-                    zIndex: 2,
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  {b.tag}
-                </span>
-                <img
-                  src={b.image}
-                  alt={b.name}
-                  loading="lazy"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    transition: "transform 0.5s ease",
-                  }}
-                />
-              </div>
+                <ChevronLeft size={18} />
+              </button>
 
-              {/* Branch body */}
-              <div
-                className="branch__body"
-                style={{
-                  padding: "24px 22px",
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: 1,
-                }}
+              <button
+                type="button"
+                onClick={() => sliderRef.current?.slickNext()}
+                className="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center p-0"
+                style={{ width: "36px", height: "36px", transition: "all 0.2s ease" }}
+                aria-label="Next Branches"
+                title="Next Branches"
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span className="branch__status-pill">
-                    <span className="branch__status-dot"></span>
-                    {b.status}
-                  </span>
-                </div>
+                <ChevronRight size={18} />
+              </button>
+            </div>
 
-                <h3
+            <Link className="btn btn--outline btn--sm ms-md-2" href="/branches">
+              All Branches →
+            </Link>
+          </div>
+        </div>
+
+        {/* Slick Slider Container */}
+        <div className="position-relative" style={{ margin: "0 -12px" }}>
+          <Slider ref={sliderRef} {...sliderSettings}>
+            {branches.map((b, i) => (
+              <div key={b.id || i} className="h-100">
+                <article
+                  className="card branch h-100 d-flex flex-column"
                   style={{
-                    fontFamily: "var(--font)",
-                    fontWeight: 700,
-                    fontSize: "19px",
-                    color: "var(--navy)",
-                    marginBottom: "4px",
-                    lineHeight: 1.3,
+                    background: "#ffffff",
+                    borderRadius: "20px",
+                    overflow: "hidden",
+                    boxShadow: "0 10px 30px -10px rgba(7, 30, 38, 0.08)",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
                   }}
                 >
-                  {b.name}
-                </h3>
-                <p
-                  style={{
-                    fontSize: "12.5px",
-                    color: "var(--green-d)",
-                    fontWeight: 600,
-                    marginBottom: "12px",
-                  }}
-                >
-                  {b.tagline}
-                </p>
-
-                {/* Location */}
-                <div className="branch__meta-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16">
-                    <path
-                      d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <circle cx="12" cy="10" r="3" strokeWidth="2" />
-                  </svg>
-                  <span>{b.address}</span>
-                </div>
-
-                {/* Contact and hours */}
-                <div className="branch__meta-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16">
-                    <circle cx="12" cy="12" r="10" strokeWidth="2" />
-                    <path d="M12 6v6l4 2" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  <span>
-                    {b.phone} · {b.hours}
-                  </span>
-                </div>
-
-                {/* Facilities tags */}
-                <div className="branch__facilities">
-                  {b.facilities.map((fac, idx) => (
-                    <span key={idx} className="branch__tag">
-                      {fac}
+                  {/* Media banner */}
+                  <div
+                    className="media position-relative"
+                    style={{
+                      aspectRatio: "16/10",
+                      overflow: "hidden",
+                      background: "var(--navy)",
+                    }}
+                  >
+                    <span
+                      className={`badge ${b.badgeClass}`}
+                      style={{
+                        position: "absolute",
+                        top: "14px",
+                        left: "14px",
+                        zIndex: 2,
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      {b.tag}
                     </span>
-                  ))}
-                </div>
+                    <img
+                      src={b.image}
+                      alt={b.name}
+                      loading="lazy"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        transition: "transform 0.5s ease",
+                      }}
+                    />
+                  </div>
 
-                {/* Actions */}
-                <div
-                  className="branch__actions"
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    marginTop: "auto",
-                    paddingTop: "16px",
-                  }}
-                >
-                  <a
-                    className="btn btn--navy btn--sm"
-                    href={`tel:${b.phone}`}
-                    style={{ flex: 1, textAlign: "center", justifyContent: "center" }}
+                  {/* Branch body */}
+                  <div
+                    className="branch__body d-flex flex-column flex-grow-1"
+                    style={{
+                      padding: "22px 20px",
+                    }}
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="14"
-                      height="14"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ marginRight: "4px" }}
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <span className="branch__status-pill">
+                        <span className="branch__status-dot"></span>
+                        {b.status}
+                      </span>
+                      <small className="text-muted fw-semibold">
+                        {b.academy}
+                      </small>
+                    </div>
+
+                    <h3
+                      style={{
+                        fontFamily: "var(--font)",
+                        fontWeight: 700,
+                        fontSize: "19px",
+                        color: "var(--navy)",
+                        marginBottom: "4px",
+                        lineHeight: 1.3,
+                      }}
                     >
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                    </svg>
-                    Call Now
-                  </a>
-                  <a
-                    className="btn btn--outline btn--sm"
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      `${b.name}, ${b.address}`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ flex: 1, textAlign: "center", justifyContent: "center" }}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="14"
-                      height="14"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ marginRight: "4px" }}
+                      {b.name}
+                    </h3>
+                    <p
+                      style={{
+                        fontSize: "12.5px",
+                        color: "var(--green-d)",
+                        fontWeight: 600,
+                        marginBottom: "12px",
+                      }}
                     >
-                      <path d="m3 11 19-9-9 19-2-8-8-2z" />
-                    </svg>
-                    Directions
-                  </a>
-                </div>
+                      {b.tagline}
+                    </p>
+
+                    {/* Location */}
+                    <div className="branch__meta-row mb-2">
+                      <MapPin size={16} className="text-danger flex-shrink-0" />
+                      <span className="small text-muted">{b.address}</span>
+                    </div>
+
+                    {/* Contact and hours */}
+                    <div className="branch__meta-row mb-3">
+                      <Clock size={16} className="text-muted flex-shrink-0" />
+                      <span className="small text-muted">
+                        {b.phone} · {b.hours}
+                      </span>
+                    </div>
+
+                    {/* Facilities tags */}
+                    <div className="branch__facilities mb-3 flex-grow-1">
+                      {b.facilities.map((fac, idx) => (
+                        <span key={idx} className="branch__tag">
+                          {fac}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Actions */}
+                    <div
+                      className="branch__actions mt-auto pt-3 border-top d-flex gap-2"
+                    >
+                      <a
+                        className="btn btn--navy btn--sm flex-fill justify-content-center text-center"
+                        href={`tel:${b.phone}`}
+                      >
+                        <Phone size={14} className="me-1" />
+                        Call Now
+                      </a>
+                      <a
+                        className="btn btn--outline btn--sm flex-fill justify-content-center text-center"
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                          `${b.name}, ${b.address}`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Navigation size={14} className="me-1" />
+                        Directions
+                      </a>
+                    </div>
+                  </div>
+                </article>
               </div>
-            </article>
-          ))}
+            ))}
+          </Slider>
         </div>
 
         {/* Bottom CTA */}
-        <div className="center" style={{ marginTop: "44px" }} data-reveal>
+        <div className="center" style={{ marginTop: "40px" }} data-reveal>
           <Link className="btn btn--navy" href="/branches">
-            View All Branches &rarr;
+            View All Branches →
           </Link>
         </div>
 
@@ -430,7 +464,7 @@ export default function BranchesSection({
               textDecoration: "underline",
             }}
           >
-            Talk to our team &rarr;
+            Talk to our team →
           </Link>
         </p>
       </div>

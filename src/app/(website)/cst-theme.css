@@ -1744,3 +1744,130 @@ tbody tr{transition:background .25s}tbody tr:hover{background:var(--cream)}
     font-size: 12px;
   }
 }
+
+/* ==========================================================
+   Slick Carousel Custom Styling for CST Cricket Academy
+   ========================================================== */
+.slick-slider {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.slick-slider .slick-track {
+  display: flex !important;
+  align-items: stretch;
+}
+
+.slick-slider .slick-slide {
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.slick-slider .slick-slide > div {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
+}
+
+/* Custom Slick Dots */
+.slick-slider .slick-dots {
+  position: static;
+  margin-top: 32px;
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.slick-slider .slick-dots li {
+  margin: 0;
+  width: auto;
+  height: auto;
+}
+
+.slick-slider .slick-dots li button {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(7, 30, 38, 0.25);
+  border: none;
+  font-size: 0;
+  line-height: 0;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.slick-slider .slick-dots li button:hover {
+  background: var(--red);
+  transform: scale(1.2);
+}
+
+.slick-slider .slick-dots li.slick-active button {
+  width: 28px;
+  background: var(--red);
+  border-radius: 999px;
+}
+
+/* Dark Section Dots (e.g., Our Team / Coaches) */
+.section--dark .slick-slider .slick-dots li button {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.section--dark .slick-slider .slick-dots li button:hover {
+  background: var(--red);
+}
+
+.section--dark .slick-slider .slick-dots li.slick-active button {
+  background: var(--red);
+}
+
+/* Slick Custom Arrows */
+.cst-slick-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--navy);
+  box-shadow: 0 4px 16px rgba(7, 30, 38, 0.15);
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(7, 30, 38, 0.1);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.cst-slick-arrow:hover {
+  background: var(--red);
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(229, 30, 58, 0.35);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.cst-slick-arrow--prev {
+  left: -20px;
+}
+
+.cst-slick-arrow--next {
+  right: -20px;
+}
+
+@media (max-width: 991px) {
+  .cst-slick-arrow--prev { left: 4px; }
+  .cst-slick-arrow--next { right: 4px; }
+}
