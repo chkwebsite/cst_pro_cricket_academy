@@ -39,14 +39,34 @@ const isTodayMatch = (dateStr) => {
     return d === todayIST || d === todayLocal;
 };
 
+const isPastMatch = (dateStr) => {
+    if (!dateStr) return false;
+    const d = String(dateStr).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    const cmpDate = todayIST || todayLocal;
+    return Boolean(d && cmpDate && d < cmpDate);
+};
+
 const getEffectiveStatus = (item) => {
     const raw = String(item?.status || "").trim();
     const lower = raw.toLowerCase();
-    if (lower === "completed" || lower === "cancelled") {
-        return raw || "Completed";
+    if (lower === "cancelled") {
+        return "Cancelled";
+    }
+    if (lower === "completed") {
+        return "Completed";
     }
     if (isTodayMatch(item?.match_date)) {
         return "Live";
+    }
+    if (isPastMatch(item?.match_date)) {
+        return "Completed";
     }
     return raw || "Scheduled";
 };
@@ -259,12 +279,20 @@ export default function MatchesPage() {
                                     {pagedMatches.map((item, idx) => {
                                         const effStatus = getEffectiveStatus(item);
                                         const closed = effStatus === "Completed" || effStatus === "Cancelled";
+                                        const isPast = isPastMatch(item.match_date);
+                                        const hasScoreboard = item.has_scoreboard !== undefined
+                                            ? Boolean(item.has_scoreboard)
+                                            : (Number(item.innings_count) > 0 || Number(item.scorecard_count) > 0 || Boolean(item.team_a_score || item.team_b_score));
+                                        const showWaitNotice = (effStatus === "Completed" || isPast) && !hasScoreboard;
                                         return (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
                                                 <td>
                                                     <div>{item.match_no || `Match #${item.id}`}</div>
                                                     <span className="badge text-bg-light border">{item.match_type}</span>
+                                                    {item.overs && (
+                                                        <span className="badge bg-secondary ms-1">{item.overs} Ov</span>
+                                                    )}
                                                     {item.tournament_name && (
                                                         <small className="text-muted d-block mt-1">
                                                             <Trophy size={12} className="me-1" />{item.tournament_name}
@@ -280,6 +308,19 @@ export default function MatchesPage() {
                                                     <small className="text-muted">
                                                         {item.team_a_code} · {item.team_b_code}
                                                     </small>
+                                                    {(item.team_a_score || item.team_b_score) ? (
+                                                        <div className="small text-primary mt-1">
+                                                            {item.team_a_score && <span>{item.team_a_code}: {item.team_a_score}</span>}
+                                                            {item.team_a_score && item.team_b_score && <span className="mx-1">|</span>}
+                                                            {item.team_b_score && <span>{item.team_b_code}: {item.team_b_score}</span>}
+                                                        </div>
+                                                    ) : showWaitNotice ? (
+                                                        <div className="mt-1">
+                                                            <span className="badge bg-warning text-dark border border-warning-subtle">
+                                                                Wait to update records
+                                                            </span>
+                                                        </div>
+                                                    ) : null}
                                                 </td>
                                                 <td>
                                                     <div>{formatDate(item.match_date)}</div>
@@ -321,13 +362,20 @@ export default function MatchesPage() {
                                                         {effStatus === 'Live' && <span className="spinner-grow spinner-grow-sm" style={{ width: "6px", height: "6px" }} />}
                                                         {effStatus}
                                                     </span>
+                                                    {showWaitNotice && (
+                                                        <div className="mt-1">
+                                                            <span className="badge bg-warning text-dark border border-warning-subtle">
+                                                                Wait to update records
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <div className="d-flex justify-content-start gap-2">
                                                         <Link
                                                             href={`/next_panel/matches/${item.id}/scorecard`}
-                                                            className="btn btn-outline-primary"
-                                                            title="Match Scorecard Center"
+                                                            className={`btn ${showWaitNotice ? "btn-warning text-dark" : "btn-outline-primary"}`}
+                                                            title={showWaitNotice ? "Scorecard pending - Wait to update records" : "Match Scorecard Center"}
                                                             aria-label="Scorecard"
                                                         >
                                                             <Trophy size={16} />

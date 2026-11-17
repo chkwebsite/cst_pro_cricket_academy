@@ -38,6 +38,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
     const [matches, setMatches] = useState([]);
     const [inningsList, setInningsList] = useState([]);
     const [bowlingPlayers, setBowlingPlayers] = useState([]);
+    const [existingBowling, setExistingBowling] = useState([]);
 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
@@ -150,6 +151,29 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
         return () => controller.abort();
     }, [formData.match_id, formData.innings_id, inningsList]);
 
+    // Fetch existing bowling entries for the selected innings to calculate overs mismatch
+    useEffect(() => {
+        if (!formData.innings_id) {
+            setExistingBowling([]);
+            return;
+        }
+        const controller = new AbortController();
+        (async () => {
+            try {
+                const res = await fetch(`/api/match-bowling-scorecard?innings_id=${formData.innings_id}`, {
+                    signal: controller.signal,
+                });
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    setExistingBowling(json.data || []);
+                }
+            } catch {
+                /* ignore */
+            }
+        })();
+        return () => controller.abort();
+    }, [formData.innings_id]);
+
     const handleMatchChange = (mId) => {
         setFormData((prev) => ({
             ...prev,
@@ -200,6 +224,36 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
 
         const balls = oversToBalls(formData.overs);
 
+        if (exceedsMatchLimit) {
+            setError(`Overs mismatch! Bowler's overs (${formData.overs}) cannot exceed the match limit of ${matchOvers} overs (${maxMatchBalls} balls).`);
+            return;
+        }
+
+        if (exceedsInningsLimit) {
+            setError(`Overs mismatch! Innings total is ${currentInnings?.total_overs} overs (${inningsTotalBalls} balls). Other bowlers bowled ${otherBowlersBalls} balls. This bowler can bowl at most ${maxAllowedBalls} balls (~${maxAllowedOversFormatted} overs).`);
+            return;
+        }
+
+        if (widesExceeded) {
+            setError(`Wides (wd) mismatch! Innings total wides is ${inningsWides}. Other bowlers bowled ${otherWides} wides. This bowler can have at most ${maxAllowedWides} wide(s).`);
+            return;
+        }
+
+        if (noBallsExceeded) {
+            setError(`No-balls (nb) mismatch! Innings total no-balls is ${inningsNoBalls}. Other bowlers bowled ${otherNoBalls} no-balls. This bowler can have at most ${maxAllowedNoBalls} no-ball(s).`);
+            return;
+        }
+
+        if (wicketsExceeded) {
+            setError(`Wickets (W) mismatch! Innings total wickets is ${inningsWickets}. Other bowlers took ${otherWickets} wickets. This bowler can take at most ${maxAllowedWickets} wicket(s).`);
+            return;
+        }
+
+        if (extrasExceeded) {
+            setError(`Extras mismatch! Total bowler extras (${otherWides + enteredWides + otherNoBalls + enteredNoBalls}) cannot exceed innings total extras (${inningsExtras}).`);
+            return;
+        }
+
         const payload = {
             match_id: Number(formData.match_id),
             innings_id: Number(formData.innings_id),
@@ -239,6 +293,59 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
             setLoading(false);
         }
     };
+
+    const selectedMatch = matches.find((m) => String(m.id) === String(formData.match_id));
+    const matchOvers = selectedMatch?.overs ? Number(selectedMatch.overs) : 20;
+    const maxMatchBalls = matchOvers * 6;
+
+    const currentInnings = inningsList.find((i) => String(i.id) === String(formData.innings_id));
+    const rawInningsOvers = Number(currentInnings?.total_overs) || 0;
+    const inningsTotalBalls = currentInnings?.total_balls ? Number(currentInnings.total_balls) : oversToBalls(rawInningsOvers);
+
+    const otherBowlersBalls = existingBowling
+        .filter((b) => !isEdit || String(b.id) !== String(id))
+        .reduce((sum, b) => sum + (Number(b.balls_bowled) || 0), 0);
+
+    const enteredBalls = isValidCricketOvers(formData.overs) ? oversToBalls(formData.overs) : 0;
+    const maxAllowedBalls = inningsTotalBalls > 0 ? Math.max(0, inningsTotalBalls - otherBowlersBalls) : maxMatchBalls;
+    const maxAllowedOversFormatted = `${Math.floor(maxAllowedBalls / 6)}.${maxAllowedBalls % 6}`;
+
+    const exceedsMatchLimit = enteredBalls > maxMatchBalls;
+    const exceedsInningsLimit = inningsTotalBalls > 0 && (otherBowlersBalls + enteredBalls > inningsTotalBalls);
+    const oversExceeded = exceedsMatchLimit || exceedsInningsLimit;
+
+    // Extras & Wickets validations
+    const inningsWides = Number(currentInnings?.wides) || 0;
+    const inningsNoBalls = Number(currentInnings?.no_balls) || 0;
+    const inningsWickets = Number(currentInnings?.total_wickets) || 0;
+    const inningsExtras = Number(currentInnings?.extras) || 0;
+
+    const otherWides = existingBowling
+        .filter((b) => !isEdit || String(b.id) !== String(id))
+        .reduce((sum, b) => sum + (Number(b.wides) || 0), 0);
+
+    const otherNoBalls = existingBowling
+        .filter((b) => !isEdit || String(b.id) !== String(id))
+        .reduce((sum, b) => sum + (Number(b.no_balls) || 0), 0);
+
+    const otherWickets = existingBowling
+        .filter((b) => !isEdit || String(b.id) !== String(id))
+        .reduce((sum, b) => sum + (Number(b.wickets) || 0), 0);
+
+    const enteredWides = Number(formData.wides) || 0;
+    const enteredNoBalls = Number(formData.no_balls) || 0;
+    const enteredWickets = Number(formData.wickets) || 0;
+
+    const maxAllowedWides = Math.max(0, inningsWides - otherWides);
+    const maxAllowedNoBalls = Math.max(0, inningsNoBalls - otherNoBalls);
+    const maxAllowedWickets = Math.max(0, inningsWickets - otherWickets);
+
+    const widesExceeded = currentInnings && (otherWides + enteredWides > inningsWides);
+    const noBallsExceeded = currentInnings && (otherNoBalls + enteredNoBalls > inningsNoBalls);
+    const wicketsExceeded = currentInnings && (otherWickets + enteredWickets > inningsWickets);
+    const extrasExceeded = inningsExtras > 0 && ((otherWides + enteredWides + otherNoBalls + enteredNoBalls) > inningsExtras);
+
+    const hasValidationErrors = oversExceeded || widesExceeded || noBallsExceeded || wicketsExceeded || extrasExceeded;
 
     const economyPreview = calculateEconomy(formData.runs_conceded, formData.balls_bowled);
 
@@ -323,6 +430,58 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                     </select>
                 </div>
 
+                {/* Innings Overs, Extras & Wickets Tracker */}
+                {(inningsTotalBalls > 0 || selectedMatch) && (
+                    <div className="col-12">
+                        <div className={`p-3 rounded-3 border ${hasValidationErrors ? "bg-danger-subtle border-danger" : "bg-light border"}`}>
+                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                <div>
+                                    <span className="fw-semibold text-dark me-2">Match Limit:</span>
+                                    <span className="badge bg-primary fs-6 me-3">{matchOvers} ov ({maxMatchBalls} balls)</span>
+                                    {inningsTotalBalls > 0 && (
+                                        <>
+                                            <span className="fw-semibold text-dark me-2">Innings Total:</span>
+                                            <span className="badge bg-info fs-6">{currentInnings?.total_overs} ov ({inningsTotalBalls} balls)</span>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="d-flex flex-wrap gap-3 text-muted small">
+                                    <span>Other Bowlers: <strong className="text-dark">{otherBowlersBalls} balls</strong></span>
+                                    <span>Max Overs: <strong className={oversExceeded ? "text-danger fw-bold" : "text-success fw-bold"}>~{maxAllowedOversFormatted} ov</strong></span>
+                                    <span>Wides Left: <strong className={widesExceeded ? "text-danger fw-bold" : "text-dark"}>{maxAllowedWides} / {inningsWides}</strong></span>
+                                    <span>NB Left: <strong className={noBallsExceeded ? "text-danger fw-bold" : "text-dark"}>{maxAllowedNoBalls} / {inningsNoBalls}</strong></span>
+                                    <span>Wickets Left: <strong className={wicketsExceeded ? "text-danger fw-bold" : "text-dark"}>{maxAllowedWickets} / {inningsWickets}</strong></span>
+                                </div>
+                            </div>
+                            {oversExceeded && (
+                                <div className="text-danger small mt-1 fw-semibold">
+                                    ⚠️ Overs Mismatch! {exceedsMatchLimit ? `Entered overs exceeds match limit of ${matchOvers} overs.` : `Entered overs exceeds remaining balls (${maxAllowedBalls}) in this innings.`}
+                                </div>
+                            )}
+                            {widesExceeded && (
+                                <div className="text-danger small mt-1 fw-semibold">
+                                    ⚠️ Wides Mismatch! Innings total wides is {inningsWides}. Other bowlers bowled {otherWides} wides. Max allowed for this bowler is {maxAllowedWides}.
+                                </div>
+                            )}
+                            {noBallsExceeded && (
+                                <div className="text-danger small mt-1 fw-semibold">
+                                    ⚠️ No-balls Mismatch! Innings total no-balls is {inningsNoBalls}. Other bowlers bowled {otherNoBalls} no-balls. Max allowed for this bowler is {maxAllowedNoBalls}.
+                                </div>
+                            )}
+                            {wicketsExceeded && (
+                                <div className="text-danger small mt-1 fw-semibold">
+                                    ⚠️ Wickets Mismatch! Innings total wickets is {inningsWickets}. Other bowlers took {otherWickets} wickets. Max allowed for this bowler is {maxAllowedWickets}.
+                                </div>
+                            )}
+                            {extrasExceeded && !widesExceeded && !noBallsExceeded && (
+                                <div className="text-danger small mt-1 fw-semibold">
+                                    ⚠️ Extras Mismatch! Bowler extras ({otherWides + enteredWides + otherNoBalls + enteredNoBalls}) cannot exceed innings total extras ({inningsExtras}).
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* Bowling Figures Card */}
                 <div className="col-12">
                     <div className="card border-0 bg-light-subtle shadow-sm rounded-4 p-3">
@@ -341,7 +500,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                                     type="number"
                                     step="0.1"
                                     name="overs"
-                                    className="form-control"
+                                    className={`form-control ${oversExceeded ? "is-invalid" : ""}`}
                                     min="0"
                                     value={formData.overs}
                                     onChange={handleChange}
@@ -350,6 +509,11 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                                 <small className="text-muted d-block mt-1">
                                     Balls bowled: {formData.balls_bowled}
                                 </small>
+                                {oversExceeded && (
+                                    <div className="invalid-feedback">
+                                        Max allowed: ~{maxAllowedOversFormatted} ov ({maxAllowedBalls} balls)
+                                    </div>
+                                )}
                             </div>
 
                             <div className="col-md-3 col-6">
@@ -377,40 +541,69 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                             </div>
 
                             <div className="col-md-3 col-6">
-                                <label className="form-label small text-muted">Wickets (W)</label>
+                                <label className="form-label small text-muted d-flex justify-content-between">
+                                    <span>Wickets (W)</span>
+                                    {currentInnings && (
+                                        <span className="text-muted">Max: {maxAllowedWickets}</span>
+                                    )}
+                                </label>
                                 <input
                                     type="number"
                                     name="wickets"
-                                    className="form-control fw-bold text-danger"
+                                    className={`form-control fw-bold text-danger ${wicketsExceeded ? "is-invalid" : ""}`}
                                     min="0"
-                                    max="10"
                                     value={formData.wickets}
                                     onChange={handleChange}
                                 />
+                                {wicketsExceeded && (
+                                    <div className="invalid-feedback">
+                                        Max {maxAllowedWickets} (Innings: {inningsWickets})
+                                    </div>
+                                )}
                             </div>
 
                             <div className="col-md-6 col-6">
-                                <label className="form-label small text-muted">Wides (WD)</label>
+                                <label className="form-label small text-muted d-flex justify-content-between">
+                                    <span>Wides (WD)</span>
+                                    {currentInnings && (
+                                        <span className="text-muted">Max: {maxAllowedWides}</span>
+                                    )}
+                                </label>
                                 <input
                                     type="number"
                                     name="wides"
-                                    className="form-control"
+                                    className={`form-control ${widesExceeded ? "is-invalid" : ""}`}
                                     min="0"
                                     value={formData.wides}
                                     onChange={handleChange}
                                 />
+                                {widesExceeded && (
+                                    <div className="invalid-feedback">
+                                        Max {maxAllowedWides} (Innings: {inningsWides})
+                                    </div>
+                                )}
                             </div>
 
                             <div className="col-md-6 col-6">
-                                <label className="form-label small text-muted">No Balls (NB)</label>
+                                <label className="form-label small text-muted d-flex justify-content-between">
+                                    <span>No Balls (NB)</span>
+                                    {currentInnings && (
+                                        <span className="text-muted">Max: {maxAllowedNoBalls}</span>
+                                    )}
+                                </label>
                                 <input
                                     type="number"
                                     name="no_balls"
-                                    className="form-control"
+                                    className={`form-control ${noBallsExceeded ? "is-invalid" : ""}`}
                                     min="0"
                                     value={formData.no_balls}
                                     onChange={handleChange}
                                 />
+                                {noBallsExceeded && (
+                                    <div className="invalid-feedback">
+                                        Max {maxAllowedNoBalls} (Innings: {inningsNoBalls})
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -421,7 +614,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                     <Link href={returnTo} className="btn btn-outline-secondary px-4">
                         Cancel
                     </Link>
-                    <button type="submit" className="btn btn-primary px-4" disabled={loading}>
+                    <button type="submit" className="btn btn-primary px-4" disabled={loading || hasValidationErrors}>
                         {loading ? (
                             <>
                                 <RefreshCw className="spinner-border spinner-border-sm me-2" />

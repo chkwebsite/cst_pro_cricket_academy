@@ -302,6 +302,7 @@ export async function POST(request) {
             match_no,
             round_name = null,
             round_type = "League",
+            overs = null,
             team_a_id = null,
             team_b_id = null,
             scheduled_date = null,
@@ -561,6 +562,7 @@ export async function POST(request) {
                     match_no,
                     round_name,
                     round_type,
+                    overs,
                     team_a_id,
                     team_b_id,
                     scheduled_date,
@@ -570,7 +572,7 @@ export async function POST(request) {
                     status,
                     winner_team_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             [
                 tournamentId,
@@ -578,6 +580,7 @@ export async function POST(request) {
                 matchNo,
                 round_name || null,
                 round_type,
+                overs ? Number(overs) : 20,
                 teamAId,
                 teamBId,
                 scheduled_date || null,

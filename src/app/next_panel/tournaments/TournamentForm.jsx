@@ -45,6 +45,7 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
         tournament_name: initial?.tournament_name || "",
         tournament_code: initial?.tournament_code || "",
         tournament_type: initial?.tournament_type || "",
+        overs: initial?.overs != null ? String(initial.overs) : "20",
         category: initial?.category || "",
         age_group: initial?.age_group || "",
         description: initial?.description || "",
@@ -209,6 +210,7 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                 tournament_name: form.tournament_name.trim(),
                 tournament_code: form.tournament_code.trim(),
                 tournament_type: form.tournament_type,
+                overs: form.overs ? Number(form.overs) : 20,
                 category: form.category.trim() || null,
                 age_group: form.age_group.trim() || null,
                 description: form.description.trim() || null,
@@ -258,6 +260,7 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
         ["Name", form.tournament_name.trim()],
         ["Code", form.tournament_code.trim().toUpperCase()],
         ["Format", form.tournament_type],
+        ["Overs per match", form.overs ? `${form.overs} overs` : "20 overs"],
         ["Category", form.category.trim() || "-"],
         ["Age group", form.age_group.trim() || "-"],
         ["Dates", `${formatDate(form.start_date)} to ${form.end_date ? formatDate(form.end_date) : "not set"}`],
@@ -362,6 +365,21 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                         <option key={item.id} value={item.name}>{item.name}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div className="col-12 col-md-6">
+                                <label htmlFor="t-overs" className="form-label">Overs per Match <span className="text-danger">*</span></label>
+                                <input
+                                    id="t-overs"
+                                    type="number"
+                                    min="1"
+                                    max="100"
+                                    className="form-control"
+                                    value={form.overs}
+                                    onChange={(e) => setField("overs", e.target.value)}
+                                    placeholder="e.g. 20 (T20), 50 (ODI), 10 (T10)"
+                                />
+                                <div className="form-text">Default overs for matches in this tournament.</div>
                             </div>
 
                             <div className="col-12 col-md-8">

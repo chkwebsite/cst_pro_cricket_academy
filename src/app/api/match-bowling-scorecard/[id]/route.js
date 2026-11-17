@@ -129,7 +129,7 @@ export async function PUT(request, { params }) {
         connection = await pool.getConnection();
 
         const [existingRows] = await connection.execute(
-            `SELECT bs.*, m.academy_id, m.branch_id
+            `SELECT bs.*, m.academy_id, m.branch_id, m.overs AS match_overs
              FROM cst_match_bowling_scorecard bs
              INNER JOIN cst_matches m ON m.id = bs.match_id
              WHERE bs.id = ?`,
@@ -237,6 +237,119 @@ export async function PUT(request, { params }) {
                 },
                 { status: 400 }
             );
+        }
+
+        const matchOvers = existing.match_overs ? Number(existing.match_overs) : 20;
+        const maxMatchBalls = matchOvers * 6;
+
+        if (calculatedBalls > maxMatchBalls) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Overs mismatch! Bowler's overs (${updated.overs} = ${calculatedBalls} balls) cannot exceed the match limit of ${matchOvers} overs (${maxMatchBalls} balls).`,
+                },
+                { status: 400 }
+            );
+        }
+
+        // Validate bowler balls, wides, no-balls, and wickets against innings totals
+        const [inningsRows] = await connection.execute(
+            `SELECT total_overs, total_balls, total_wickets, extras, wides, no_balls FROM cst_match_innings WHERE id = ?`,
+            [existing.innings_id]
+        );
+
+        if (inningsRows.length > 0) {
+            const rawInningsBalls = inningsRows[0].total_balls ? Number(inningsRows[0].total_balls) : 0;
+            const rawInningsOvers = Number(inningsRows[0].total_overs) || 0;
+            const completeOversInn = Math.floor(rawInningsOvers);
+            const remBallsInn = Math.round((rawInningsOvers - completeOversInn) * 10);
+            const inningsTotalBalls = rawInningsBalls > 0 ? rawInningsBalls : (completeOversInn * 6 + (remBallsInn >= 0 && remBallsInn <= 5 ? remBallsInn : 0));
+
+            const [otherBowlersRows] = await connection.execute(
+                `SELECT 
+                    COALESCE(SUM(balls_bowled), 0) AS other_balls_bowled,
+                    COALESCE(SUM(wides), 0) AS other_wides,
+                    COALESCE(SUM(no_balls), 0) AS other_no_balls,
+                    COALESCE(SUM(wickets), 0) AS other_wickets
+                 FROM cst_match_bowling_scorecard
+                 WHERE innings_id = ? AND id != ?`,
+                [existing.innings_id, id]
+            );
+
+            const otherBallsBowled = Number(otherBowlersRows[0]?.other_balls_bowled) || 0;
+            const otherWides = Number(otherBowlersRows[0]?.other_wides) || 0;
+            const otherNoBalls = Number(otherBowlersRows[0]?.other_no_balls) || 0;
+            const otherWickets = Number(otherBowlersRows[0]?.other_wickets) || 0;
+
+            // 1. Overs validation
+            if (inningsTotalBalls > 0) {
+                const newTotalBallsBowled = otherBallsBowled + calculatedBalls;
+                if (newTotalBallsBowled > inningsTotalBalls) {
+                    const maxAllowedBalls = Math.max(0, inningsTotalBalls - otherBallsBowled);
+                    const maxAllowedOvers = `${Math.floor(maxAllowedBalls / 6)}.${maxAllowedBalls % 6}`;
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: `Overs mismatch! Innings total is ${inningsRows[0].total_overs} overs (${inningsTotalBalls} balls). Other bowlers have bowled ${otherBallsBowled} balls. This bowler can bowl at most ${maxAllowedBalls} balls (${maxAllowedOvers} overs), but ${calculatedBalls} balls (${updated.overs} overs) was entered.`,
+                        },
+                        { status: 400 }
+                    );
+                }
+            }
+
+            // 2. Wides (wd) validation
+            const inningsWides = Number(inningsRows[0].wides) || 0;
+            const updatedWides = Number(updated.wides) || 0;
+            if (otherWides + updatedWides > inningsWides) {
+                const maxAllowedWides = Math.max(0, inningsWides - otherWides);
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Wides (wd) mismatch! Innings total wides is ${inningsWides}. Other bowlers have already bowled ${otherWides} wides. This bowler cannot bowl ${updatedWides} wides (max allowed: ${maxAllowedWides}).`,
+                    },
+                    { status: 400 }
+                );
+            }
+
+            // 3. No-balls (nb) validation
+            const inningsNoBalls = Number(inningsRows[0].no_balls) || 0;
+            const updatedNoBalls = Number(updated.no_balls) || 0;
+            if (otherNoBalls + updatedNoBalls > inningsNoBalls) {
+                const maxAllowedNoBalls = Math.max(0, inningsNoBalls - otherNoBalls);
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `No-balls (nb) mismatch! Innings total no-balls is ${inningsNoBalls}. Other bowlers have already bowled ${otherNoBalls} no-balls. This bowler cannot bowl ${updatedNoBalls} no-balls (max allowed: ${maxAllowedNoBalls}).`,
+                    },
+                    { status: 400 }
+                );
+            }
+
+            // 4. Wickets (W) validation
+            const inningsWickets = Number(inningsRows[0].total_wickets) || 0;
+            const updatedWickets = Number(updated.wickets) || 0;
+            if (otherWickets + updatedWickets > inningsWickets) {
+                const maxAllowedWickets = Math.max(0, inningsWickets - otherWickets);
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Wickets (W) mismatch! Innings total wickets is ${inningsWickets}. Other bowlers have already taken ${otherWickets} wickets. This bowler cannot take ${updatedWickets} wickets (max allowed: ${maxAllowedWickets}).`,
+                    },
+                    { status: 400 }
+                );
+            }
+
+            // 5. Total Extras consistency check
+            const inningsExtras = Number(inningsRows[0].extras) || 0;
+            if (inningsExtras > 0 && ((otherWides + updatedWides) + (otherNoBalls + updatedNoBalls) > inningsExtras)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Extras mismatch! Total bowler extras (${otherWides + updatedWides} wides + ${otherNoBalls + updatedNoBalls} no-balls) cannot exceed innings total extras (${inningsExtras}).`,
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         // Recalculate economy on every update

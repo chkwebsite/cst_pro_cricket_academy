@@ -27,6 +27,7 @@ const isTodayMatch = (dateVal) => {
 const EMPTY_FORM = {
     match_no: "",
     match_type: "Friendly",
+    overs: "20",
     match_fee: "",
     status: "Scheduled",
     match_date: "",
@@ -255,6 +256,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                 setFormData({
                     match_no: d.match_no || "",
                     match_type: d.match_type || "Friendly",
+                    overs: d.overs != null ? String(d.overs) : "20",
                     match_fee: d.match_fee !== null && d.match_fee !== undefined ? String(d.match_fee) : "",
                     status: initialStatus,
                     match_date: dateStr,
@@ -347,6 +349,9 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                     if (!prev.team_a_fee) next.team_a_fee = feeStr;
                     if (!prev.team_b_fee) next.team_b_fee = feeStr;
                 }
+                if (tourney && tourney.overs) {
+                    next.overs = String(tourney.overs);
+                }
             }
             if (name === "team_a_id" && value && Number(value) === Number(prev.team_b_id)) {
                 next.team_b_id = "";
@@ -432,6 +437,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                 body: JSON.stringify({
                     match_no: formData.match_no.trim() || null,
                     match_type: formData.match_type,
+                    overs: formData.overs ? Number(formData.overs) : 20,
                     match_fee: formData.match_fee !== "" ? Number(formData.match_fee) : 0,
                     status: submitStatus,
                     match_date: formData.match_date,
@@ -489,7 +495,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
 
                 <form onSubmit={handleSubmit}>
                     <div className="row">
-                        <div className="col-md-4 mb-3">
+                        <div className="col-md-3 mb-3">
                             <label className="form-label">Match No. (optional)</label>
                             <div className="input-group">
                                 <input
@@ -514,7 +520,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                             </div>
                         </div>
 
-                        <div className="col-md-4 mb-3">
+                        <div className="col-md-3 mb-3">
                             <label className="form-label">Match Type</label>
                             <select
                                 name="match_type"
@@ -528,7 +534,25 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                             </select>
                         </div>
 
-                        <div className="col-md-4 mb-3">
+                        <div className="col-md-3 mb-3">
+                            <label className="form-label">
+                                Overs <span className="text-danger">*</span>
+                            </label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                name="overs"
+                                className="form-control"
+                                value={formData.overs}
+                                onChange={handleChange}
+                                placeholder="e.g. 20 (T20), 50 (ODI)"
+                                required
+                            />
+                            <div className="form-text">Allotted match overs.</div>
+                        </div>
+
+                        <div className="col-md-3 mb-3">
                             <label className="form-label">Status</label>
                             <select
                                 name="status"

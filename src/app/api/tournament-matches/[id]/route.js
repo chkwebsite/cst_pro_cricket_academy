@@ -236,6 +236,11 @@ export async function PUT(request, { params }) {
                 ? old.round_type
                 : body.round_type;
 
+        const overs =
+            body.overs === undefined
+                ? (old.overs ? Number(old.overs) : 20)
+                : (body.overs ? Number(body.overs) : 20);
+
         const teamAId =
             body.team_a_id === undefined
                 ? old.team_a_id
@@ -495,6 +500,7 @@ export async function PUT(request, { params }) {
                     match_no = ?,
                     round_name = ?,
                     round_type = ?,
+                    overs = ?,
                     team_a_id = ?,
                     team_b_id = ?,
                     scheduled_date = ?,
@@ -511,6 +517,7 @@ export async function PUT(request, { params }) {
                 matchNo,
                 roundName,
                 roundType,
+                overs,
                 teamAId,
                 teamBId,
                 scheduledDate,

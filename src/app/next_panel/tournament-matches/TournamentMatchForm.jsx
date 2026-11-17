@@ -29,6 +29,7 @@ const EMPTY_FORM = {
     match_no: "",
     round_name: "",
     round_type: "League",
+    overs: "20",
     team_a_id: "",
     team_b_id: "",
     scheduled_date: "",
@@ -231,6 +232,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     match_no: d.match_no ?? "",
                     round_name: d.round_name || "",
                     round_type: d.round_type || "League",
+                    overs: d.overs != null ? String(d.overs) : "20",
                     team_a_id: d.team_a_id ?? "",
                     team_b_id: d.team_b_id ?? "",
                     scheduled_date: d.scheduled_date ? String(d.scheduled_date).slice(0, 10) : "",
@@ -252,6 +254,12 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
         const { name, value } = e.target;
         setFormData((prev) => {
             const next = { ...prev, [name]: value };
+            if (name === "tournament_id" && value) {
+                const tourney = tournaments.find((t) => Number(t.id) === Number(value));
+                if (tourney && tourney.overs) {
+                    next.overs = String(tourney.overs);
+                }
+            }
             if (name === "ground_id" && value !== prev.ground_id) {
                 next.booking_id = "";
                 next.scheduled_time = "";
@@ -334,6 +342,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     match_no: matchNo,
                     round_name: formData.round_name.trim() || null,
                     round_type: formData.round_type,
+                    overs: formData.overs ? Number(formData.overs) : 20,
                     team_a_id: a,
                     team_b_id: b,
                     scheduled_date: formData.scheduled_date || null,
@@ -403,7 +412,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     </div>
 
                     <div className="row">
-                        <div className="col-md-6 mb-3">
+                        <div className="col-md-4 mb-3">
                             <label className="form-label">Round Type</label>
                             <select name="round_type" className="form-select" value={formData.round_type} onChange={handleChange}>
                                 {ROUND_TYPES.map((r) => (
@@ -411,7 +420,23 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                 ))}
                             </select>
                         </div>
-                        <div className="col-md-6 mb-3">
+                        <div className="col-md-4 mb-3">
+                            <label className="form-label">
+                                Overs <span className="text-danger">*</span>
+                            </label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                name="overs"
+                                className="form-control"
+                                value={formData.overs}
+                                onChange={handleChange}
+                                placeholder="e.g. 20 (T20), 50 (ODI)"
+                                required
+                            />
+                        </div>
+                        <div className="col-md-4 mb-3">
                             <label className="form-label">Round Name (optional)</label>
                             <input type="text" name="round_name" className="form-control" value={formData.round_name} onChange={handleChange} placeholder="e.g. Group A – Match 3" />
                         </div>

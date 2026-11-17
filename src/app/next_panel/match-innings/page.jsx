@@ -50,10 +50,10 @@ function getMatchResultText(match, innings) {
     const inn2 = innings.find((i) => Number(i.innings_no) === 2);
 
     if (inn1 && inn2) {
-        const r1 = Number(inn1.total_runs) || 0;
-        const r2 = Number(inn2.total_runs) || 0;
+        const r1 = inn1.target_runs ? Number(inn1.target_runs) : (Number(inn1.total_runs) + Number(inn1.extras || 0));
+        const r2 = inn2.target_runs ? Number(inn2.target_runs) : (Number(inn2.total_runs) + Number(inn2.extras || 0));
         const w2 = Number(inn2.total_wickets) || 0;
-        const target = inn2.target_runs ? Number(inn2.target_runs) : r1 + 1;
+        const target = inn2.target_runs ? Number(inn2.target_runs) : (inn1.target_runs ? Number(inn1.target_runs) : r1);
 
         if (r2 >= target) {
             const wicketsRemaining = Math.max(0, 10 - w2);
@@ -700,7 +700,16 @@ export default function MatchInningsPage() {
                                                         lineHeight: 1.1,
                                                     }}
                                                 >
-                                                    {item.total_runs}/{item.total_wickets}
+                                                    {item.target_runs ? item.target_runs : (Number(item.total_runs || 0) + Number(item.extras || 0))}/{item.total_wickets}
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        color: "#64748b",
+                                                        fontSize: "0.75rem",
+                                                        marginTop: "1px",
+                                                    }}
+                                                >
+                                                    {Number(item.extras || 0) > 0 ? `${item.total_runs} + ${item.extras} ex` : `${item.total_runs} runs`}
                                                 </div>
                                             </div>
 
@@ -752,19 +761,31 @@ export default function MatchInningsPage() {
                                             {/* Col 6: Target */}
                                             <div>
                                                 {item.target_runs ? (
-                                                    <span
-                                                        className="badge rounded-pill"
-                                                        style={{
-                                                            backgroundColor: "#e0f2fe",
-                                                            color: "#0284c7",
-                                                            fontWeight: 600,
-                                                            fontSize: "0.75rem",
-                                                            padding: "4px 12px",
-                                                            whiteSpace: "nowrap",
-                                                        }}
-                                                    >
-                                                        {item.target_runs} runs
-                                                    </span>
+                                                    <div>
+                                                        <span
+                                                            className="badge rounded-pill"
+                                                            style={{
+                                                                backgroundColor: "#e0f2fe",
+                                                                color: "#0284c7",
+                                                                fontWeight: 600,
+                                                                fontSize: "0.75rem",
+                                                                padding: "4px 12px",
+                                                                whiteSpace: "nowrap",
+                                                            }}
+                                                        >
+                                                            {item.target_runs} runs
+                                                        </span>
+                                                        <div
+                                                            style={{
+                                                                color: "#64748b",
+                                                                fontSize: "0.72rem",
+                                                                marginTop: "2px",
+                                                                whiteSpace: "nowrap",
+                                                            }}
+                                                        >
+                                                            Target for {item.bowling_team_name}
+                                                        </div>
+                                                    </div>
                                                 ) : (
                                                     <span style={{ color: "#94a3b8", fontSize: "1.1rem" }}>
                                                         —

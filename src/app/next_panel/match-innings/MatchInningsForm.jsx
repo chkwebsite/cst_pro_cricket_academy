@@ -105,14 +105,32 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
 
     // Current selected match object
     const selectedMatch = matches.find((m) => String(m.id) === String(formData.match_id));
+    const matchOvers = selectedMatch?.overs ? Number(selectedMatch.overs) : 20;
 
-    // When a match is selected in New mode, auto-set batting & bowling teams if available
+    // Auto-fill total_overs from selected match when match changes or loads in New mode
+    useEffect(() => {
+        if (!isEdit && selectedMatch) {
+            const mOvers = selectedMatch.overs ? Number(selectedMatch.overs) : 20;
+            setFormData((prev) => ({
+                ...prev,
+                total_overs: mOvers,
+                total_balls: oversToBalls(mOvers),
+            }));
+        }
+    }, [selectedMatch, isEdit]);
+
+    // When a match is selected in New mode, auto-set batting & bowling teams and match overs
     const handleMatchChange = async (newMatchId) => {
+        const targetMatch = matches.find((m) => String(m.id) === String(newMatchId));
+        const mOvers = targetMatch?.overs ? Number(targetMatch.overs) : 20;
+
         setFormData((prev) => ({
             ...prev,
             match_id: newMatchId,
             batting_team_id: "",
             bowling_team_id: "",
+            total_overs: mOvers,
+            total_balls: oversToBalls(mOvers),
         }));
 
         if (!newMatchId) return;
@@ -130,6 +148,8 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                         match_id: newMatchId,
                         batting_team_id: String(teamA.team_id),
                         bowling_team_id: String(teamB.team_id),
+                        total_overs: mOvers,
+                        total_balls: oversToBalls(mOvers),
                     }));
                 }
             }
@@ -170,6 +190,13 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                 updated.extras = w + nb + b + lb + pen;
             }
 
+            // Auto-calculate Target Runs = Total Runs + Total Extras
+            if (["total_runs", "extras", "wides", "no_balls", "byes", "leg_byes", "penalty_runs"].includes(name)) {
+                const tr = Number(name === "total_runs" ? value : prev.total_runs) || 0;
+                const ex = Number(updated.extras !== undefined ? updated.extras : prev.extras) || 0;
+                updated.target_runs = String(tr + ex);
+            }
+
             return updated;
         });
     };
@@ -196,6 +223,13 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
 
         if (!isValidCricketOvers(formData.total_overs)) {
             setError("Invalid overs format. Decimal part must be between 0 and 5 (e.g. 19.4).");
+            return;
+        }
+
+        const enteredBalls = oversToBalls(formData.total_overs);
+        const maxBalls = matchOvers * 6;
+        if (enteredBalls > maxBalls) {
+            setError(`Overs mismatch! Total overs (${formData.total_overs}) exceeds the match limit of ${matchOvers} overs (${maxBalls} balls).`);
             return;
         }
 
@@ -422,34 +456,51 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                 </div>
 
                 <div className="col-md-3">
-                    <label className="form-label fw-semibold">
-                        Total Overs <small className="text-muted">(e.g. 20.0, 18.4)</small>
+                    <label className="form-label fw-semibold d-flex justify-content-between align-items-center">
+                        <span>Total Overs <small className="text-muted">(auto-filled)</small></span>
+                        <span className="badge bg-secondary-subtle text-secondary border">
+                            {matchOvers} ov (Read-only)
+                        </span>
                     </label>
                     <input
                         type="number"
                         step="0.1"
                         name="total_overs"
-                        className="form-control"
+                        className="form-control bg-light"
                         min="0"
                         value={formData.total_overs}
-                        onChange={handleChange}
+                        readOnly
+                        title={`Locked to match limit: ${matchOvers} overs`}
                     />
-                    <small className="text-muted d-block mt-1">
-                        Balls bowled: {formData.total_balls}
-                    </small>
+                    <div className="d-flex justify-content-between align-items-center mt-1">
+                        <small className="text-muted">
+                            Balls bowled: {formData.total_balls || oversToBalls(formData.total_overs)}
+                        </small>
+                        <small className="text-muted">
+                            Match: {matchOvers} ov
+                        </small>
+                    </div>
                 </div>
 
                 <div className="col-md-3">
-                    <label className="form-label fw-semibold">Target Runs</label>
+                    <label className="form-label fw-semibold d-flex justify-content-between align-items-center">
+                        <span>Target Runs</span>
+                        <span className="badge bg-info-subtle text-info border">
+                            Auto (Total + Extras)
+                        </span>
+                    </label>
                     <input
                         type="number"
                         name="target_runs"
                         className="form-control"
-                        placeholder="e.g. 185 (optional)"
+                        placeholder="Auto: Total Runs + Extras"
                         min="0"
                         value={formData.target_runs}
                         onChange={handleChange}
                     />
+                    <small className="text-muted d-block mt-1">
+                        Opponent target: {Number(formData.total_runs || 0) + Number(formData.extras || 0)} runs
+                    </small>
                 </div>
 
                 {/* Extras Details Card */}

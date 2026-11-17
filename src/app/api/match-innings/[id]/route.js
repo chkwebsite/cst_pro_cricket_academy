@@ -127,7 +127,7 @@ export async function PUT(request, { params }) {
 
         // Check existing innings
         const [existingRows] = await connection.execute(
-            `SELECT mi.*, m.academy_id, m.branch_id
+            `SELECT mi.*, m.academy_id, m.branch_id, m.overs AS match_overs
              FROM cst_match_innings mi
              INNER JOIN cst_matches m ON m.id = mi.match_id
              WHERE mi.id = ?`,
@@ -236,6 +236,88 @@ export async function PUT(request, { params }) {
                 },
                 { status: 400 }
             );
+        }
+
+        const matchOvers = existing.match_overs ? Number(existing.match_overs) : 20;
+
+        // Validate overs against match limit and against balls already bowled
+        if (updated.total_overs !== undefined && updated.total_overs !== null && updated.total_overs !== "") {
+            const numOvers = Number(updated.total_overs);
+            const completeOvers = Math.floor(numOvers);
+            const remBalls = Math.round((numOvers - completeOvers) * 10);
+            if (remBalls < 0 || remBalls > 5) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Invalid overs format. Decimal part (balls) must be between .0 and .5 (e.g. 19.5, 20.0).",
+                    },
+                    { status: 400 }
+                );
+            }
+            const enteredBalls = completeOvers * 6 + remBalls;
+            const maxAllowedBalls = matchOvers * 6;
+            if (enteredBalls > maxAllowedBalls) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Overs mismatch! Innings total overs (${updated.total_overs}) cannot exceed the match limit of ${matchOvers} overs (${maxAllowedBalls} balls).`,
+                    },
+                    { status: 400 }
+                );
+            }
+
+            // Check if balls already bowled by bowlers exceed this new total_overs
+            const [bowlerBallsRows] = await connection.execute(
+                `SELECT COALESCE(SUM(balls_bowled), 0) AS total_balls_bowled
+                 FROM cst_match_bowling_scorecard
+                 WHERE innings_id = ?`,
+                [id]
+            );
+            const totalBallsBowled = Number(bowlerBallsRows[0]?.total_balls_bowled) || 0;
+            if (totalBallsBowled > 0 && enteredBalls < totalBallsBowled) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Overs mismatch! Total overs (${updated.total_overs} = ${enteredBalls} balls) cannot be less than balls already bowled by bowlers in this innings (${totalBallsBowled} balls).`,
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+
+        if (updated.total_balls !== undefined && updated.total_balls !== null && updated.total_balls !== "") {
+            const maxAllowedBalls = matchOvers * 6;
+            if (Number(updated.total_balls) > maxAllowedBalls) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Overs mismatch! Innings total balls (${updated.total_balls}) cannot exceed the match limit of ${matchOvers} overs (${maxAllowedBalls} balls).`,
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+
+        // Validate total_runs against already recorded batter runs + extras
+        if (updated.total_runs !== undefined && updated.total_runs !== null && updated.total_runs !== "") {
+            const [batterSumRows] = await connection.execute(
+                `SELECT COALESCE(SUM(runs), 0) AS total_batters_runs
+                 FROM cst_match_scorecard
+                 WHERE innings_id = ?`,
+                [id]
+            );
+            const totalBattersRuns = Number(batterSumRows[0]?.total_batters_runs) || 0;
+            const inningsExtras = Number(updated.extras) || 0;
+            const minRequiredRuns = totalBattersRuns + inningsExtras;
+            if (totalBattersRuns > 0 && Number(updated.total_runs) < minRequiredRuns) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Runs mismatch! Total runs (${updated.total_runs}) cannot be less than already recorded batters' runs (${totalBattersRuns}) + extras (${inningsExtras}) = ${minRequiredRuns} runs.`,
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         // If team changed, validate that both teams exist and belong to match

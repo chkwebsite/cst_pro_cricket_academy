@@ -73,9 +73,13 @@ export async function GET(request) {
     try {
         connection = await pool.getConnection();
 
-        // Auto-update match status to 'Live' when match_date matches today's date (and status is not Completed or Cancelled)
+        // Auto-update match status:
+        // 1) Match Date matches today's date -> Status 'Live' (if not Completed or Cancelled)
+        // 2) Match Date is back date (< today's date) -> Status 'Completed' (if not Completed or Cancelled)
         try {
             const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+
+            // Today's matches -> Live
             await connection.execute(
                 `UPDATE cst_matches
                  SET status = 'Live', updated_at = NOW()
@@ -83,8 +87,17 @@ export async function GET(request) {
                    AND status NOT IN ('Completed', 'Cancelled', 'Live')`,
                 [todayIST]
             );
-        } catch (autoLiveErr) {
-            console.error("Auto-update live matches error:", autoLiveErr);
+
+            // Back date matches -> Completed
+            await connection.execute(
+                `UPDATE cst_matches
+                 SET status = 'Completed', updated_at = NOW()
+                 WHERE (match_date < CURDATE() AND match_date < DATE(DATE_ADD(NOW(), INTERVAL 330 MINUTE)) AND match_date < ?)
+                   AND status NOT IN ('Completed', 'Cancelled')`,
+                [todayIST]
+            );
+        } catch (autoStatusErr) {
+            console.error("Auto-update match statuses error:", autoStatusErr);
         }
 
         const { searchParams } = new URL(request.url);
@@ -127,6 +140,7 @@ export async function GET(request) {
         m.team_b_id,
         m.match_no,
         m.match_type,
+        m.overs,
         m.match_fee,
         m.match_date,
         m.match_time,
@@ -144,6 +158,7 @@ export async function GET(request) {
         b.branch_name,
 
         t.tournament_name,
+        t.overs AS tournament_overs,
         (SELECT ttp.player_fee
          FROM cst_tournament_team_players ttp
          JOIN cst_tournament_teams tt ON tt.id = ttp.tournament_team_id
@@ -179,6 +194,9 @@ export async function GET(request) {
          FROM cst_match_innings
          WHERE match_id = m.id AND batting_team_id = m.team_b_id
          ORDER BY innings_no DESC LIMIT 1) AS team_b_score,
+
+        (SELECT COUNT(*) FROM cst_match_innings WHERE match_id = m.id) AS innings_count,
+        (SELECT COUNT(*) FROM cst_match_scorecard WHERE match_id = m.id) AS scorecard_count,
 
         tw.team_name AS toss_winner_team_name,
 
@@ -348,11 +366,25 @@ export async function GET(request) {
 
         const [rows] = await connection.execute(sql, values);
 
+        const rowsWithCounts = rows.map((r) => {
+            const inningsCount = Number(r.innings_count) || 0;
+            const scorecardCount = Number(r.scorecard_count) || 0;
+            const hasScores = Boolean(r.team_a_score || r.team_b_score);
+            const hasScoreboard = inningsCount > 0 || scorecardCount > 0 || hasScores;
+            return {
+                ...r,
+                innings_count: inningsCount,
+                scorecard_count: scorecardCount,
+                has_scoreboard: hasScoreboard,
+                scoreboard_message: !hasScoreboard ? "Wait to update records" : null,
+            };
+        });
+
         return NextResponse.json({
             success: true,
             message: "Matches fetched successfully",
-            total: rows.length,
-            data: rows,
+            total: rowsWithCounts.length,
+            data: rowsWithCounts,
         });
 
     } catch (error) {
@@ -391,6 +423,7 @@ export async function POST(request) {
             team_b_id,
             match_no,
             match_type,
+            overs,
             match_fee,
             match_date,
             match_time,
@@ -900,6 +933,28 @@ export async function POST(request) {
             }
         }
 
+        // Resolve and validate overs
+        let matchOvers = overs !== undefined && overs !== null && overs !== "" ? Number(overs) : null;
+        if (matchOvers !== null) {
+            if (!Number.isInteger(matchOvers) || matchOvers < 1 || matchOvers > 100) {
+                await connection.rollback();
+                transactionStarted = false;
+                return NextResponse.json(
+                    { success: false, message: "Match overs must be an integer between 1 and 100" },
+                    { status: 400 }
+                );
+            }
+        } else if (tournament_id) {
+            const [tRows] = await connection.execute("SELECT overs FROM cst_tournaments WHERE id = ?", [Number(tournament_id)]);
+            if (tRows.length > 0 && tRows[0].overs) {
+                matchOvers = Number(tRows[0].overs);
+            } else {
+                matchOvers = 20;
+            }
+        } else {
+            matchOvers = 20;
+        }
+
         // Insert match
         const [result] = await connection.execute(
             `
@@ -912,6 +967,7 @@ export async function POST(request) {
             team_b_id,
             match_no,
             match_type,
+            overs,
             match_fee,
             match_date,
             match_time,
@@ -923,7 +979,7 @@ export async function POST(request) {
             remarks,
             created_by
         )
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
             [
                 resolvedAcademyId || null,
@@ -933,6 +989,7 @@ export async function POST(request) {
                 Number(team_b_id),
                 match_no || null,
                 match_type,
+                matchOvers,
                 finalMatchFee,
                 match_date,
                 match_time || null,

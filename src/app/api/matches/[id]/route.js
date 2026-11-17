@@ -63,9 +63,13 @@ export async function GET(request, { params }) {
 
         connection = await pool.getConnection();
 
-        // Auto-update match status to 'Live' when match_date is today and status is not Completed or Cancelled
+        // Auto-update match status:
+        // 1) Match Date matches today's date -> Status 'Live' (if not Completed or Cancelled)
+        // 2) Match Date is back date (< today's date) -> Status 'Completed' (if not Completed or Cancelled)
         try {
             const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+
+            // Today's match -> Live
             await connection.execute(
                 `UPDATE cst_matches
                  SET status = 'Live', updated_at = NOW()
@@ -74,8 +78,18 @@ export async function GET(request, { params }) {
                    AND status NOT IN ('Completed', 'Cancelled', 'Live')`,
                 [matchId, todayIST]
             );
-        } catch (autoLiveErr) {
-            console.error("Auto-update live match error:", autoLiveErr);
+
+            // Back date match -> Completed
+            await connection.execute(
+                `UPDATE cst_matches
+                 SET status = 'Completed', updated_at = NOW()
+                 WHERE id = ?
+                   AND (match_date < CURDATE() AND match_date < DATE(DATE_ADD(NOW(), INTERVAL 330 MINUTE)) AND match_date < ?)
+                   AND status NOT IN ('Completed', 'Cancelled')`,
+                [matchId, todayIST]
+            );
+        } catch (autoStatusErr) {
+            console.error("Auto-update match status error:", autoStatusErr);
         }
 
         const [rows] = await connection.execute(
@@ -101,7 +115,9 @@ export async function GET(request, { params }) {
         tb.team_type AS team_b_type,
                         tw.team_name AS toss_winner_team_name,
                             g.ground_name,
-                            gb.booking_no
+                            gb.booking_no,
+        (SELECT COUNT(*) FROM cst_match_innings WHERE match_id = m.id) AS innings_count,
+        (SELECT COUNT(*) FROM cst_match_scorecard WHERE match_id = m.id) AS scorecard_count
         FROM cst_matches m
         LEFT JOIN cst_academy a
             ON a.id = m.academy_id
@@ -143,9 +159,20 @@ export async function GET(request, { params }) {
             }
         }
 
+        const inningsCount = Number(match.innings_count) || 0;
+        const scorecardCount = Number(match.scorecard_count) || 0;
+        const hasScoreboard = inningsCount > 0 || scorecardCount > 0;
+        const data = {
+            ...match,
+            innings_count: inningsCount,
+            scorecard_count: scorecardCount,
+            has_scoreboard: hasScoreboard,
+            scoreboard_message: !hasScoreboard ? "Wait to update records" : null,
+        };
+
         return NextResponse.json({
             success: true,
-            data: match,
+            data,
         });
 
     } catch (error) {
@@ -272,6 +299,18 @@ export async function PUT(request, { params }) {
             : old.match_no;
 
         const match_type = body.match_type ?? old.match_type;
+        const overs = body.overs !== undefined
+            ? (body.overs ? Number(body.overs) : null)
+            : (old.overs ? Number(old.overs) : 20);
+
+        if (overs !== null && (!Number.isInteger(overs) || overs < 1 || overs > 100)) {
+            await connection.rollback();
+            transactionStarted = false;
+            return NextResponse.json(
+                { success: false, message: "Match overs must be an integer between 1 and 100" },
+                { status: 400 }
+            );
+        }
         const match_fee = body.match_fee !== undefined
             ? Number(body.match_fee)
             : old.match_fee !== null ? Number(old.match_fee) : 0;
@@ -731,6 +770,7 @@ export async function PUT(request, { params }) {
         team_b_id = ?,
         match_no = ?,
         match_type = ?,
+        overs = ?,
         match_fee = ?,
         match_date = ?,
         match_time = ?,
@@ -751,6 +791,7 @@ export async function PUT(request, { params }) {
                 Number(team_b_id),
                 match_no || null,
                 match_type,
+                overs || 20,
                 Number.isFinite(match_fee) && match_fee >= 0 ? match_fee : 0,
                 String(match_date).slice(0, 10),
                 match_time || null,

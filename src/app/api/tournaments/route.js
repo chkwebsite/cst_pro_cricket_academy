@@ -178,6 +178,7 @@ export async function GET(request) {
                 t.tournament_name,
                 t.tournament_code,
                 t.tournament_type,
+                t.overs,
 
                 t.category,
                 t.age_group,
@@ -274,6 +275,7 @@ export async function POST(request) {
             tournament_code,
 
             tournament_type = "Round Robin",
+            overs = 20,
 
             category = null,
             age_group = null,
@@ -351,6 +353,17 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "Team fee cannot be negative"
+                },
+                { status: 400 }
+            );
+        }
+
+        const oversVal = overs ? Number(overs) : 20;
+        if (!Number.isInteger(oversVal) || oversVal < 1 || oversVal > 100) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Overs must be an integer between 1 and 100"
                 },
                 { status: 400 }
             );
@@ -477,6 +490,7 @@ export async function POST(request) {
                 tournament_name,
                 tournament_code,
                 tournament_type,
+                overs,
 
                 category,
                 age_group,
@@ -503,6 +517,7 @@ export async function POST(request) {
                 ?,
                 ?,
 
+                ?,
                 ?,
                 ?,
                 ?,
@@ -535,6 +550,7 @@ export async function POST(request) {
                 tournamentName,
                 tournamentCode,
                 tournament_type,
+                oversVal,
 
                 category,
                 age_group,
@@ -570,6 +586,7 @@ export async function POST(request) {
                     tournament_name: tournamentName,
                     tournament_code: tournamentCode,
                     tournament_type,
+                    overs: oversVal,
 
                     category,
                     age_group,

@@ -8,6 +8,7 @@ import {
     DISMISSAL_TYPES,
     calculateStrikeRate,
     getPlayerDisplayName,
+    oversToBalls,
 } from "../components/cricketHelpers";
 
 const EMPTY_FORM = {
@@ -41,6 +42,7 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
     const [battingPlayers, setBattingPlayers] = useState([]);
     const [bowlingPlayers, setBowlingPlayers] = useState([]);
     const [allMatchPlayers, setAllMatchPlayers] = useState([]);
+    const [existingScorecards, setExistingScorecards] = useState([]);
 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
@@ -149,8 +151,16 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
 
                     const currentInnings = inningsList.find((i) => String(i.id) === String(formData.innings_id));
                     if (currentInnings) {
-                        setBattingPlayers(all.filter((p) => Number(p.team_id) === Number(currentInnings.batting_team_id)));
-                        setBowlingPlayers(all.filter((p) => Number(p.team_id) === Number(currentInnings.bowling_team_id)));
+                        const batting = all.filter((p) => Number(p.team_id) === Number(currentInnings.batting_team_id));
+                        const bowling = all.filter((p) => Number(p.team_id) === Number(currentInnings.bowling_team_id));
+
+                        setBattingPlayers(batting.length > 0 ? batting : all);
+                        if (bowling.length > 0) {
+                            setBowlingPlayers(bowling);
+                        } else {
+                            const otherPlayers = all.filter((p) => Number(p.team_id) !== Number(currentInnings.batting_team_id));
+                            setBowlingPlayers(otherPlayers.length > 0 ? otherPlayers : all);
+                        }
                     } else {
                         setBattingPlayers(all);
                         setBowlingPlayers(all);
@@ -162,6 +172,30 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
         })();
         return () => controller.abort();
     }, [formData.match_id, formData.innings_id, inningsList]);
+
+    // Fetch existing scorecard entries for selected innings to calculate runs mismatch
+    useEffect(() => {
+        if (!formData.innings_id) {
+            setExistingScorecards([]);
+            return;
+        }
+
+        const controller = new AbortController();
+        (async () => {
+            try {
+                const res = await fetch(`/api/match-scorecard?innings_id=${formData.innings_id}`, {
+                    signal: controller.signal,
+                });
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    setExistingScorecards(json.data || []);
+                }
+            } catch {
+                /* ignore */
+            }
+        })();
+        return () => controller.abort();
+    }, [formData.innings_id]);
 
     const handleMatchChange = (mId) => {
         setFormData((prev) => ({
@@ -194,10 +228,24 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                 updated.strike_rate = b > 0 ? Number(((r / b) * 100).toFixed(2)) : 0;
             }
 
-            // Reset bowler/fielder if Not Out
-            if (name === "dismissal_type" && (value === "Not Out" || value === "Retired Hurt")) {
-                updated.dismissed_by_player_id = "";
-                updated.fielder_player_id = "";
+            // Reset bowler/fielder if Not Out or not applicable to the dismissal type
+            if (name === "dismissal_type") {
+                const nextNeedsBowler = [
+                    "Bowled",
+                    "Caught",
+                    "LBW",
+                    "Run Out",
+                    "Stumped",
+                    "Hit Wicket",
+                ].includes(value);
+                const nextNeedsFielder = ["Caught", "Run Out", "Stumped"].includes(value);
+
+                if (!nextNeedsBowler || value === "Not Out" || value === "Retired Hurt") {
+                    updated.dismissed_by_player_id = "";
+                }
+                if (!nextNeedsFielder || value === "Not Out" || value === "Retired Hurt") {
+                    updated.fielder_player_id = "";
+                }
             }
 
             return updated;
@@ -219,6 +267,34 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
             Number(formData.dismissed_by_player_id) === Number(formData.match_player_id)
         ) {
             setError("A batter cannot be their own dismissed_by bowler.");
+            return;
+        }
+
+        if (runsExceeded) {
+            setError(
+                `Runs mismatch! Innings target is ${inningsTargetRuns} runs (Extras: ${inningsExtras}, Other Batters: ${otherBattersRuns}). This batter cannot score more than ${maxAllowedRuns} run(s), but ${enteredRuns} was entered.`
+            );
+            return;
+        }
+
+        if (ballsExceeded) {
+            setError(
+                `Balls faced mismatch! Match is ${matchOvers} overs (${matchMaxBalls} balls max, innings limit: ${maxBallsForInnings} balls). Other batters have faced ${otherBattersBalls} balls. This batter cannot face more than ${maxAllowedBalls} ball(s), but ${enteredBalls} was entered.`
+            );
+            return;
+        }
+
+        if (boundaryRunsExceeded) {
+            setError(
+                `Boundary runs mismatch! ${enteredFours} fours (4s) and ${enteredSixes} sixes (6s) equal ${enteredFours * 4 + enteredSixes * 6} runs, which cannot exceed total runs scored (${enteredRuns}).`
+            );
+            return;
+        }
+
+        if (boundaryCountExceeded) {
+            setError(
+                `Boundary count mismatch! Total boundaries (${enteredFours + enteredSixes}) cannot exceed balls faced (${enteredBalls}).`
+            );
             return;
         }
 
@@ -264,12 +340,60 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
         }
     };
 
+    const selectedMatch = matches.find((m) => String(m.id) === String(formData.match_id));
+    const matchOvers = selectedMatch?.overs ? Number(selectedMatch.overs) : 20;
+    const matchMaxBalls = matchOvers * 6;
+
+    const currentInnings = inningsList.find((i) => String(i.id) === String(formData.innings_id));
+    const inningsTotalRuns = Number(currentInnings?.total_runs) || 0;
+    const inningsExtras = Number(currentInnings?.extras) || 0;
+    const inningsTargetRuns = currentInnings?.target_runs !== null && currentInnings?.target_runs !== undefined && currentInnings?.target_runs !== ""
+        ? Number(currentInnings.target_runs)
+        : (inningsTotalRuns > 0 ? inningsTotalRuns + inningsExtras : 0);
+
+    const rawInningsOvers = Number(currentInnings?.total_overs) || 0;
+    const completeOversInn = Math.floor(rawInningsOvers);
+    const remBallsInn = Math.round((rawInningsOvers - completeOversInn) * 10);
+    const inningsTotalBalls = currentInnings?.total_balls
+        ? Number(currentInnings.total_balls)
+        : (rawInningsOvers > 0 ? (completeOversInn * 6 + (remBallsInn >= 0 && remBallsInn <= 5 ? remBallsInn : 0)) : matchMaxBalls);
+    const maxBallsForInnings = Math.min(inningsTotalBalls, matchMaxBalls);
+
+    const otherBattersRuns = existingScorecards
+        .filter((sc) => !isEdit || String(sc.id) !== String(id))
+        .reduce((sum, sc) => sum + (Number(sc.runs) || 0), 0);
+    const otherBattersBalls = existingScorecards
+        .filter((sc) => !isEdit || String(sc.id) !== String(id))
+        .reduce((sum, sc) => sum + (Number(sc.balls) || 0), 0);
+
+    const enteredRuns = Number(formData.runs) || 0;
+    const enteredBalls = Number(formData.balls) || 0;
+    const enteredFours = Number(formData.fours) || 0;
+    const enteredSixes = Number(formData.sixes) || 0;
+
+    const maxByTarget = inningsTargetRuns > 0 ? Math.max(0, inningsTargetRuns - inningsExtras - otherBattersRuns) : Infinity;
+    const maxByTotalRuns = inningsTotalRuns > 0 ? Math.max(0, inningsTotalRuns - otherBattersRuns) : Infinity;
+    const maxAllowedRuns = Math.min(maxByTarget, maxByTotalRuns);
+
+    const targetExceeded = inningsTargetRuns > 0 && (otherBattersRuns + enteredRuns + inningsExtras > inningsTargetRuns);
+    const totalRunsExceeded = inningsTotalRuns > 0 && (otherBattersRuns + enteredRuns > inningsTotalRuns);
+    const runsExceeded = targetExceeded || totalRunsExceeded;
+
+    const maxAllowedBalls = Math.max(0, maxBallsForInnings - otherBattersBalls);
+    const ballsExceeded = enteredBalls > maxAllowedBalls;
+
+    const boundaryRunsExceeded = (enteredFours * 4 + enteredSixes * 6) > enteredRuns;
+    const boundaryCountExceeded = enteredBalls > 0 && (enteredFours + enteredSixes > enteredBalls);
+
+    const hasValidationErrors = runsExceeded || ballsExceeded || boundaryRunsExceeded || boundaryCountExceeded;
+
     const isNotOut = formData.dismissal_type === "Not Out" || formData.dismissal_type === "Retired Hurt";
     const needsFielder = ["Caught", "Run Out", "Stumped"].includes(formData.dismissal_type);
     const needsBowler = [
         "Bowled",
         "Caught",
         "LBW",
+        "Run Out",
         "Stumped",
         "Hit Wicket",
     ].includes(formData.dismissal_type);
@@ -369,29 +493,87 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                     />
                 </div>
 
+                {/* Innings Runs & Balls Tracker */}
+                {(inningsTargetRuns > 0 || inningsTotalRuns > 0 || currentInnings) && (
+                    <div className="col-12">
+                        <div className={`p-3 rounded-3 border ${hasValidationErrors ? "bg-danger-subtle border-danger" : "bg-light border"}`}>
+                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <span className="fw-semibold text-dark me-2">Innings Target:</span>
+                                    <span className="badge bg-primary fs-6 me-2">{inningsTargetRuns} runs</span>
+                                    <span className="badge bg-secondary-subtle text-secondary border">
+                                        {matchOvers} ov ({matchMaxBalls} balls max)
+                                    </span>
+                                </div>
+                                <div className="d-flex flex-wrap gap-3 text-muted small">
+                                    <span>Extras: <strong className="text-dark">{inningsExtras}</strong></span>
+                                    <span>Other Batters Scored: <strong className="text-dark">{otherBattersRuns} r</strong></span>
+                                    <span>Max Runs Allowed: <strong className={runsExceeded ? "text-danger fw-bold" : "text-success fw-bold"}>{maxAllowedRuns}</strong></span>
+                                    <span>Other Balls Faced: <strong className="text-dark">{otherBattersBalls} b</strong></span>
+                                    <span>Max Balls Allowed: <strong className={ballsExceeded ? "text-danger fw-bold" : "text-success fw-bold"}>{maxAllowedBalls}</strong></span>
+                                </div>
+                            </div>
+                            {runsExceeded && (
+                                <div className="text-danger small mt-2 fw-semibold">
+                                    ⚠️ Target Runs Mismatch! Entered runs ({enteredRuns}) exceeds the remaining available runs ({maxAllowedRuns}) for this innings.
+                                </div>
+                            )}
+                            {ballsExceeded && (
+                                <div className="text-danger small mt-2 fw-semibold">
+                                    ⚠️ Balls Faced Mismatch! Match is {matchOvers} overs ({matchMaxBalls} balls). Other batters faced {otherBattersBalls} balls. This batter can face at most {maxAllowedBalls} ball(s), but {enteredBalls} was entered.
+                                </div>
+                            )}
+                            {boundaryRunsExceeded && (
+                                <div className="text-danger small mt-2 fw-semibold">
+                                    ⚠️ Boundary Runs Mismatch! {enteredFours} fours and {enteredSixes} sixes equal {enteredFours * 4 + enteredSixes * 6} runs, which cannot exceed total runs ({enteredRuns}).
+                                </div>
+                            )}
+                            {boundaryCountExceeded && (
+                                <div className="text-danger small mt-2 fw-semibold">
+                                    ⚠️ Boundary Count Mismatch! Total boundaries ({enteredFours + enteredSixes}) cannot exceed balls faced ({enteredBalls}).
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* Runs, Balls, 4s, 6s, SR */}
                 <div className="col-md-2 col-6">
                     <label className="form-label fw-semibold">Runs</label>
                     <input
                         type="number"
                         name="runs"
-                        className="form-control"
+                        className={`form-control ${runsExceeded ? "is-invalid" : ""}`}
                         min="0"
                         value={formData.runs}
                         onChange={handleChange}
                     />
+                    {runsExceeded && (
+                        <div className="invalid-feedback">Max {maxAllowedRuns}</div>
+                    )}
                 </div>
 
                 <div className="col-md-2 col-6">
-                    <label className="form-label fw-semibold">Balls Faced</label>
+                    <label className="form-label fw-semibold d-flex justify-content-between align-items-center">
+                        <span>Balls Faced</span>
+                        {currentInnings && (
+                            <span className="text-muted small">Max: {maxAllowedBalls}</span>
+                        )}
+                    </label>
                     <input
                         type="number"
                         name="balls"
-                        className="form-control"
+                        className={`form-control ${ballsExceeded ? "is-invalid" : ""}`}
                         min="0"
+                        max={maxAllowedBalls}
                         value={formData.balls}
                         onChange={handleChange}
                     />
+                    {ballsExceeded && (
+                        <div className="invalid-feedback">
+                            Max {maxAllowedBalls} balls ({matchOvers} ov)
+                        </div>
+                    )}
                 </div>
 
                 <div className="col-md-2 col-4">
@@ -399,7 +581,7 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                     <input
                         type="number"
                         name="fours"
-                        className="form-control"
+                        className={`form-control ${boundaryRunsExceeded || boundaryCountExceeded ? "is-invalid" : ""}`}
                         min="0"
                         value={formData.fours}
                         onChange={handleChange}
@@ -411,7 +593,7 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                     <input
                         type="number"
                         name="sixes"
-                        className="form-control"
+                        className={`form-control ${boundaryRunsExceeded || boundaryCountExceeded ? "is-invalid" : ""}`}
                         min="0"
                         value={formData.sixes}
                         onChange={handleChange}
@@ -435,7 +617,30 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                 {/* Dismissal Section */}
                 <div className="col-12">
                     <div className="p-3 bg-light rounded-4 border">
-                        <h6 className="fw-semibold mb-3">Dismissal Details</h6>
+                        <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                            <h6 className="fw-semibold mb-0">Dismissal Details</h6>
+                            {currentInnings && (
+                                <span className="small text-muted">
+                                    Bowling Team: <strong>{currentInnings.bowling_team_name || "Opponent"}</strong>
+                                </span>
+                            )}
+                        </div>
+
+                        {formData.innings_id && bowlingPlayers.length === 0 && (
+                            <div className="alert alert-warning py-2 px-3 small mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <span>
+                                    No match players found for bowling team (<strong>{currentInnings?.bowling_team_name || "Opponent"}</strong>). Please register players for this team in Match Players.
+                                </span>
+                                <Link
+                                    href={`/next_panel/match-players/new?match_id=${formData.match_id}`}
+                                    className="btn btn-sm btn-outline-dark text-nowrap"
+                                    target="_blank"
+                                >
+                                    Add Players
+                                </Link>
+                            </div>
+                        )}
+
                         <div className="row g-3">
                             <div className="col-md-4">
                                 <label className="form-label text-muted small">
@@ -467,12 +672,20 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                                     onChange={handleChange}
                                     disabled={isNotOut || !needsBowler}
                                 >
-                                    <option value="">Select bowler...</option>
-                                    {bowlingPlayers.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {getPlayerDisplayName(p)}
-                                        </option>
-                                    ))}
+                                    <option value="">
+                                        {isNotOut || !needsBowler
+                                            ? `Not applicable (${formData.dismissal_type})`
+                                            : bowlingPlayers.length === 0
+                                            ? "No bowlers available"
+                                            : "Select bowler..."}
+                                    </option>
+                                    {bowlingPlayers
+                                        .filter((p) => Number(p.id) !== Number(formData.match_player_id))
+                                        .map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {getPlayerDisplayName(p)} {p.jersey_no ? `(#${p.jersey_no})` : ""} {p.team_name ? `- ${p.team_name}` : ""}
+                                            </option>
+                                        ))}
                                 </select>
                             </div>
 
@@ -487,10 +700,16 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                                     onChange={handleChange}
                                     disabled={isNotOut || !needsFielder}
                                 >
-                                    <option value="">Select fielder...</option>
+                                    <option value="">
+                                        {isNotOut || !needsFielder
+                                            ? `Not applicable (${formData.dismissal_type})`
+                                            : bowlingPlayers.length === 0
+                                            ? "No fielders available"
+                                            : "Select fielder..."}
+                                    </option>
                                     {bowlingPlayers.map((p) => (
                                         <option key={p.id} value={p.id}>
-                                            {getPlayerDisplayName(p)}
+                                            {getPlayerDisplayName(p)} {p.jersey_no ? `(#${p.jersey_no})` : ""} {p.team_name ? `- ${p.team_name}` : ""}
                                         </option>
                                     ))}
                                 </select>
@@ -504,7 +723,7 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                     <Link href={returnTo} className="btn btn-outline-secondary px-4">
                         Cancel
                     </Link>
-                    <button type="submit" className="btn btn-primary px-4" disabled={loading}>
+                    <button type="submit" className="btn btn-primary px-4" disabled={loading || hasValidationErrors}>
                         {loading ? (
                             <>
                                 <RefreshCw className="spinner-border spinner-border-sm me-2" />

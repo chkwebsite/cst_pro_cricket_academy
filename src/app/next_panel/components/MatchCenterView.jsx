@@ -44,14 +44,34 @@ const isTodayMatch = (dateStr) => {
     return d === todayIST || d === todayLocal;
 };
 
+const isPastMatch = (dateStr) => {
+    if (!dateStr) return false;
+    const d = String(dateStr).slice(0, 10);
+    let todayIST = "";
+    try {
+        todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    } catch {
+        todayIST = "";
+    }
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+    const cmpDate = todayIST || todayLocal;
+    return Boolean(d && cmpDate && d < cmpDate);
+};
+
 const getEffectiveStatus = (m) => {
     const raw = String(m?.status || "").trim();
     const lower = raw.toLowerCase();
-    if (lower === "completed" || lower === "cancelled") {
-        return raw || "Completed";
+    if (lower === "cancelled") {
+        return "Cancelled";
+    }
+    if (lower === "completed") {
+        return "Completed";
     }
     if (isTodayMatch(m?.match_date)) {
         return "Live";
+    }
+    if (isPastMatch(m?.match_date)) {
+        return "Completed";
     }
     return raw || "Scheduled";
 };
@@ -366,6 +386,13 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                             {isLive && <span className="spinner-grow spinner-grow-sm" style={{ width: "8px", height: "8px" }} />}
                                             Status: {currentStatus}
                                         </span>
+                                        {isCompleted && (!inningsList || inningsList.length === 0) && (
+                                            <div className="mt-2">
+                                                <span className="badge bg-warning text-dark px-2 py-1">
+                                                    Wait to update records
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -417,6 +444,11 @@ export default function MatchCenterView({ initialMatchId = null }) {
                         <div className="bg-white rounded-4 shadow-sm p-5 text-center text-muted">
                             <Layers size={48} className="text-secondary opacity-50 mb-3" />
                             <h5>No Innings Found For This Match</h5>
+                            <div className="my-2">
+                                <span className="badge bg-warning text-dark border border-warning-subtle py-1 px-3">
+                                    Wait to update records
+                                </span>
+                            </div>
                             <p>To begin scoring, start by creating the first innings for this match.</p>
                             <Link
                                 href={`/next_panel/match-innings/new${selectedMatchId ? `?match_id=${selectedMatchId}` : ""}`}

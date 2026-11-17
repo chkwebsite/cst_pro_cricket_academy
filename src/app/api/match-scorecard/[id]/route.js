@@ -131,7 +131,7 @@ export async function PUT(request, { params }) {
         connection = await pool.getConnection();
 
         const [existingRows] = await connection.execute(
-            `SELECT sc.*, m.academy_id, m.branch_id
+            `SELECT sc.*, m.academy_id, m.branch_id, m.overs AS match_overs
              FROM cst_match_scorecard sc
              INNER JOIN cst_matches m ON m.id = sc.match_id
              WHERE sc.id = ?`,
@@ -265,6 +265,117 @@ export async function PUT(request, { params }) {
                 },
                 { status: 400 }
             );
+        }
+
+        // Validate batter runs, balls, boundaries against match & innings limits:
+        const matchOvers = existing.match_overs ? Number(existing.match_overs) : 20;
+        const matchMaxBalls = matchOvers * 6;
+
+        const [inningsRows] = await connection.execute(
+            `SELECT total_runs, extras, target_runs, total_overs, total_balls FROM cst_match_innings WHERE id = ?`,
+            [existing.innings_id]
+        );
+        const inningsTotalRuns = Number(inningsRows[0]?.total_runs) || 0;
+        const inningsExtras = Number(inningsRows[0]?.extras) || 0;
+        const inningsTargetRuns = inningsRows[0]?.target_runs !== null && inningsRows[0]?.target_runs !== undefined && inningsRows[0]?.target_runs !== ""
+            ? Number(inningsRows[0].target_runs)
+            : (inningsTotalRuns > 0 ? inningsTotalRuns + inningsExtras : 0);
+
+        const rawInningsOvers = Number(inningsRows[0]?.total_overs) || 0;
+        const completeOversInn = Math.floor(rawInningsOvers);
+        const remBallsInn = Math.round((rawInningsOvers - completeOversInn) * 10);
+        const inningsTotalBalls = inningsRows[0]?.total_balls
+            ? Number(inningsRows[0].total_balls)
+            : (rawInningsOvers > 0 ? (completeOversInn * 6 + (remBallsInn >= 0 && remBallsInn <= 5 ? remBallsInn : 0)) : matchMaxBalls);
+        const maxBallsForInnings = Math.min(inningsTotalBalls, matchMaxBalls);
+
+        const [otherBattersRows] = await connection.execute(
+            `SELECT 
+                COALESCE(SUM(runs), 0) AS other_batters_runs,
+                COALESCE(SUM(balls), 0) AS other_batters_balls
+             FROM cst_match_scorecard
+             WHERE innings_id = ? AND id != ?`,
+            [existing.innings_id, id]
+        );
+
+        const otherBattersRuns = Number(otherBattersRows[0]?.other_batters_runs) || 0;
+        const otherBattersBalls = Number(otherBattersRows[0]?.other_batters_balls) || 0;
+        const updatedRuns = Number(updated.runs) || 0;
+        const updatedBalls = Number(updated.balls) || 0;
+        const updatedFours = Number(updated.fours) || 0;
+        const updatedSixes = Number(updated.sixes) || 0;
+
+        // 1. Validate Balls Faced against match limit (e.g. 20 overs = 120 balls)
+        if (updatedBalls > matchMaxBalls) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Balls faced mismatch! Match is ${matchOvers} overs (${matchMaxBalls} balls). A batter cannot face ${updatedBalls} balls in a ${matchOvers}-over match.`,
+                },
+                { status: 400 }
+            );
+        }
+
+        const newTotalBallsFaced = otherBattersBalls + updatedBalls;
+        if (newTotalBallsFaced > maxBallsForInnings) {
+            const maxAllowedBalls = Math.max(0, maxBallsForInnings - otherBattersBalls);
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Balls faced mismatch! Match is ${matchOvers} overs (${matchMaxBalls} balls max, innings total: ${maxBallsForInnings} balls). Other batters have faced ${otherBattersBalls} balls. This batter can face at most ${maxAllowedBalls} ball(s), but ${updatedBalls} was entered (Total would be ${newTotalBallsFaced}).`,
+                },
+                { status: 400 }
+            );
+        }
+
+        // 2. Validate Boundary runs & count
+        if (updatedFours * 4 + updatedSixes * 6 > updatedRuns) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Boundary runs mismatch! ${updatedFours} fours (4s) and ${updatedSixes} sixes (6s) equal ${updatedFours * 4 + updatedSixes * 6} runs, which cannot exceed total runs scored (${updatedRuns}).`,
+                },
+                { status: 400 }
+            );
+        }
+
+        if (updatedBalls > 0 && (updatedFours + updatedSixes > updatedBalls)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Boundary count mismatch! Total boundaries (${updatedFours + updatedSixes}) cannot exceed balls faced (${updatedBalls}).`,
+                },
+                { status: 400 }
+            );
+        }
+
+        // 3. Validate Runs
+        if (inningsTargetRuns > 0 || inningsTotalRuns > 0) {
+            const newTotalWithExtras = otherBattersRuns + updatedRuns + inningsExtras;
+
+            // Check against Target Runs
+            if (inningsTargetRuns > 0 && newTotalWithExtras > inningsTargetRuns) {
+                const maxAllowedRuns = Math.max(0, inningsTargetRuns - inningsExtras - otherBattersRuns);
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Runs mismatch! Innings target is ${inningsTargetRuns} runs (Extras: ${inningsExtras}, Other Batters: ${otherBattersRuns}). This batter can score at most ${maxAllowedRuns} run(s), but ${updatedRuns} was entered (Total with extras would be ${newTotalWithExtras}).`,
+                    },
+                    { status: 400 }
+                );
+            }
+
+            // Check against Total Runs
+            if (inningsTotalRuns > 0 && (otherBattersRuns + updatedRuns > inningsTotalRuns)) {
+                const maxAllowedRuns = Math.max(0, inningsTotalRuns - otherBattersRuns);
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Runs mismatch! Innings total runs is ${inningsTotalRuns} (Other Batters: ${otherBattersRuns}). This batter can score at most ${maxAllowedRuns} run(s), but ${updatedRuns} was entered.`,
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         values.push(id);

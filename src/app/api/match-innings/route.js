@@ -259,7 +259,7 @@ export async function POST(request) {
 
         // Verify match exists
         const [matches] = await connection.execute(
-            "SELECT id, academy_id, branch_id FROM cst_matches WHERE id = ?",
+            "SELECT id, academy_id, branch_id, overs FROM cst_matches WHERE id = ?",
             [match_id]
         );
 
@@ -268,6 +268,48 @@ export async function POST(request) {
                 { success: false, message: "Match not found" },
                 { status: 404 }
             );
+        }
+
+        const matchOvers = matches[0].overs ? Number(matches[0].overs) : 20;
+
+        // Validate overs against match limit
+        if (total_overs !== undefined && total_overs !== null && total_overs !== "") {
+            const numOvers = Number(total_overs);
+            const completeOvers = Math.floor(numOvers);
+            const remBalls = Math.round((numOvers - completeOvers) * 10);
+            if (remBalls < 0 || remBalls > 5) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Invalid overs format. Decimal part (balls) must be between .0 and .5 (e.g. 19.5, 20.0).",
+                    },
+                    { status: 400 }
+                );
+            }
+            const enteredBalls = completeOvers * 6 + remBalls;
+            const maxAllowedBalls = matchOvers * 6;
+            if (enteredBalls > maxAllowedBalls) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Overs mismatch! Innings total overs (${total_overs}) cannot exceed the match limit of ${matchOvers} overs (${maxAllowedBalls} balls).`,
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+
+        if (total_balls !== undefined && total_balls !== null && total_balls !== "") {
+            const maxAllowedBalls = matchOvers * 6;
+            if (Number(total_balls) > maxAllowedBalls) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: `Overs mismatch! Innings total balls (${total_balls}) cannot exceed the match limit of ${matchOvers} overs (${maxAllowedBalls} balls).`,
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         if (!verifyRecordAccess(authUser, { academy_id: matches[0].academy_id, branch_id: matches[0].branch_id })) {
@@ -312,6 +354,17 @@ export async function POST(request) {
             );
         }
 
+        const finalOvers = (total_overs !== undefined && total_overs !== null && Number(total_overs) > 0)
+            ? Number(total_overs)
+            : matchOvers;
+        const finalBalls = (total_balls !== undefined && total_balls !== null && Number(total_balls) > 0)
+            ? Number(total_balls)
+            : Math.floor(finalOvers) * 6 + Math.round((finalOvers - Math.floor(finalOvers)) * 10);
+        const computedTargetRuns = (Number(total_runs) || 0) + (Number(extras) || 0);
+        const finalTargetRuns = (target_runs !== null && target_runs !== undefined && target_runs !== "")
+            ? Number(target_runs)
+            : computedTargetRuns;
+
         // Create innings
         const [result] = await connection.execute(
             `INSERT INTO cst_match_innings(
@@ -339,15 +392,15 @@ export async function POST(request) {
                 bowling_team_id,
                 total_runs,
                 total_wickets,
-                total_overs,
-                total_balls,
+                finalOvers,
+                finalBalls,
                 extras,
                 wides,
                 no_balls,
                 byes,
                 leg_byes,
                 penalty_runs,
-                target_runs,
+                finalTargetRuns,
                 innings_status,
             ]
         );

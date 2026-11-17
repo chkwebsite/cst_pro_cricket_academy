@@ -266,7 +266,10 @@ export default function TournamentsPage() {
                                                     <div>{row.branch_name || "-"}</div>
                                                     {row.academy_name && <div className="small text-muted">{row.academy_name}</div>}
                                                 </td>
-                                                <td>{row.tournament_type}</td>
+                                                <td>
+                                                    <div>{row.tournament_type}</div>
+                                                    {row.overs && <small className="badge bg-light text-dark border">{row.overs} Overs</small>}
+                                                </td>
                                                 <td className="small">
                                                     <div>{formatDate(row.start_date)}</div>
                                                     <div className="text-muted">to {formatDate(row.end_date)}</div>
