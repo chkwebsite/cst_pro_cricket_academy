@@ -399,6 +399,8 @@ export async function GET(request) {
                     up.end_date,
                     up.status,
                     up.created_at,
+                    ap.date_of_joining,
+                    ap.date_of_appointment,
                     p.program_name,
                     p.program_fee,
                     p.registration_fee,
@@ -406,6 +408,7 @@ export async function GET(request) {
                     p.kit_fee,
                     b.branch_name
                  FROM cst_user_programs up
+                 LEFT JOIN cst_admission_players ap ON ap.id = up.admission_players_id
                  LEFT JOIN cst_programs p ON p.id = up.program_id
                  LEFT JOIN cst_branch b ON b.id = up.branch_id
                  WHERE (up.user_id = ? OR (up.admission_players_id = ? AND ? IS NOT NULL) OR (up.appointment_no = ? AND ? IS NOT NULL))
@@ -481,8 +484,9 @@ export async function GET(request) {
 
             // 1. Find all coaching programs active in this month (using Asia/Kolkata dates)
             const activeProgsForMonth = programs.filter((up) => {
-                if (!up.start_date) return true;
-                const startStr = toIstDateStr(up.start_date);
+                const effStartDate = up.start_date || up.date_of_joining || admission?.date_of_joining || toIstDateStr(up.created_at);
+                if (!effStartDate) return false;
+                const startStr = toIstDateStr(effStartDate);
                 if (startStr && startStr > lastDayOfMonth) return false;
                 if (up.end_date) {
                     const endStr = toIstDateStr(up.end_date);
@@ -549,7 +553,7 @@ export async function GET(request) {
             const totalPaid = monthItems.reduce((acc, it) => acc + it.paid_amount, 0);
             const totalDue = Math.max(0, totalFee - totalPaid);
 
-            let status = "Upcoming";
+            let status = "Not Enrolled";
             if (monthItems.length > 0) {
                 if (totalDue <= 0 && totalFee > 0) status = "Paid";
                 else if (totalPaid > 0) status = "Partial";

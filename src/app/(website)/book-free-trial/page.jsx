@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import PageHeader from "../components/layout/PageHeader";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
     Award,
+    Building2,
     Calendar,
     CheckCircle2,
     Clock,
+    GraduationCap,
     MapPin,
     Phone,
     Shield,
@@ -17,10 +20,16 @@ import {
     User,
 } from "lucide-react";
 
-export default function BookFreeTrialPage() {
+function BookFreeTrialContent() {
+    const searchParams = useSearchParams();
+    const queryAcademyId = searchParams.get("academy_id") || "";
+    const queryBranchId = searchParams.get("branch_id") || "";
+
+    const [academies, setAcademies] = useState([]);
     const [branches, setBranches] = useState([]);
     const [programs, setPrograms] = useState([]);
     const [loadingOptions, setLoadingOptions] = useState(true);
+    const [loadingPrograms, setLoadingPrograms] = useState(false);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -28,7 +37,8 @@ export default function BookFreeTrialPage() {
         phone: "",
         email: "",
         age: "",
-        branch_id: "",
+        academy_id: queryAcademyId,
+        branch_id: queryBranchId,
         program_id: "",
         message: "",
     });
@@ -37,39 +47,176 @@ export default function BookFreeTrialPage() {
     const [submitted, setSubmitted] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
 
-    // Load branches & programs for dropdowns
+    // 1. Initial Load: Academies & Branches
     useEffect(() => {
-        async function fetchOptions() {
+        let isMounted = true;
+
+        async function fetchInitialOptions() {
             try {
-                const [bRes, pRes] = await Promise.all([
+                const [aRes, bRes] = await Promise.all([
+                    fetch("/api/academies?status=1"),
                     fetch("/api/branch?status=1"),
-                    fetch("/api/programs?status=1"),
                 ]);
+
+                const aJson = await aRes.json();
                 const bJson = await bRes.json();
-                const pJson = await pRes.json();
+
+                if (!isMounted) return;
+
+                let loadedAcademies = [];
+                let loadedBranches = [];
+
+                if (aRes.ok && aJson.success && Array.isArray(aJson.data)) {
+                    loadedAcademies = aJson.data;
+                    setAcademies(loadedAcademies);
+                }
 
                 if (bRes.ok && bJson.success && Array.isArray(bJson.data)) {
-                    setBranches(bJson.data);
-                    if (bJson.data.length > 0) {
-                        setFormData((prev) => ({ ...prev, branch_id: String(bJson.data[0].id) }));
-                    }
+                    loadedBranches = bJson.data;
+                    setBranches(loadedBranches);
                 }
-                if (pRes.ok && pJson.success && Array.isArray(pJson.data)) {
-                    setPrograms(pJson.data);
+
+                // Determine effective academy_id
+                let effAcademyId = queryAcademyId;
+                if (!effAcademyId && loadedAcademies.length > 0) {
+                    effAcademyId = String(loadedAcademies[0].id);
                 }
+
+                // Determine effective branch_id for this academy
+                const matchingBranches = loadedBranches.filter(
+                    (b) => Number(b.academy_id) === Number(effAcademyId)
+                );
+
+                let effBranchId = queryBranchId;
+                const branchBelongs = matchingBranches.some(
+                    (b) => String(b.id) === String(effBranchId)
+                );
+
+                if (!branchBelongs && matchingBranches.length > 0) {
+                    effBranchId = String(matchingBranches[0].id);
+                }
+
+                setFormData((prev) => ({
+                    ...prev,
+                    academy_id: effAcademyId || prev.academy_id,
+                    branch_id: effBranchId || prev.branch_id,
+                }));
             } catch (err) {
-                console.error("Failed to load options:", err);
+                console.error("Failed to load initial options:", err);
             } finally {
-                setLoadingOptions(false);
+                if (isMounted) setLoadingOptions(false);
             }
         }
-        fetchOptions();
-    }, []);
+
+        fetchInitialOptions();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [queryAcademyId, queryBranchId]);
+
+    // 2. Fetch & Bind Programs based on selected Academy and Branch
+    useEffect(() => {
+        if (!formData.academy_id) {
+            setPrograms([]);
+            return;
+        }
+
+        let isMounted = true;
+        setLoadingPrograms(true);
+
+        let url = `/api/programs?status=1&academy_id=${formData.academy_id}`;
+        if (formData.branch_id) {
+            url += `&branch_id=${formData.branch_id}`;
+        }
+
+        fetch(url)
+            .then((res) => res.json())
+            .then((json) => {
+                if (isMounted && json.success && Array.isArray(json.data)) {
+                    setPrograms(json.data);
+
+                    // Reset program_id if previously selected program is not in the new list
+                    setFormData((prev) => {
+                        const exists = json.data.some((p) => String(p.id) === String(prev.program_id));
+                        return exists ? prev : { ...prev, program_id: "" };
+                    });
+                } else if (isMounted) {
+                    setPrograms([]);
+                    setFormData((prev) => ({ ...prev, program_id: "" }));
+                }
+            })
+            .catch((err) => {
+                console.error("Failed to load filtered programs:", err);
+                if (isMounted) {
+                    setPrograms([]);
+                    setFormData((prev) => ({ ...prev, program_id: "" }));
+                }
+            })
+            .finally(() => {
+                if (isMounted) setLoadingPrograms(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [formData.academy_id, formData.branch_id]);
+
+    // Update query params if they change externally
+    useEffect(() => {
+        if (queryAcademyId) {
+            setFormData((prev) => ({ ...prev, academy_id: queryAcademyId }));
+        }
+        if (queryBranchId) {
+            setFormData((prev) => ({ ...prev, branch_id: queryBranchId }));
+        }
+    }, [queryAcademyId, queryBranchId]);
+
+    // Handle Academy change: filter branches, reset branch_id & program_id
+    const handleAcademyChange = (e) => {
+        const nextAcademyId = e.target.value;
+        const matchingBranches = branches.filter(
+            (b) => Number(b.academy_id) === Number(nextAcademyId)
+        );
+
+        setFormData((prev) => ({
+            ...prev,
+            academy_id: nextAcademyId,
+            branch_id: matchingBranches.length > 0 ? String(matchingBranches[0].id) : "",
+            program_id: "",
+        }));
+    };
+
+    // Handle Branch change: update branch_id and reset program_id
+    const handleBranchChange = (e) => {
+        const nextBranchId = e.target.value;
+        setFormData((prev) => ({
+            ...prev,
+            branch_id: nextBranchId,
+            program_id: "",
+        }));
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
+
+    // Filter branches belonging to the currently selected academy
+    const filteredBranches = formData.academy_id
+        ? branches.filter((b) => Number(b.academy_id) === Number(formData.academy_id))
+        : branches;
+
+    // Current selected academy, branch, and program objects for display
+    const selectedAcademyObj = academies.find(
+        (a) => String(a.id) === String(formData.academy_id)
+    );
+    const selectedBranchObj = branches.find(
+        (b) => String(b.id) === String(formData.branch_id)
+    );
+    const selectedProgramObj = programs.find(
+        (p) => String(p.id) === String(formData.program_id)
+    );
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -80,19 +227,33 @@ export default function BookFreeTrialPage() {
             return;
         }
 
+        if (!formData.academy_id) {
+            setErrorMsg("Please select an academy.");
+            return;
+        }
+
+        if (!formData.branch_id) {
+            setErrorMsg("Please select a preferred branch / campus.");
+            return;
+        }
+
         setSubmitting(true);
         try {
+            const academyLabel = selectedAcademyObj?.academy_name || `Academy #${formData.academy_id}`;
+            const branchLabel = selectedBranchObj?.branch_name || `Branch #${formData.branch_id}`;
+            const programLabel = selectedProgramObj?.program_name || "General Coaching Assessment";
+
             const trialMessage = formData.message.trim()
-                ? `[Free Trial Booking Request] ${formData.message.trim()}`
-                : "Free Trial Booking request submitted via website";
+                ? `[Free Trial Booking | ${academyLabel} - ${branchLabel} | Program: ${programLabel}] ${formData.message.trim()}`
+                : `Free Trial Booking request submitted via website for ${academyLabel} - ${branchLabel} (${programLabel})`;
 
             const payload = {
-                academy_id: 1,
+                academy_id: Number(formData.academy_id),
+                branch_id: Number(formData.branch_id),
                 student_name: formData.student_name.trim(),
                 phone: formData.phone.trim(),
                 email: formData.email.trim() || null,
                 age: formData.age ? Number(formData.age) : null,
-                branch_id: formData.branch_id ? Number(formData.branch_id) : null,
                 program_id: formData.program_id ? Number(formData.program_id) : null,
                 message: trialMessage,
                 enquiry_source: "Website",
@@ -140,7 +301,7 @@ export default function BookFreeTrialPage() {
                                 <div>
                                     <span
                                         className="badge px-3 py-1 mb-3 fw-bold text-uppercase"
-                                        style={{ background: "var(--lime)", color: "var(--navy)" }}
+                                        style={{ background: "var(--lime, #b6ff00)", color: "var(--navy, #062f38)" }}
                                     >
                                         Zero Cost Trial
                                     </span>
@@ -148,58 +309,56 @@ export default function BookFreeTrialPage() {
                                         Experience Pro Cricket Coaching
                                     </h2>
                                     <p className="text-white-50 mb-4" style={{ lineHeight: "1.7" }}>
-                                        Visit our international standard training turf wickets, meet our BCCI &amp; NIS certified coaches, and get a personalized skills evaluation for your child.
+                                        Join our high-performance trial session at your chosen academy branch. Get assessed by BCCI-certified coaches on genuine turf pitches.
                                     </p>
 
-                                    <div className="d-flex flex-column gap-3 mb-4">
-                                        <div className="d-flex align-items-start gap-3">
+                                    <ul className="list-unstyled d-flex flex-column gap-3 mb-4">
+                                        <li className="d-flex align-items-start gap-3">
                                             <div
-                                                className="p-2 rounded-circle flex-shrink-0"
-                                                style={{ background: "rgba(164, 255, 0, 0.15)", color: "var(--lime)" }}
+                                                className="rounded-circle p-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                                style={{ background: "rgba(255,255,255,0.1)", color: "var(--lime, #b6ff00)" }}
                                             >
-                                                <Award size={20} />
+                                                <Calendar size={18} />
                                             </div>
                                             <div>
-                                                <div className="fw-bold text-white fs-6">90-Minute Live Session</div>
-                                                <div className="text-white-50 small">Batting, bowling &amp; fielding drills on natural turf.</div>
+                                                <div className="fw-bold">1 Full Free Training Day</div>
+                                                <small className="text-white-50">Experience structured drills, net sessions & match scenarios.</small>
                                             </div>
-                                        </div>
-
-                                        <div className="d-flex align-items-start gap-3">
+                                        </li>
+                                        <li className="d-flex align-items-start gap-3">
                                             <div
-                                                className="p-2 rounded-circle flex-shrink-0"
-                                                style={{ background: "rgba(164, 255, 0, 0.15)", color: "var(--lime)" }}
+                                                className="rounded-circle p-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                                style={{ background: "rgba(255,255,255,0.1)", color: "var(--lime, #b6ff00)" }}
                                             >
-                                                <Trophy size={20} />
+                                                <Trophy size={18} />
                                             </div>
                                             <div>
-                                                <div className="fw-bold text-white fs-6">Coach Skill Assessment</div>
-                                                <div className="text-white-50 small">Custom feedback report on grip, stance, and action.</div>
+                                                <div className="fw-bold">Skill Assessment Report</div>
+                                                <small className="text-white-50">Head coaches evaluate batting, bowling, fitness & mental game.</small>
                                             </div>
-                                        </div>
-
-                                        <div className="d-flex align-items-start gap-3">
+                                        </li>
+                                        <li className="d-flex align-items-start gap-3">
                                             <div
-                                                className="p-2 rounded-circle flex-shrink-0"
-                                                style={{ background: "rgba(164, 255, 0, 0.15)", color: "var(--lime)" }}
+                                                className="rounded-circle p-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                                                style={{ background: "rgba(255,255,255,0.1)", color: "var(--lime, #b6ff00)" }}
                                             >
-                                                <Shield size={20} />
+                                                <Shield size={18} />
                                             </div>
                                             <div>
-                                                <div className="fw-bold text-white fs-6">No Commitment Needed</div>
-                                                <div className="text-white-50 small">Decide on admission only after your child loves the experience.</div>
+                                                <div className="fw-bold">No Obligation</div>
+                                                <small className="text-white-50">No hidden fees or compulsory admission. 100% free trial.</small>
                                             </div>
-                                        </div>
-                                    </div>
+                                        </li>
+                                    </ul>
                                 </div>
 
-                                <div className="p-3 rounded-3 bg-white bg-opacity-10 border border-white border-opacity-20 mt-4">
+                                <div className="pt-4 border-top border-white border-opacity-10">
                                     <div className="small text-white-50 mb-1">Direct Admission Helpline:</div>
                                     <a
                                         href="tel:+918285831503"
                                         className="text-white fw-bold text-decoration-none d-flex align-items-center gap-2 fs-5"
                                     >
-                                        <Phone size={18} style={{ color: "var(--lime)" }} /> +91 8285831503
+                                        <Phone size={18} style={{ color: "var(--lime, #b6ff00)" }} /> +91 8285831503
                                     </a>
                                 </div>
                             </div>
@@ -219,9 +378,31 @@ export default function BookFreeTrialPage() {
                                         <h3 className="fw-bold font-oswald text-uppercase text-dark mb-2">
                                             Trial Session Requested!
                                         </h3>
-                                        <p className="text-muted mb-4" style={{ maxWidth: "480px", margin: "0 auto" }}>
+                                        <p className="text-muted mb-3" style={{ maxWidth: "480px", margin: "0 auto" }}>
                                             Thank you, <strong>{formData.student_name}</strong>! Our head coach will call you on <strong>{formData.phone}</strong> within 24 hours to confirm your trial slot timing and kit instructions.
                                         </p>
+                                        {selectedAcademyObj && selectedBranchObj && (
+                                            <div
+                                                className="p-3 rounded-3 mb-4 text-start mx-auto"
+                                                style={{ maxWidth: "440px", background: "#f8f9fa", border: "1px solid #e9ecef" }}
+                                            >
+                                                <div className="small text-muted mb-1">Booking Confirmation:</div>
+                                                <div className="fw-bold text-dark d-flex align-items-center gap-2">
+                                                    <Building2 size={16} className="text-danger" />
+                                                    <span>{selectedAcademyObj.academy_name}</span>
+                                                </div>
+                                                <div className="text-secondary small d-flex align-items-center gap-2 mt-1">
+                                                    <MapPin size={16} className="text-primary" />
+                                                    <span>{selectedBranchObj.branch_name} {selectedBranchObj.city ? `(${selectedBranchObj.city})` : ""}</span>
+                                                </div>
+                                                {selectedProgramObj && (
+                                                    <div className="text-success small d-flex align-items-center gap-2 mt-1 fw-semibold">
+                                                        <GraduationCap size={16} />
+                                                        <span>Program: {selectedProgramObj.program_name}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="d-flex justify-content-center gap-3">
                                             <Link href="/" className="btn btn-dark rounded-pill px-4">
                                                 Back to Home
@@ -236,7 +417,8 @@ export default function BookFreeTrialPage() {
                                                         phone: "",
                                                         email: "",
                                                         age: "",
-                                                        branch_id: branches[0]?.id ? String(branches[0].id) : "",
+                                                        academy_id: queryAcademyId || (academies[0]?.id ? String(academies[0].id) : ""),
+                                                        branch_id: queryBranchId || (filteredBranches[0]?.id ? String(filteredBranches[0].id) : ""),
                                                         program_id: "",
                                                         message: "",
                                                     });
@@ -329,47 +511,96 @@ export default function BookFreeTrialPage() {
                                                     />
                                                 </div>
 
-                                                {/* Preferred Campus */}
+                                                {/* Academy Selection (Auto-filled & Changeable) */}
                                                 <div className="col-md-6">
-                                                    <label className="form-label small fw-bold text-dark">
-                                                        Preferred Branch / Campus
+                                                    <label className="form-label small fw-bold text-dark d-flex align-items-center gap-1">
+                                                        <Building2 size={15} className="text-danger" />
+                                                        <span>Selected Academy <span className="text-danger">*</span></span>
+                                                    </label>
+                                                    <select
+                                                        name="academy_id"
+                                                        value={formData.academy_id}
+                                                        onChange={handleAcademyChange}
+                                                        className="form-select"
+                                                        disabled={loadingOptions}
+                                                        required
+                                                    >
+                                                        <option value="">Select Academy...</option>
+                                                        {academies.map((a) => (
+                                                            <option key={a.id} value={a.id}>
+                                                                {a.academy_name} {a.city ? `(${a.city})` : ""}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                {/* Branch Selection (Auto-filled & Filtered by Academy) */}
+                                                <div className="col-md-6">
+                                                    <label className="form-label small fw-bold text-dark d-flex align-items-center gap-1">
+                                                        <MapPin size={15} className="text-danger" />
+                                                        <span>Preferred Branch / Campus <span className="text-danger">*</span></span>
                                                     </label>
                                                     <select
                                                         name="branch_id"
                                                         value={formData.branch_id}
-                                                        onChange={handleChange}
+                                                        onChange={handleBranchChange}
                                                         className="form-select"
+                                                        disabled={!formData.academy_id || loadingOptions}
+                                                        required
                                                     >
-                                                        {branches.length > 0 ? (
-                                                            branches.map((b) => (
-                                                                <option key={b.id} value={b.id}>
-                                                                    {b.branch_name} ({b.city || "Campus"})
-                                                                </option>
-                                                            ))
-                                                        ) : (
-                                                            <option value="">Main Campus (Maruti Kunj)</option>
-                                                        )}
+                                                        <option value="">
+                                                            {!formData.academy_id
+                                                                ? "Please select an academy first"
+                                                                : filteredBranches.length === 0
+                                                                ? "No active branches for this academy"
+                                                                : "Select Campus / Branch..."}
+                                                        </option>
+                                                        {filteredBranches.map((b) => (
+                                                            <option key={b.id} value={b.id}>
+                                                                {b.branch_name} {b.city ? `(${b.city})` : ""}
+                                                            </option>
+                                                        ))}
                                                     </select>
                                                 </div>
 
-                                                {/* Preferred Program */}
-                                                <div className="col-md-6">
-                                                    <label className="form-label small fw-bold text-dark">
-                                                        Interested Program
+                                                {/* Preferred Program - DYNAMICALLY BOUND TO SELECTED ACADEMY & BRANCH */}
+                                                <div className="col-md-12">
+                                                    <label className="form-label small fw-bold text-dark d-flex align-items-center justify-content-between mb-1">
+                                                        <span className="d-flex align-items-center gap-1">
+                                                            <GraduationCap size={16} className="text-danger" />
+                                                            <span>Interested Program</span>
+                                                            <small className="text-muted fw-normal">(Optional)</small>
+                                                        </span>
+                                                        {loadingPrograms && (
+                                                            <span className="text-muted small">
+                                                                <span className="spinner-border spinner-border-sm me-1" role="status" />
+                                                                Loading campus programs...
+                                                            </span>
+                                                        )}
                                                     </label>
                                                     <select
                                                         name="program_id"
                                                         value={formData.program_id}
                                                         onChange={handleChange}
                                                         className="form-select"
+                                                        disabled={!formData.academy_id || loadingPrograms}
                                                     >
-                                                        <option value="">General Coaching (Any Batch)</option>
+                                                        <option value="">
+                                                            {loadingPrograms
+                                                                ? "Loading programs..."
+                                                                : "General Coaching (Any Batch / Skill Assessment)"}
+                                                        </option>
                                                         {programs.map((p) => (
                                                             <option key={p.id} value={p.id}>
-                                                                {p.program_name}
+                                                                {p.program_name} {p.program_fee ? `— ₹${Number(p.program_fee).toLocaleString("en-IN")}` : ""}
                                                             </option>
                                                         ))}
                                                     </select>
+                                                    {formData.academy_id && formData.branch_id && !loadingPrograms && programs.length === 0 && (
+                                                        <small className="text-muted mt-1 d-block">
+                                                            No specific specialized programs registered for this campus. General coaching trial will be assigned.
+                                                        </small>
+                                                    )}
                                                 </div>
 
                                                 {/* Message */}
@@ -393,7 +624,7 @@ export default function BookFreeTrialPage() {
                                                         type="submit"
                                                         disabled={submitting}
                                                         className="btn btn-dark w-100 py-3 rounded-pill fw-bold text-uppercase letter-spacing-1 shadow-sm d-flex align-items-center justify-content-center gap-2"
-                                                        style={{ background: "var(--navy)" }}
+                                                        style={{ background: "var(--navy, #062f38)" }}
                                                     >
                                                         {submitting ? (
                                                             <>
@@ -402,7 +633,7 @@ export default function BookFreeTrialPage() {
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <Sparkles size={18} style={{ color: "var(--lime)" }} />
+                                                                <Sparkles size={18} style={{ color: "var(--lime, #b6ff00)" }} />
                                                                 Confirm Free Trial Booking
                                                             </>
                                                         )}
@@ -421,5 +652,21 @@ export default function BookFreeTrialPage() {
                 </div>
             </section>
         </>
+    );
+}
+
+export default function BookFreeTrialPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="text-center py-5" style={{ minHeight: "60vh" }}>
+                    <div className="spinner-border text-danger" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            }
+        >
+            <BookFreeTrialContent />
+        </Suspense>
     );
 }

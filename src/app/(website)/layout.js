@@ -7,6 +7,8 @@ import { UserProvider } from "../next_panel/components/UserContext";
 import { getServerSession } from "../components/lib/auth-session";
 import { CartProvider } from "./components/cart/CartContext";
 import CartDrawer from "./components/cart/CartDrawer";
+import { TrialModalProvider } from "./components/trial/TrialModalContext";
+import TrialSelectionModal from "./components/trial/TrialSelectionModal";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import BackToTop from "./components/layout/BackToTop";
@@ -101,15 +103,18 @@ export default async function WebsiteLayout({ children }) {
         <ScrollProgressBar />
         <UserProvider initialSession={session}>
           <CartProvider>
-            <BootstrapJs />
-            <ScrollRevealInit />
-            <Header />
-            <main id="main-content">{children}</main>
-            <Footer />
-            <WhatsAppButton />
-            <BackToTop />
-            <MobileBar />
-            <CartDrawer />
+            <TrialModalProvider>
+              <BootstrapJs />
+              <ScrollRevealInit />
+              <Header />
+              <main id="main-content">{children}</main>
+              <Footer />
+              <WhatsAppButton />
+              <BackToTop />
+              <MobileBar />
+              <CartDrawer />
+              <TrialSelectionModal />
+            </TrialModalProvider>
           </CartProvider>
         </UserProvider>
       </body>

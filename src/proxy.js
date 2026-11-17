@@ -259,7 +259,9 @@ export function proxy(request) {
         // C. Protected Resource Mutations (POST, PUT, PATCH, DELETE)
         const isProtectedMutation = PROTECTED_MUTATIONS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
         if (isProtectedMutation && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
-            if (!payload) {
+            // Allow public submission of new student enquiries / trial bookings from the website
+            const isPublicEnquiryPost = pathname === "/api/student-enquiries" && method === "POST";
+            if (!isPublicEnquiryPost && !payload) {
                 return applySecurityHeaders(
                     NextResponse.json(
                         {

@@ -79,42 +79,53 @@ export async function GET(request) {
            ACADEMY / BRANCH ROLE SCOPE FILTER
         ========================================= */
 
-        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
-        if (errorResponse) return errorResponse;
+        const { user: authUser } = await getAuthenticatedUser(request);
 
-        if (authUser.isBranchAdmin && authUser.branch_id) {
-            // Branch Admin: strictly their assigned branch
-            where += ` AND b.id = ? AND b.academy_id = ? `;
-            params.push(authUser.branch_id, authUser.academy_id);
-        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-            // Academy Admin: strictly their academy's branches
-            where += ` AND b.academy_id = ? `;
-            params.push(authUser.academy_id);
-        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-            where += ` AND b.academy_id = ? `;
-            params.push(authUser.academy_id);
-            const allowedBranches = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
-                ? authUser.assignedBranchIds
-                : (authUser.branch_id ? [authUser.branch_id] : []);
-            if (allowedBranches.length > 0) {
-                where += ` AND b.id IN (?) `;
-                params.push(allowedBranches);
-            } else {
-                where += ` AND 1 = 0 `;
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                // Branch Admin: strictly their assigned branch
+                where += ` AND b.id = ? AND b.academy_id = ? `;
+                params.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                // Academy Admin: strictly their academy's branches
+                where += ` AND b.academy_id = ? `;
+                params.push(authUser.academy_id);
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                where += ` AND b.academy_id = ? `;
+                params.push(authUser.academy_id);
+                const allowedBranches = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                    ? authUser.assignedBranchIds
+                    : (authUser.branch_id ? [authUser.branch_id] : []);
+                if (allowedBranches.length > 0) {
+                    where += ` AND b.id IN (?) `;
+                    params.push(allowedBranches);
+                } else {
+                    where += ` AND 1 = 0 `;
+                }
+            } else if (academyId) {
+                const academyIdNumber = Number(academyId);
+                if (!Number.isInteger(academyIdNumber) || academyIdNumber <= 0) {
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: "Invalid academy_id",
+                        },
+                        { status: 400 }
+                    );
+                }
+                where += ` AND b.academy_id = ? `;
+                params.push(academyIdNumber);
             }
-        } else if (academyId) {
-            const academyIdNumber = Number(academyId);
-            if (!Number.isInteger(academyIdNumber) || academyIdNumber <= 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid academy_id",
-                    },
-                    { status: 400 }
-                );
+        } else {
+            // Public website access: list active, non-deleted branches
+            where += ` AND b.status = 1`;
+            if (academyId) {
+                const academyIdNumber = Number(academyId);
+                if (Number.isInteger(academyIdNumber) && academyIdNumber > 0) {
+                    where += ` AND b.academy_id = ? `;
+                    params.push(academyIdNumber);
+                }
             }
-            where += ` AND b.academy_id = ? `;
-            params.push(academyIdNumber);
         }
 
 

@@ -1081,16 +1081,19 @@ export default function PlayerDashboardPage() {
                             <div className="row g-3 mb-5">
                                 {feeCalendar?.months?.map((m) => {
                                     const statusLower = String(m.payment_status || "").toLowerCase();
-                                    const isPaid = statusLower === "paid";
-                                    const isPartial = statusLower === "partial";
-                                    const isPendingStatus = statusLower === "pending" || Number(m.due_amount) > 0;
-                                    const isUpcoming = !m.is_billed || statusLower === "upcoming";
+                                    const isNotEnrolled = statusLower === "not enrolled" || (!m.is_billed && Number(m.fee_amount || 0) === 0);
+                                    const isPaid = !isNotEnrolled && statusLower === "paid";
+                                    const isPartial = !isNotEnrolled && statusLower === "partial";
+                                    const isPendingStatus = !isNotEnrolled && (statusLower === "pending" || Number(m.due_amount) > 0);
+                                    const isUpcoming = !isNotEnrolled && (!m.is_billed || statusLower === "upcoming");
 
                                     return (
                                         <div key={m.month_num} className="col-12 col-sm-6 col-md-4 col-xl-3">
                                             <div
                                                 className={`card h-100 border rounded-4 p-3.5 shadow-sm transition ${
-                                                    isPaid
+                                                    isNotEnrolled
+                                                        ? "bg-light border opacity-75"
+                                                        : isPaid
                                                         ? "border-success bg-success-subtle"
                                                         : isPartial
                                                         ? "border-warning bg-warning-subtle"
@@ -1105,7 +1108,9 @@ export default function PlayerDashboardPage() {
                                                     </span>
                                                     <span
                                                         className={`badge rounded-pill px-2.5 py-1 ${
-                                                            isPaid
+                                                            isNotEnrolled
+                                                                ? "bg-secondary-subtle text-secondary border border-secondary-subtle"
+                                                                : isPaid
                                                                 ? "bg-success text-white"
                                                                 : isPartial
                                                                 ? "bg-warning text-dark border border-warning"
@@ -1115,12 +1120,12 @@ export default function PlayerDashboardPage() {
                                                         }`}
                                                         style={{ fontSize: "0.68rem" }}
                                                     >
-                                                        {isPaid ? "PAID" : isPartial ? "PARTIAL" : isPendingStatus && m.is_billed ? "PENDING" : "UPCOMING"}
+                                                        {isNotEnrolled ? "NOT ENROLLED" : isPaid ? "PAID" : isPartial ? "PARTIAL" : isPendingStatus && m.is_billed ? "PENDING" : "UPCOMING"}
                                                     </span>
                                                 </div>
 
                                                 <div className="my-2">
-                                                    {m.is_billed ? (
+                                                    {m.is_billed && !isNotEnrolled ? (
                                                         <>
                                                             <div className="d-flex justify-content-between small text-muted mb-1">
                                                                 <span>Total Fee:</span>
@@ -1158,6 +1163,10 @@ export default function PlayerDashboardPage() {
                                                                 </div>
                                                             )}
                                                         </>
+                                                    ) : isNotEnrolled ? (
+                                                        <div className="text-muted small py-3 text-center opacity-75">
+                                                            Not enrolled for this period
+                                                        </div>
                                                     ) : (
                                                         <div className="text-muted small py-2 text-center opacity-75">
                                                             Bill not yet generated
@@ -1167,12 +1176,14 @@ export default function PlayerDashboardPage() {
 
                                                 <div className="mt-auto pt-2 border-top d-flex justify-content-between align-items-center" style={{ fontSize: "0.7rem" }}>
                                                     <span className="text-muted">
-                                                        {m.due_date ? `Due: ${new Date(m.due_date).toLocaleDateString("en-IN")}` : "Monthly Cycle"}
+                                                        {isNotEnrolled ? "Prior to Joining" : (m.due_date ? `Due: ${new Date(m.due_date).toLocaleDateString("en-IN")}` : "Monthly Cycle")}
                                                     </span>
                                                     {isPaid ? (
                                                         <span className="text-success fw-bold d-flex align-items-center gap-1">
                                                             <CheckCircle2 size={13} /> Cleared
                                                         </span>
+                                                    ) : isNotEnrolled ? (
+                                                        <span className="text-muted opacity-75">—</span>
                                                     ) : m.due_amount > 0 ? (
                                                         <span className="text-danger fw-bold">
                                                             Due ₹{m.due_amount.toLocaleString("en-IN")}

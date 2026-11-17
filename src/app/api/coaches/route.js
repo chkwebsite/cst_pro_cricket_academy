@@ -8,8 +8,7 @@ export async function GET(request) {
     let connection;
 
     try {
-        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
-        if (errorResponse) return errorResponse;
+        const { user: authUser } = await getAuthenticatedUser(request);
 
         const { searchParams } = new URL(request.url);
 
@@ -67,34 +66,47 @@ export async function GET(request) {
         }
 
         // Role-based Tenant Scoping
-        if (authUser.isBranchAdmin && authUser.branch_id) {
-            sql += " AND c.branch_id = ? AND c.academy_id = ?";
-            values.push(authUser.branch_id, authUser.academy_id);
-        } else if (authUser.isAcademyAdmin && authUser.academy_id) {
-            sql += " AND c.academy_id = ?";
-            values.push(authUser.academy_id);
-            if (branch_id) {
-                sql += " AND c.branch_id = ?";
-                values.push(branch_id);
-            }
-        } else if (!authUser.isSuperAdmin && authUser.academy_id) {
-            sql += " AND c.academy_id = ?";
-            values.push(authUser.academy_id);
-            const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
-                ? authUser.assignedBranchIds
-                : (authUser.branch_id ? [authUser.branch_id] : [-1]);
-            if (branch_id) {
-                if (allowed.includes(Number(branch_id))) {
+        if (authUser) {
+            if (authUser.isBranchAdmin && authUser.branch_id) {
+                sql += " AND c.branch_id = ? AND c.academy_id = ?";
+                values.push(authUser.branch_id, authUser.academy_id);
+            } else if (authUser.isAcademyAdmin && authUser.academy_id) {
+                sql += " AND c.academy_id = ?";
+                values.push(authUser.academy_id);
+                if (branch_id) {
                     sql += " AND c.branch_id = ?";
                     values.push(branch_id);
+                }
+            } else if (!authUser.isSuperAdmin && authUser.academy_id) {
+                sql += " AND c.academy_id = ?";
+                values.push(authUser.academy_id);
+                const allowed = authUser.assignedBranchIds && authUser.assignedBranchIds.length > 0
+                    ? authUser.assignedBranchIds
+                    : (authUser.branch_id ? [authUser.branch_id] : [-1]);
+                if (branch_id) {
+                    if (allowed.includes(Number(branch_id))) {
+                        sql += " AND c.branch_id = ?";
+                        values.push(branch_id);
+                    } else {
+                        sql += " AND c.branch_id = -1";
+                    }
                 } else {
-                    sql += " AND c.branch_id = -1";
+                    sql += ` AND c.branch_id IN (${allowed.map(() => "?").join(",")})`;
+                    values.push(...allowed);
                 }
             } else {
-                sql += ` AND c.branch_id IN (${allowed.map(() => "?").join(",")})`;
-                values.push(...allowed);
+                if (academy_id) {
+                    sql += " AND c.academy_id = ?";
+                    values.push(academy_id);
+                }
+                if (branch_id) {
+                    sql += " AND c.branch_id = ?";
+                    values.push(branch_id);
+                }
             }
         } else {
+            // Public website access: only active coaches across academies
+            sql += " AND c.status = 1";
             if (academy_id) {
                 sql += " AND c.academy_id = ?";
                 values.push(academy_id);

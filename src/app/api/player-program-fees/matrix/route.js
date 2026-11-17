@@ -49,6 +49,8 @@ export async function GET(request) {
                 up.created_at,
                 up.status AS enrollment_status,
                 ap.admission_no,
+                ap.date_of_joining,
+                ap.date_of_appointment,
                 CONCAT_WS(' ', ap.first_name, ap.last_name) AS player_name,
                 ap.phone AS player_phone,
                 p.program_name,
@@ -259,7 +261,7 @@ export async function GET(request) {
                 const enrollmentFees = feesByEnrollment.get(player.user_program_id) || new Map();
                 const monthsData = {};
 
-                const startMonth = toYearMonth(player.start_date) || toYearMonth(player.created_at);
+                const startMonth = toYearMonth(player.start_date) || toYearMonth(player.date_of_joining) || toYearMonth(player.created_at);
                 const endMonth = toYearMonth(player.end_date);
                 const defaultMonthlyFee = Number(player.program_fee) || 0;
 

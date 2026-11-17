@@ -72,6 +72,8 @@ p.id,
     p.aadhaar_card,
 
     p.playing_academy,
+    p.date_of_joining,
+    p.date_of_appointment,
 
     p.branch_id,
     b.branch_name,
@@ -199,6 +201,8 @@ export async function PUT(request, { params }) {
 
         const aadhaar_no = formData.get("aadhaar_no");
         const playing_academy = formData.get("playing_academy");
+        const date_of_joining = formData.get("date_of_joining") || null;
+        const date_of_appointment = formData.get("date_of_appointment") || null;
 
         const branch_id = formData.get("branch_id");
         const role_id = formData.get("role_id");
@@ -521,6 +525,8 @@ admission_no = ?,
     aadhaar_card = ?,
 
     playing_academy = ?,
+    date_of_joining = ?,
+    date_of_appointment = ?,
 
     branch_id = ?,
     role_id = ?,
@@ -552,6 +558,8 @@ admission_no = ?,
                 aadhaarCardPath,
 
                 playing_academy || null,
+                date_of_joining,
+                date_of_appointment,
 
                 branch_id,
                 role_id,
@@ -561,6 +569,15 @@ admission_no = ?,
                 id
             ]
         );
+
+        if (date_of_joining) {
+            await connection.query(
+                `UPDATE cst_user_programs
+                 SET start_date = COALESCE(start_date, ?)
+                 WHERE admission_players_id = ?`,
+                [date_of_joining, id]
+            );
+        }
 
 
         // =================================================
@@ -594,6 +611,8 @@ p.id,
     p.aadhaar_card,
 
     p.playing_academy,
+    p.date_of_joining,
+    p.date_of_appointment,
 
     p.branch_id,
     b.branch_name,

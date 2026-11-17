@@ -6,6 +6,12 @@ import { useState, useEffect } from "react";
 import { useUser } from "../components/UserContext";
 import Pagination from "../components/Pagination";
 
+const formatDate = (val) => {
+    if (!val) return "—";
+    const [y, m, d] = String(val).slice(0, 10).split("-");
+    return d && m && y ? `${d}/${m}/${y}` : String(val).slice(0, 10);
+};
+
 export default function AdmissionPlayersPage() {
     // STATES
     const [loading, setLoading] = useState(true);
@@ -234,6 +240,8 @@ export default function AdmissionPlayersPage() {
                                             <th>Name</th>
                                             <th>Branch</th>
                                             <th>Role</th>
+                                            <th>Date of Joining</th>
+                                            <th>Date of Appointment</th>
                                             <th>Phone</th>
                                             <th>Under Age</th>
                                             <th>Status</th>
@@ -249,6 +257,16 @@ export default function AdmissionPlayersPage() {
                                                 <td>{item.first_name} {item.last_name || ""}</td>
                                                 <td>{item.branch_name}</td>
                                                 <td>{item.role_name}</td>
+                                                <td>
+                                                    <span className="badge bg-light text-dark border">
+                                                        {formatDate(item.date_of_joining)}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <small className="text-muted">
+                                                        {formatDate(item.date_of_appointment)}
+                                                    </small>
+                                                </td>
                                                 <td>{item.phone || "—"}</td>
                                                 <td>
                                                     <span className={`badge ${item.under_age === 1 ? "bg-warning text-dark" : "bg-light text-dark"}`}>

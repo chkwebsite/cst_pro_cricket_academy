@@ -41,15 +41,23 @@ export async function GET(request) {
 
         const params = [];
 
-        const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
-        if (errorResponse) return errorResponse;
+        const { user: authUser } = await getAuthenticatedUser(request);
 
-        if (!authUser.isSuperAdmin) {
-            sql += ` AND id = ?`;
-            params.push(authUser.academy_id);
-        } else if (id) {
-            sql += ` AND id = ?`;
-            params.push(id);
+        if (authUser) {
+            if (!authUser.isSuperAdmin) {
+                sql += ` AND id = ?`;
+                params.push(authUser.academy_id);
+            } else if (id) {
+                sql += ` AND id = ?`;
+                params.push(id);
+            }
+        } else {
+            // Public website access: list active, non-deleted academies
+            sql += ` AND status = 1`;
+            if (id) {
+                sql += ` AND id = ?`;
+                params.push(id);
+            }
         }
         if (search) {
             sql += ` AND (academy_name LIKE ? OR phone LIKE ? OR email LIKE ? OR city LIKE ? OR state LIKE ?)`;

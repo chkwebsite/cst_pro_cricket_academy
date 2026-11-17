@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import PageHeader from "../components/layout/PageHeader";
 import CoachesGridSection from "../components/coaches/CoachesGridSection";
 import SupportExpertsSection from "../components/coaches/SupportExpertsSection";
@@ -18,7 +19,9 @@ export default function CoachesPage() {
         breadcrumbs={[{ label: "Home", href: "/" }]}
         current="Coaches"
       />
-      <CoachesGridSection />
+      <Suspense fallback={<div className="text-center py-5 text-white">Loading coaches panel...</div>}>
+        <CoachesGridSection />
+      </Suspense>
       <SupportExpertsSection />
       <CtaSection />
     </>

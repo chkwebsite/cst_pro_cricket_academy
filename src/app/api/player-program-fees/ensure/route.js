@@ -83,6 +83,7 @@ async function handleEnsure(authUser, userProgramIdRaw, feeMonthRaw, amountRaw) 
                 up.program_id,
                 up.start_date,
                 up.end_date,
+                ap.date_of_joining,
                 p.academy_id,
                 p.program_name,
                 p.program_fee,
@@ -108,6 +109,15 @@ async function handleEnsure(authUser, userProgramIdRaw, feeMonthRaw, amountRaw) 
         if (!verifyRecordAccess(authUser, { academy_id: en.academy_id, branch_id: en.branch_id })) {
             await connection.rollback();
             return { error: "Forbidden. Enrollment belongs to another academy or branch.", status: 403 };
+        }
+
+        const effStart = en.start_date || en.date_of_joining;
+        if (effStart) {
+            const startMonthStr = String(effStart).slice(0, 7);
+            if (monthStr < startMonthStr) {
+                await connection.rollback();
+                return { error: `Cannot generate fee for ${monthStr}. Player program enrollment starts in ${startMonthStr}.`, status: 400 };
+            }
         }
 
         // Determine fee amount

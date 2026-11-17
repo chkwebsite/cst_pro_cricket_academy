@@ -22,7 +22,6 @@ async function getCoach(id) {
        LEFT JOIN cst_branch b ON b.id = c.branch_id
        WHERE c.id = ?
          AND c.is_deleted = 0
-         AND (c.academy_id = 1 OR c.academy_id IS NULL)
        LIMIT 1`,
       [id]
     );

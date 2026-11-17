@@ -343,6 +343,8 @@ export async function GET(request) {
                 p.aadhaar_card,
 
                 p.playing_academy,
+                p.date_of_joining,
+                p.date_of_appointment,
 
                 p.branch_id,
                 b.branch_name,
@@ -595,6 +597,16 @@ export async function POST(request) {
         const playing_academy =
             formData.get("playing_academy");
 
+        const date_of_joining =
+            toNullable(
+                formData.get("date_of_joining")
+            );
+
+        const date_of_appointment =
+            toNullable(
+                formData.get("date_of_appointment")
+            );
+
         let branch_id =
             toNumberOrNull(
                 formData.get("branch_id")
@@ -629,7 +641,7 @@ export async function POST(request) {
 
         const start_date =
             toNullable(
-                formData.get("start_date")
+                formData.get("start_date") || date_of_joining || new Date().toISOString().slice(0, 10)
             );
 
         const end_date =
@@ -763,6 +775,8 @@ export async function POST(request) {
                         aadhaar_card,
 
                         playing_academy,
+                        date_of_joining,
+                        date_of_appointment,
 
                         branch_id,
                         role_id,
@@ -778,6 +792,7 @@ export async function POST(request) {
                         ?, ?,
                         ?, ?,
                         ?,
+                        ?, ?,
                         ?, ?,
                         ?
                     )
@@ -811,6 +826,8 @@ export async function POST(request) {
                         toNullable(
                             playing_academy
                         ),
+                        date_of_joining,
+                        date_of_appointment,
 
                         branch_id,
                         role_id,
@@ -1096,7 +1113,7 @@ export async function PUT(request, context) {
 
         const start_date =
             toNullable(
-                formData.get("start_date")
+                formData.get("start_date") || date_of_joining || new Date().toISOString().slice(0, 10)
             );
 
         const end_date =

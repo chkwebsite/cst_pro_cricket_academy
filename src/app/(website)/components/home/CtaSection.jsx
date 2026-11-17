@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useTrialModal } from "../trial/TrialModalContext";
 
 export default function CtaSection({
   title = "YOUR CRICKET JOURNEY STARTS HERE.",
@@ -8,6 +11,8 @@ export default function CtaSection({
   contactText = "Contact Us",
   contactLink = "/contact",
 }) {
+  const { openModal } = useTrialModal();
+
   return (
     <section className="section" id="cta">
       <div className="container">
@@ -23,9 +28,13 @@ export default function CtaSection({
           </h2>
           <p className="lead">{subtitle}</p>
           <div className="hero__cta">
-            <Link className="btn btn--red" href={buttonLink}>
+            <button
+              type="button"
+              className="btn btn--red"
+              onClick={openModal}
+            >
               {buttonText}
-            </Link>
+            </button>
             <Link className="btn btn--ghost" href={contactLink}>
               {contactText}
             </Link>

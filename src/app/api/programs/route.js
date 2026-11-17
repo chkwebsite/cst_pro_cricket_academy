@@ -52,8 +52,7 @@ async function saveProgramImage(file) {
 // GET ALL PROGRAMS
 // =====================================================
 export async function GET(request) {
-    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
-    if (errorResponse) return errorResponse;
+    const { user: authUser } = await getAuthenticatedUser(request);
 
     const connection = await pool.getConnection();
 
@@ -104,41 +103,54 @@ export async function GET(request) {
         const values = [];
 
         // Tenant Isolation
-        if (!authUser.isSuperAdmin) {
-            sql += ` AND p.academy_id = ? `;
-            values.push(authUser.academy_id);
+        if (authUser) {
+            if (!authUser.isSuperAdmin) {
+                sql += ` AND p.academy_id = ? `;
+                values.push(authUser.academy_id);
 
-            if (authUser.isBranchAdmin) {
-                sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
-                values.push(authUser.branch_id);
-            } else if (authUser.isPlayer) {
-                if (authUser.branch_id) {
+                if (authUser.isBranchAdmin) {
                     sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
                     values.push(authUser.branch_id);
-                }
-            } else if (!authUser.isAcademyAdmin) {
-                // Staff / Coach
-                const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
-                if (allowedBranches.length > 0) {
-                    sql += ` AND (p.branch_id IN (?) OR p.branch_id IS NULL) `;
-                    values.push(allowedBranches);
+                } else if (authUser.isPlayer) {
+                    if (authUser.branch_id) {
+                        sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
+                        values.push(authUser.branch_id);
+                    }
+                } else if (!authUser.isAcademyAdmin) {
+                    // Staff / Coach
+                    const allowedBranches = authUser.assignedBranchIds || (authUser.branch_id ? [authUser.branch_id] : []);
+                    if (allowedBranches.length > 0) {
+                        sql += ` AND (p.branch_id IN (?) OR p.branch_id IS NULL) `;
+                        values.push(allowedBranches);
+                    }
+                } else {
+                    // Academy Admin can view all or filter by branch
+                    if (branch_id) {
+                        sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
+                        values.push(branch_id);
+                    }
                 }
             } else {
-                // Academy Admin can view all or filter by branch
+                // Super Admin
+                if (academy_id) {
+                    sql += ` AND p.academy_id = ? `;
+                    values.push(academy_id);
+                }
                 if (branch_id) {
                     sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
                     values.push(branch_id);
                 }
             }
         } else {
-            // Super Admin
+            // Public website access
+            sql += ` AND p.status = 1`;
             if (academy_id) {
                 sql += ` AND p.academy_id = ? `;
-                values.push(academy_id);
+                values.push(Number(academy_id));
             }
             if (branch_id) {
                 sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL) `;
-                values.push(branch_id);
+                values.push(Number(branch_id));
             }
         }
 

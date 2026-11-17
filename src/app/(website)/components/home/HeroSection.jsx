@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useTrialModal } from "../trial/TrialModalContext";
 
 export default function HeroSection({
   badge = "ADMISSIONS OPEN 2026-27",
@@ -19,6 +22,8 @@ export default function HeroSection({
   heroImage = "/assets/img/hero-player.png",
   heroImageAlt = "CST Cricket Academy player playing a cover drive",
 }) {
+  const { openModal } = useTrialModal();
+
   return (
     <section className="hero" id="top">
       <div className="hero__bg" aria-hidden="true"></div>
@@ -42,9 +47,13 @@ export default function HeroSection({
           </h1>
           <p className="lead">{description}</p>
           <div className="hero__cta">
-            <Link className="btn btn--red" href={primaryBtn.href}>
+            <button
+              type="button"
+              className="btn btn--red"
+              onClick={openModal}
+            >
               {primaryBtn.text}
-            </Link>
+            </button>
             <Link className="btn btn--ghost" href={secondaryBtn.href}>
               {secondaryBtn.text}{" "}
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

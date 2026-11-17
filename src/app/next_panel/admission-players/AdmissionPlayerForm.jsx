@@ -25,6 +25,8 @@ const EMPTY_FORM = {
     gender: "",
     aadhaar_no: "",
     playing_academy: "",
+    date_of_joining: new Date().toLocaleDateString("en-CA"),
+    date_of_appointment: new Date().toLocaleDateString("en-CA"),
     branch_id: "",
     role_id: "",
     status: 1,
@@ -259,6 +261,12 @@ export default function AdmissionPlayerForm({ id = null }) {
                     playing_academy:
                         data.playing_academy || "",
 
+                    date_of_joining:
+                        data.date_of_joining ? String(data.date_of_joining).slice(0, 10) : "",
+
+                    date_of_appointment:
+                        data.date_of_appointment ? String(data.date_of_appointment).slice(0, 10) : "",
+
                     branch_id:
                         data.branch_id ?? "",
 
@@ -409,6 +417,13 @@ export default function AdmissionPlayerForm({ id = null }) {
             return;
         }
 
+        if (!formData.date_of_joining) {
+            setError(
+                "Date of Joining is required"
+            );
+            return;
+        }
+
         /* ---------------------------------------------
            SUBMIT
         --------------------------------------------- */
@@ -436,6 +451,10 @@ export default function AdmissionPlayerForm({ id = null }) {
                     }
                 }
             );
+
+            if (formData.date_of_joining) {
+                body.set("start_date", formData.date_of_joining);
+            }
 
             /* -----------------------------------------
                FILE
@@ -1289,6 +1308,51 @@ export default function AdmissionPlayerForm({ id = null }) {
                                     className="form-control"
                                     value={
                                         formData.playing_academy
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
+                                />
+
+                            </div>
+
+                            <div className="col-md-3 mb-3">
+
+                                <label className="form-label fw-semibold">
+                                    Date of Joining <span className="text-danger">*</span>
+                                </label>
+
+                                <input
+                                    type="date"
+                                    name="date_of_joining"
+                                    className="form-control"
+                                    value={
+                                        formData.date_of_joining
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
+                                    required
+                                />
+
+                                <div className="form-text">
+                                    Monthly fee starts from this joining month.
+                                </div>
+
+                            </div>
+
+                            <div className="col-md-3 mb-3">
+
+                                <label className="form-label fw-semibold">
+                                    Date of Appointment
+                                </label>
+
+                                <input
+                                    type="date"
+                                    name="date_of_appointment"
+                                    className="form-control"
+                                    value={
+                                        formData.date_of_appointment
                                     }
                                     onChange={
                                         handleChange
