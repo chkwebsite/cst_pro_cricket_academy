@@ -1878,7 +1878,7 @@ main { overflow-x: clip; }
 .page-hero .crumbs { flex-wrap: wrap; gap: 6px 10px; font-size: clamp(12px, 1.5vw, 14px); margin-top: 16px; }
 .page-hero::before { width: min(520px, 90vw); height: min(520px, 90vw); }
 .section, section { scroll-margin-top: 90px; }
-.card, .panel, .modal-content, .dropdown, .mobile-nav { min-width: 0; }
+/* .card, .panel, .modal-content, .dropdown, .mobile-nav { min-width: 0; } */
 .card { overflow-wrap: anywhere; }
 .btn, .btn-sm, button { max-width: 100%; }
 .btn { white-space: normal; text-align: center; }
