@@ -32,6 +32,7 @@ import {
     Video,
     X,
     RefreshCw,
+    Swords,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 import Header from "./Header";
@@ -57,6 +58,7 @@ const iconMap = {
     "product-images": Images,
     "product-stock": Layers,
     "order-payments": CreditCard,
+    "umpire-payments": CreditCard,
     "credit-card": CreditCard,
     "match-fee-status": CreditCard,
     "fee-status": CreditCard,
@@ -73,13 +75,18 @@ const iconMap = {
     "staff-salary-transactions": Receipt,
     banknote: Banknote,
     receipt: Receipt,
+    "financial-summary": DollarSign,
     "dollar-sign": DollarSign,
     "ground-booking-requests": CalendarCheck,
     "ground-bookings": CalendarCheck,
     "ground-availability": Calendar,
     layers: Layers,
     batches: Layers,
+    umpires: UserCheck,
+    whistle: UserCheck,
     "user-check": UserCheck,
+    swords: Swords,
+    matches: Swords,
     "batch-coaches": UserCheck,
     "batch-players": Users,
     "individual-training": Activity,
@@ -399,6 +406,8 @@ export default function Sidebar({ children }) {
                         "/next_panel/player-payments",
                         "/next_panel/player-fees-matrix",
                         "/next_panel/ground-payments",
+                        "/next_panel/umpire-payments",
+                        "/next_panel/financial-summary",
                         "/next_panel/orders",
                         "/next_panel/order-payments",
                     ]);
@@ -685,6 +694,50 @@ export default function Sidebar({ children }) {
 
                     playerItems.sort((a, b) => (Number(a.menu_order) || 99) - (Number(b.menu_order) || 99));
                     filtered = playerItems;
+                } else if (role === ROLES.UMPIRE || currentUserType.includes("umpire") || user?.isUmpire) {
+                    // UMPIRE SPECIFIC MENU RULES:
+                    // Only see Dashboard (custom Umpire dashboard), Assigned Matches, and Assigned Ground Bookings
+                    filtered = [
+                        {
+                            id: 99990,
+                            parent_id: null,
+                            menu_key: "dashboard",
+                            menu_name: "Dashboard",
+                            menu_title: "Dashboard",
+                            menu_url: "/next_panel/dashboard",
+                            menu_icon: "layout-dashboard",
+                            menu_order: 0,
+                        },
+                        {
+                            id: 99991,
+                            parent_id: null,
+                            menu_key: "matches",
+                            menu_name: "My Matches",
+                            menu_title: "My Matches",
+                            menu_url: "/next_panel/matches",
+                            menu_icon: "matches",
+                            menu_order: 1,
+                        },
+                        {
+                            id: 99992,
+                            parent_id: null,
+                            menu_key: "ground-bookings",
+                            menu_name: "Ground Bookings",
+                            menu_title: "Ground Bookings",
+                            menu_url: "/next_panel/ground-bookings",
+                            menu_icon: "ground-bookings",
+                            menu_order: 2,
+                        },
+                        {
+                            id: 99993,
+                            parent_id: null,
+                            menu_key: "ground-availability",
+                            menu_name: "Ground Availability",
+                            menu_title: "Ground Availability",
+                            menu_icon: "ground-availability",
+                            menu_order: 3,
+                        },
+                    ];
                 } else {
                     // OTHER USER ROLES (Academy Admin, Branch Admin, Coach, Accountant, etc.):
                     // Strictly filter based on assigned role permissions in DB

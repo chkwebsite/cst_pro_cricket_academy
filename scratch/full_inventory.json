@@ -1,0 +1,990 @@
+{
+  "summary": {
+    "websitePublicCount": 20,
+    "websiteEcommerceCount": 6,
+    "authCount": 2,
+    "userPortalCount": 3,
+    "adminManagementCount": 211,
+    "totalScreens": 242
+  },
+  "inventory": {
+    "websitePublic": [
+      {
+        "route": "/(website)/about",
+        "file": "src\\app\\(website)\\about\\page.jsx"
+      },
+      {
+        "route": "/(website)/achievements",
+        "file": "src\\app\\(website)\\achievements\\page.jsx"
+      },
+      {
+        "route": "/(website)/book-free-trial",
+        "file": "src\\app\\(website)\\book-free-trial\\page.jsx"
+      },
+      {
+        "route": "/(website)/branches",
+        "file": "src\\app\\(website)\\branches\\page.jsx"
+      },
+      {
+        "route": "/(website)/coaches",
+        "file": "src\\app\\(website)\\coaches\\page.jsx"
+      },
+      {
+        "route": "/(website)/coaches/[id]",
+        "file": "src\\app\\(website)\\coaches\\[id]\\page.jsx"
+      },
+      {
+        "route": "/(website)/contact",
+        "file": "src\\app\\(website)\\contact\\page.jsx"
+      },
+      {
+        "route": "/(website)/facilities",
+        "file": "src\\app\\(website)\\facilities\\page.jsx"
+      },
+      {
+        "route": "/(website)/faq",
+        "file": "src\\app\\(website)\\faq\\page.jsx"
+      },
+      {
+        "route": "/(website)/gallery",
+        "file": "src\\app\\(website)\\gallery\\page.jsx"
+      },
+      {
+        "route": "/(website)/ground-booking",
+        "file": "src\\app\\(website)\\ground-booking\\page.jsx"
+      },
+      {
+        "route": "/(website)/matches",
+        "file": "src\\app\\(website)\\matches\\page.jsx"
+      },
+      {
+        "route": "/(website)",
+        "file": "src\\app\\(website)\\page.jsx"
+      },
+      {
+        "route": "/(website)/privacy-policy",
+        "file": "src\\app\\(website)\\privacy-policy\\page.jsx"
+      },
+      {
+        "route": "/(website)/programs",
+        "file": "src\\app\\(website)\\programs\\page.jsx"
+      },
+      {
+        "route": "/(website)/refund-policy",
+        "file": "src\\app\\(website)\\refund-policy\\page.jsx"
+      },
+      {
+        "route": "/(website)/rules",
+        "file": "src\\app\\(website)\\rules\\page.jsx"
+      },
+      {
+        "route": "/(website)/shipping-policy",
+        "file": "src\\app\\(website)\\shipping-policy\\page.jsx"
+      },
+      {
+        "route": "/(website)/terms-conditions",
+        "file": "src\\app\\(website)\\terms-conditions\\page.jsx"
+      },
+      {
+        "route": "/(website)/tournaments",
+        "file": "src\\app\\(website)\\tournaments\\page.jsx"
+      }
+    ],
+    "websiteEcommerce": [
+      {
+        "route": "/(website)/cart",
+        "file": "src\\app\\(website)\\cart\\page.jsx"
+      },
+      {
+        "route": "/(website)/checkout",
+        "file": "src\\app\\(website)\\checkout\\page.jsx"
+      },
+      {
+        "route": "/(website)/order-success/[order_no]",
+        "file": "src\\app\\(website)\\order-success\\[order_no]\\page.jsx"
+      },
+      {
+        "route": "/(website)/orders",
+        "file": "src\\app\\(website)\\orders\\page.jsx"
+      },
+      {
+        "route": "/(website)/shop",
+        "file": "src\\app\\(website)\\shop\\page.jsx"
+      },
+      {
+        "route": "/(website)/shop/[slug]",
+        "file": "src\\app\\(website)\\shop\\[slug]\\page.jsx"
+      }
+    ],
+    "auth": [
+      {
+        "route": "/(auth)/login",
+        "file": "src\\app\\(auth)\\login\\page.jsx"
+      },
+      {
+        "route": "/(auth)/register",
+        "file": "src\\app\\(auth)\\register\\page.jsx"
+      }
+    ],
+    "userPortal": [
+      {
+        "route": "/(website)/my-bookings",
+        "file": "src\\app\\(website)\\my-bookings\\page.jsx"
+      },
+      {
+        "route": "/(website)/profile",
+        "file": "src\\app\\(website)\\profile\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-dashboard",
+        "file": "src\\app\\next_panel\\player-dashboard\\page.jsx"
+      }
+    ],
+    "adminManagement": [
+      {
+        "route": "/next_panel/academies/new",
+        "file": "src\\app\\next_panel\\academies\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/academies",
+        "file": "src\\app\\next_panel\\academies\\page.jsx"
+      },
+      {
+        "route": "/next_panel/academies/[id]/edit",
+        "file": "src\\app\\next_panel\\academies\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/academies/[id]",
+        "file": "src\\app\\next_panel\\academies\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/admission-players/new",
+        "file": "src\\app\\next_panel\\admission-players\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/admission-players",
+        "file": "src\\app\\next_panel\\admission-players\\page.jsx"
+      },
+      {
+        "route": "/next_panel/admission-players/[id]/edit",
+        "file": "src\\app\\next_panel\\admission-players\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/age-groups/new",
+        "file": "src\\app\\next_panel\\age-groups\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/age-groups",
+        "file": "src\\app\\next_panel\\age-groups\\page.jsx"
+      },
+      {
+        "route": "/next_panel/age-groups/[id]/edit",
+        "file": "src\\app\\next_panel\\age-groups\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/attendance",
+        "file": "src\\app\\next_panel\\attendance\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batch-coaches/new",
+        "file": "src\\app\\next_panel\\batch-coaches\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batch-coaches",
+        "file": "src\\app\\next_panel\\batch-coaches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batch-coaches/[id]/edit",
+        "file": "src\\app\\next_panel\\batch-coaches\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batch-players/new",
+        "file": "src\\app\\next_panel\\batch-players\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batch-players",
+        "file": "src\\app\\next_panel\\batch-players\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batch-players/[id]/edit",
+        "file": "src\\app\\next_panel\\batch-players\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batches/new",
+        "file": "src\\app\\next_panel\\batches\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batches",
+        "file": "src\\app\\next_panel\\batches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batches/[id]/edit",
+        "file": "src\\app\\next_panel\\batches\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/batches/[id]",
+        "file": "src\\app\\next_panel\\batches\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/branches/new",
+        "file": "src\\app\\next_panel\\branches\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/branches",
+        "file": "src\\app\\next_panel\\branches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/branches/[id]/edit",
+        "file": "src\\app\\next_panel\\branches\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/branches/[id]",
+        "file": "src\\app\\next_panel\\branches\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/coaches/new",
+        "file": "src\\app\\next_panel\\coaches\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/coaches",
+        "file": "src\\app\\next_panel\\coaches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/coaches/[id]/edit",
+        "file": "src\\app\\next_panel\\coaches\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/dashboard",
+        "file": "src\\app\\next_panel\\dashboard\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-payments/new",
+        "file": "src\\app\\next_panel\\fee-payments\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-payments",
+        "file": "src\\app\\next_panel\\fee-payments\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-payments/[id]/edit",
+        "file": "src\\app\\next_panel\\fee-payments\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-payments/[id]",
+        "file": "src\\app\\next_panel\\fee-payments\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-status/new",
+        "file": "src\\app\\next_panel\\fee-status\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-status",
+        "file": "src\\app\\next_panel\\fee-status\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-status/[id]/edit",
+        "file": "src\\app\\next_panel\\fee-status\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/fee-status/[id]",
+        "file": "src\\app\\next_panel\\fee-status\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/financial-summary",
+        "file": "src\\app\\next_panel\\financial-summary\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-albums/new",
+        "file": "src\\app\\next_panel\\gallery-albums\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-albums",
+        "file": "src\\app\\next_panel\\gallery-albums\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-albums/[id]/edit",
+        "file": "src\\app\\next_panel\\gallery-albums\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-categories/new",
+        "file": "src\\app\\next_panel\\gallery-categories\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-categories",
+        "file": "src\\app\\next_panel\\gallery-categories\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-categories/[id]/edit",
+        "file": "src\\app\\next_panel\\gallery-categories\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-images/new",
+        "file": "src\\app\\next_panel\\gallery-images\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-images",
+        "file": "src\\app\\next_panel\\gallery-images\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-images/[id]/edit",
+        "file": "src\\app\\next_panel\\gallery-images\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-management",
+        "file": "src\\app\\next_panel\\gallery-management\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-videos/new",
+        "file": "src\\app\\next_panel\\gallery-videos\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-videos",
+        "file": "src\\app\\next_panel\\gallery-videos\\page.jsx"
+      },
+      {
+        "route": "/next_panel/gallery-videos/[id]/edit",
+        "file": "src\\app\\next_panel\\gallery-videos\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-availability",
+        "file": "src\\app\\next_panel\\ground-availability\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-booking-requests/new",
+        "file": "src\\app\\next_panel\\ground-booking-requests\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-booking-requests",
+        "file": "src\\app\\next_panel\\ground-booking-requests\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-booking-requests/[id]/edit",
+        "file": "src\\app\\next_panel\\ground-booking-requests\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-booking-requests/[id]",
+        "file": "src\\app\\next_panel\\ground-booking-requests\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-bookings/new",
+        "file": "src\\app\\next_panel\\ground-bookings\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-bookings",
+        "file": "src\\app\\next_panel\\ground-bookings\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-bookings/[id]/edit",
+        "file": "src\\app\\next_panel\\ground-bookings\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-bookings/[id]",
+        "file": "src\\app\\next_panel\\ground-bookings\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-images/new",
+        "file": "src\\app\\next_panel\\ground-images\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-images",
+        "file": "src\\app\\next_panel\\ground-images\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-images/[id]/edit",
+        "file": "src\\app\\next_panel\\ground-images\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-payments/new",
+        "file": "src\\app\\next_panel\\ground-payments\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-payments",
+        "file": "src\\app\\next_panel\\ground-payments\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-payments/[id]/edit",
+        "file": "src\\app\\next_panel\\ground-payments\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-slots/new",
+        "file": "src\\app\\next_panel\\ground-slots\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-slots",
+        "file": "src\\app\\next_panel\\ground-slots\\page.jsx"
+      },
+      {
+        "route": "/next_panel/ground-slots/[id]/edit",
+        "file": "src\\app\\next_panel\\ground-slots\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/grounds/new",
+        "file": "src\\app\\next_panel\\grounds\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/grounds",
+        "file": "src\\app\\next_panel\\grounds\\page.jsx"
+      },
+      {
+        "route": "/next_panel/grounds/[id]/edit",
+        "file": "src\\app\\next_panel\\grounds\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/grounds/[id]",
+        "file": "src\\app\\next_panel\\grounds\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/individual-training/new",
+        "file": "src\\app\\next_panel\\individual-training\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/individual-training",
+        "file": "src\\app\\next_panel\\individual-training\\page.jsx"
+      },
+      {
+        "route": "/next_panel/individual-training/[id]/edit",
+        "file": "src\\app\\next_panel\\individual-training\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/individual-training/[id]",
+        "file": "src\\app\\next_panel\\individual-training\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-bowling-scorecard/new",
+        "file": "src\\app\\next_panel\\match-bowling-scorecard\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-bowling-scorecard",
+        "file": "src\\app\\next_panel\\match-bowling-scorecard\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-bowling-scorecard/[id]/edit",
+        "file": "src\\app\\next_panel\\match-bowling-scorecard\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-innings/new",
+        "file": "src\\app\\next_panel\\match-innings\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-innings",
+        "file": "src\\app\\next_panel\\match-innings\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-innings/[id]/edit",
+        "file": "src\\app\\next_panel\\match-innings\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-management",
+        "file": "src\\app\\next_panel\\match-management\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-players/new",
+        "file": "src\\app\\next_panel\\match-players\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-players",
+        "file": "src\\app\\next_panel\\match-players\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-players/[id]/edit",
+        "file": "src\\app\\next_panel\\match-players\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-scorecard/center",
+        "file": "src\\app\\next_panel\\match-scorecard\\center\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-scorecard/new",
+        "file": "src\\app\\next_panel\\match-scorecard\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-scorecard",
+        "file": "src\\app\\next_panel\\match-scorecard\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-scorecard/[id]/edit",
+        "file": "src\\app\\next_panel\\match-scorecard\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-types/new",
+        "file": "src\\app\\next_panel\\match-types\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-types",
+        "file": "src\\app\\next_panel\\match-types\\page.jsx"
+      },
+      {
+        "route": "/next_panel/match-types/[id]/edit",
+        "file": "src\\app\\next_panel\\match-types\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/matches/new",
+        "file": "src\\app\\next_panel\\matches\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/matches",
+        "file": "src\\app\\next_panel\\matches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/matches/[id]/edit",
+        "file": "src\\app\\next_panel\\matches\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/matches/[id]/scorecard",
+        "file": "src\\app\\next_panel\\matches\\[id]\\scorecard\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu/new",
+        "file": "src\\app\\next_panel\\menu\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu",
+        "file": "src\\app\\next_panel\\menu\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu/[id]/edit",
+        "file": "src\\app\\next_panel\\menu\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu/[id]",
+        "file": "src\\app\\next_panel\\menu\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu-management",
+        "file": "src\\app\\next_panel\\menu-management\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu-permissions/new",
+        "file": "src\\app\\next_panel\\menu-permissions\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu-permissions",
+        "file": "src\\app\\next_panel\\menu-permissions\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu-permissions/[id]/edit",
+        "file": "src\\app\\next_panel\\menu-permissions\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/menu-permissions/[id]",
+        "file": "src\\app\\next_panel\\menu-permissions\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/no-permission",
+        "file": "src\\app\\next_panel\\no-permission\\page.jsx"
+      },
+      {
+        "route": "/next_panel/order-payments",
+        "file": "src\\app\\next_panel\\order-payments\\page.jsx"
+      },
+      {
+        "route": "/next_panel/orders",
+        "file": "src\\app\\next_panel\\orders\\page.jsx"
+      },
+      {
+        "route": "/next_panel/outside-players/new",
+        "file": "src\\app\\next_panel\\outside-players\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/outside-players",
+        "file": "src\\app\\next_panel\\outside-players\\page.jsx"
+      },
+      {
+        "route": "/next_panel/outside-players/[id]/edit",
+        "file": "src\\app\\next_panel\\outside-players\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel",
+        "file": "src\\app\\next_panel\\page.js"
+      },
+      {
+        "route": "/next_panel/password-resets",
+        "file": "src\\app\\next_panel\\password-resets\\page.jsx"
+      },
+      {
+        "route": "/next_panel/permissions/new",
+        "file": "src\\app\\next_panel\\permissions\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/permissions",
+        "file": "src\\app\\next_panel\\permissions\\page.jsx"
+      },
+      {
+        "route": "/next_panel/permissions/[id]/edit",
+        "file": "src\\app\\next_panel\\permissions\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/permissions/[id]",
+        "file": "src\\app\\next_panel\\permissions\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-attendance/new",
+        "file": "src\\app\\next_panel\\player-attendance\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-attendance",
+        "file": "src\\app\\next_panel\\player-attendance\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-attendance/[id]/edit",
+        "file": "src\\app\\next_panel\\player-attendance\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-fees-matrix",
+        "file": "src\\app\\next_panel\\player-fees-matrix\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-payments/new",
+        "file": "src\\app\\next_panel\\player-payments\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-payments",
+        "file": "src\\app\\next_panel\\player-payments\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-payments/[id]/edit",
+        "file": "src\\app\\next_panel\\player-payments\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-payments/[id]",
+        "file": "src\\app\\next_panel\\player-payments\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-program-fees/new",
+        "file": "src\\app\\next_panel\\player-program-fees\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-program-fees",
+        "file": "src\\app\\next_panel\\player-program-fees\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-program-fees/[id]/edit",
+        "file": "src\\app\\next_panel\\player-program-fees\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/player-program-fees/[id]",
+        "file": "src\\app\\next_panel\\player-program-fees\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Players/Player-Programs",
+        "file": "src\\app\\next_panel\\Players\\Player-Programs\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Players/Players",
+        "file": "src\\app\\next_panel\\Players\\Players\\page.jsx"
+      },
+      {
+        "route": "/next_panel/product-categories",
+        "file": "src\\app\\next_panel\\product-categories\\page.jsx"
+      },
+      {
+        "route": "/next_panel/product-images",
+        "file": "src\\app\\next_panel\\product-images\\page.jsx"
+      },
+      {
+        "route": "/next_panel/product-stock",
+        "file": "src\\app\\next_panel\\product-stock\\page.jsx"
+      },
+      {
+        "route": "/next_panel/products",
+        "file": "src\\app\\next_panel\\products\\page.jsx"
+      },
+      {
+        "route": "/next_panel/programs/new",
+        "file": "src\\app\\next_panel\\programs\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/programs",
+        "file": "src\\app\\next_panel\\programs\\page.jsx"
+      },
+      {
+        "route": "/next_panel/programs/[id]/edit",
+        "file": "src\\app\\next_panel\\programs\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/public-users",
+        "file": "src\\app\\next_panel\\public-users\\page.jsx"
+      },
+      {
+        "route": "/next_panel/role-permissions/new",
+        "file": "src\\app\\next_panel\\role-permissions\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/role-permissions",
+        "file": "src\\app\\next_panel\\role-permissions\\page.jsx"
+      },
+      {
+        "route": "/next_panel/role-permissions/[id]/edit",
+        "file": "src\\app\\next_panel\\role-permissions\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/roles/new",
+        "file": "src\\app\\next_panel\\roles\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/roles",
+        "file": "src\\app\\next_panel\\roles\\page.jsx"
+      },
+      {
+        "route": "/next_panel/roles/[id]/edit",
+        "file": "src\\app\\next_panel\\roles\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/roles/[id]",
+        "file": "src\\app\\next_panel\\roles\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/Menu",
+        "file": "src\\app\\next_panel\\Settings\\Menu\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/Menu-Permissions",
+        "file": "src\\app\\next_panel\\Settings\\Menu-Permissions\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/Permissions",
+        "file": "src\\app\\next_panel\\Settings\\Permissions\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/Programs",
+        "file": "src\\app\\next_panel\\Settings\\Programs\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/Role-Permissions",
+        "file": "src\\app\\next_panel\\Settings\\Role-Permissions\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/Roles",
+        "file": "src\\app\\next_panel\\Settings\\Roles\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/User-Branches",
+        "file": "src\\app\\next_panel\\Settings\\User-Branches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/Settings/User-role",
+        "file": "src\\app\\next_panel\\Settings\\User-role\\page.jsx"
+      },
+      {
+        "route": "/next_panel/staff/new",
+        "file": "src\\app\\next_panel\\staff\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/staff",
+        "file": "src\\app\\next_panel\\staff\\page.jsx"
+      },
+      {
+        "route": "/next_panel/staff/[id]/edit",
+        "file": "src\\app\\next_panel\\staff\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/staff-salary",
+        "file": "src\\app\\next_panel\\staff-salary\\page.jsx"
+      },
+      {
+        "route": "/next_panel/staff-salary-payments",
+        "file": "src\\app\\next_panel\\staff-salary-payments\\page.jsx"
+      },
+      {
+        "route": "/next_panel/staff-salary-transactions",
+        "file": "src\\app\\next_panel\\staff-salary-transactions\\page.jsx"
+      },
+      {
+        "route": "/next_panel/student-enquiries/new",
+        "file": "src\\app\\next_panel\\student-enquiries\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/student-enquiries",
+        "file": "src\\app\\next_panel\\student-enquiries\\page.jsx"
+      },
+      {
+        "route": "/next_panel/student-enquiries/[id]/edit",
+        "file": "src\\app\\next_panel\\student-enquiries\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/student-enquiries/[id]/followup",
+        "file": "src\\app\\next_panel\\student-enquiries\\[id]\\followup\\page.jsx"
+      },
+      {
+        "route": "/next_panel/student-enquiries-flowup",
+        "file": "src\\app\\next_panel\\student-enquiries-flowup\\page.jsx"
+      },
+      {
+        "route": "/next_panel/team-players/new",
+        "file": "src\\app\\next_panel\\team-players\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/team-players",
+        "file": "src\\app\\next_panel\\team-players\\page.jsx"
+      },
+      {
+        "route": "/next_panel/team-players/[id]/edit",
+        "file": "src\\app\\next_panel\\team-players\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/teams/new",
+        "file": "src\\app\\next_panel\\teams\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/teams",
+        "file": "src\\app\\next_panel\\teams\\page.jsx"
+      },
+      {
+        "route": "/next_panel/teams/[id]/edit",
+        "file": "src\\app\\next_panel\\teams\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-management",
+        "file": "src\\app\\next_panel\\tournament-management\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-matches/new",
+        "file": "src\\app\\next_panel\\tournament-matches\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-matches",
+        "file": "src\\app\\next_panel\\tournament-matches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-matches/[id]/edit",
+        "file": "src\\app\\next_panel\\tournament-matches\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-team-players/new",
+        "file": "src\\app\\next_panel\\tournament-team-players\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-team-players",
+        "file": "src\\app\\next_panel\\tournament-team-players\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-team-players/[id]/edit",
+        "file": "src\\app\\next_panel\\tournament-team-players\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-teams/new",
+        "file": "src\\app\\next_panel\\tournament-teams\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-teams",
+        "file": "src\\app\\next_panel\\tournament-teams\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournament-teams/[id]/edit",
+        "file": "src\\app\\next_panel\\tournament-teams\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournaments/new",
+        "file": "src\\app\\next_panel\\tournaments\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournaments",
+        "file": "src\\app\\next_panel\\tournaments\\page.jsx"
+      },
+      {
+        "route": "/next_panel/tournaments/[id]/edit",
+        "file": "src\\app\\next_panel\\tournaments\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/umpire-payments/new",
+        "file": "src\\app\\next_panel\\umpire-payments\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/umpire-payments",
+        "file": "src\\app\\next_panel\\umpire-payments\\page.jsx"
+      },
+      {
+        "route": "/next_panel/umpires/new",
+        "file": "src\\app\\next_panel\\umpires\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/umpires",
+        "file": "src\\app\\next_panel\\umpires\\page.jsx"
+      },
+      {
+        "route": "/next_panel/umpires/[id]/edit",
+        "file": "src\\app\\next_panel\\umpires\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/umpires/[id]",
+        "file": "src\\app\\next_panel\\umpires\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-branches/new",
+        "file": "src\\app\\next_panel\\user-branches\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-branches",
+        "file": "src\\app\\next_panel\\user-branches\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-branches/[id]/edit",
+        "file": "src\\app\\next_panel\\user-branches\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-branches/[id]",
+        "file": "src\\app\\next_panel\\user-branches\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-programs/new",
+        "file": "src\\app\\next_panel\\user-programs\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-programs",
+        "file": "src\\app\\next_panel\\user-programs\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-programs/[id]/edit",
+        "file": "src\\app\\next_panel\\user-programs\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-programs/[id]",
+        "file": "src\\app\\next_panel\\user-programs\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-roles/new",
+        "file": "src\\app\\next_panel\\user-roles\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-roles",
+        "file": "src\\app\\next_panel\\user-roles\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-roles/[id]/edit",
+        "file": "src\\app\\next_panel\\user-roles\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-roles/[id]",
+        "file": "src\\app\\next_panel\\user-roles\\[id]\\page.jsx"
+      },
+      {
+        "route": "/next_panel/user-weekly-off",
+        "file": "src\\app\\next_panel\\user-weekly-off\\page.jsx"
+      },
+      {
+        "route": "/next_panel/users/new",
+        "file": "src\\app\\next_panel\\users\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/users",
+        "file": "src\\app\\next_panel\\users\\page.jsx"
+      },
+      {
+        "route": "/next_panel/users/[id]/edit",
+        "file": "src\\app\\next_panel\\users\\[id]\\edit\\page.jsx"
+      },
+      {
+        "route": "/next_panel/usersxxxx/users/new",
+        "file": "src\\app\\next_panel\\usersxxxx\\users\\new\\page.jsx"
+      },
+      {
+        "route": "/next_panel/usersxxxx/users",
+        "file": "src\\app\\next_panel\\usersxxxx\\users\\page.jsx"
+      },
+      {
+        "route": "/next_panel/usersxxxx/users/[id]/edit",
+        "file": "src\\app\\next_panel\\usersxxxx\\users\\[id]\\edit\\page.jsx"
+      }
+    ]
+  }
+}

@@ -391,3 +391,35 @@
         padding: 78px 12px 24px;
     }
 }
+
+/* Responsive layout stabilization */
+.contentInner > * { min-width: 0; }
+.contentInner { overflow-wrap: anywhere; }
+.sidebar { overscroll-behavior: contain; }
+.navScroll { scrollbar-gutter: stable; }
+
+@media (max-width: 991.98px) {
+    .content {
+        margin-left: 0;
+        width: 100%;
+        min-width: 0;
+        padding: 82px clamp(10px, 2vw, 18px) 28px;
+    }
+    .sidebar { max-width: min(300px, 88vw); }
+    .backdrop { touch-action: manipulation; }
+}
+
+@media (max-width: 575.98px) {
+    .content { padding: 74px 8px 20px; }
+    .contentInner { min-height: calc(100vh - 100px); }
+    .brandContainer { padding: 12px 14px 8px; }
+    .brandLogo { max-width: 180px; height: 38px; }
+    .navScroll { padding-left: 8px; padding-right: 8px; }
+    .menuButton { padding: 10px; min-height: 42px; }
+    .submenu { margin-left: 12px; padding-left: 8px; }
+}
+
+@media (max-width: 360px) {
+    .content { padding-left: 6px; padding-right: 6px; }
+    .sidebar { max-width: 86vw; }
+}

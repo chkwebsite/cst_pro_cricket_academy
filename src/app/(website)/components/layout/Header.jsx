@@ -58,15 +58,18 @@ export default function Header({
     };
     updateHeight();
 
-    const handleScroll = () => {
-      setIsSticky(window.scrollY > 30);
-    };
+    const handleScroll = () => setIsSticky(window.scrollY > 30);
+    const resizeObserver = headerRef.current && typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(updateHeight)
+      : null;
+    if (resizeObserver && headerRef.current) resizeObserver.observe(headerRef.current);
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", updateHeight, { passive: true });
     handleScroll();
 
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", updateHeight);
     };
@@ -143,9 +146,7 @@ export default function Header({
       {/* Main Sticky/Fixed Header Wrapper */}
       <div
         className="header-wrapper"
-        style={{
-          minHeight: isSticky ? `${headerHeight}px` : "auto",
-        }}
+        style={{ minHeight: `${headerHeight}px` }}
       >
         <header
           ref={headerRef}

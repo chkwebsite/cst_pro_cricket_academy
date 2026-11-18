@@ -99,7 +99,25 @@ export async function GET(request) {
         // Academy & Branch role-based scoping
         const { user: authUser } = await getAuthenticatedUser(request);
         if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
+            if (authUser.isUmpire || String(authUser.user_type || "").toLowerCase().includes("umpire")) {
+                let umpireId = authUser.umpire_id;
+                if (!umpireId) {
+                    const [uRows] = await connection.query(
+                        "SELECT id FROM cst_umpires WHERE user_id = ? AND is_deleted = 0 LIMIT 1",
+                        [authUser.id]
+                    );
+                    if (uRows.length > 0) umpireId = uRows[0].id;
+                }
+                if (umpireId) {
+                    sql += ` AND (
+                        g.id IN (SELECT ground_id FROM cst_ground_bookings WHERE umpire_id = ?)
+                        OR g.id IN (SELECT ground_id FROM cst_matches WHERE id IN (SELECT match_id FROM cst_match_umpires WHERE umpire_id = ?))
+                    )`;
+                    values.push(umpireId, umpireId);
+                } else {
+                    sql += " AND 1 = 0";
+                }
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
                 sql += " AND g.branch_id = ? AND g.academy_id = ?";
                 values.push(authUser.branch_id, authUser.academy_id);
             } else if (authUser.isAcademyAdmin && authUser.academy_id) {

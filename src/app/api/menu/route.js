@@ -93,6 +93,46 @@ export async function GET(request) {
             }
         } catch (_) {}
 
+        // Auto-ensure "Umpires" menu exists under Match & Tournament (or Appointments & Users)
+        try {
+            const [existingUmpireMenu] = await connection.query(
+                "SELECT id, is_sidebar, is_active, status, is_deleted FROM cst_menu WHERE menu_url = '/next_panel/umpires' OR menu_key = 'umpires' LIMIT 1"
+            );
+            if (!existingUmpireMenu || existingUmpireMenu.length === 0) {
+                const [matchParent] = await connection.query(
+                    `SELECT id FROM cst_menu
+                     WHERE (id = 28 OR menu_key = 'match-tournament' OR LOWER(menu_title) LIKE '%match%')
+                       AND is_deleted = 0
+                     LIMIT 1`
+                );
+                const parentId = matchParent && matchParent.length > 0 ? matchParent[0].id : 28;
+                const [insUmpire] = await connection.query(
+                    `INSERT INTO cst_menu (
+                        parent_id, menu_key, menu_name, menu_title, menu_icon, menu_url,
+                        menu_type, menu_order, is_sidebar, is_active, status, is_deleted
+                    ) VALUES (?, 'umpires', 'Umpires', 'Umpires', 'user-check', '/next_panel/umpires', 'link', 4, 1, 1, 1, 0)`,
+                    [parentId]
+                );
+                if (insUmpire?.insertId) {
+                    await connection.query(
+                        `INSERT IGNORE INTO cst_menu_permissions (menu_id, permission_id)
+                         SELECT ?, id FROM cst_permissions WHERE status = 1`,
+                        [insUmpire.insertId]
+                    );
+                }
+            } else if (existingUmpireMenu[0].is_deleted === 1 || existingUmpireMenu[0].is_sidebar === 0) {
+                await connection.query(
+                    "UPDATE cst_menu SET is_sidebar = 1, is_active = 1, status = 1, is_deleted = 0 WHERE id = ?",
+                    [existingUmpireMenu[0].id]
+                );
+                await connection.query(
+                    `INSERT IGNORE INTO cst_menu_permissions (menu_id, permission_id)
+                     SELECT ?, id FROM cst_permissions WHERE status = 1`,
+                    [existingUmpireMenu[0].id]
+                );
+            }
+        } catch (_) {}
+
         const { searchParams } = new URL(request.url);
 
         const parent_id = searchParams.get("parent_id");

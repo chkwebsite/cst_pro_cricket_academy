@@ -133,7 +133,7 @@ export default function FacilitiesPage() {
                 <div className="container">
                     {/* Header Banner */}
                     <div
-                        className="p-4 p-md-5 rounded-4 text-white mb-5 shadow-sm position-relative overflow-hidden"
+                        className="facilities-feature p-4 p-md-5 rounded-4 text-white mb-5 shadow-sm position-relative overflow-hidden"
                         style={{
                             background: "linear-gradient(135deg, #062f38 0%, #0d4b57 100%)",
                             border: "1px solid rgba(164, 255, 0, 0.2)",
@@ -147,10 +147,10 @@ export default function FacilitiesPage() {
                                 >
                                     Infrastructure Excellence
                                 </span>
-                                <h1 className="fw-bold mb-2 text-white font-oswald text-uppercase display-5">
+                                <h1 className="facilities-feature__title fw-bold mb-2 text-white font-oswald text-uppercase display-5">
                                     World-Class Cricket Infrastructure
                                 </h1>
-                                <p className="lead mb-0 text-white-50" style={{ maxWidth: "600px", fontSize: "1.05rem" }}>
+                                <p className="facilities-feature__description lead mb-0 text-white-50" style={{ maxWidth: "600px", fontSize: "1.05rem" }}>
                                     Built to professional domestic standards. Everything a cricketer needs to develop elite technique, athletic fitness, and competitive match confidence.
                                 </p>
                             </div>

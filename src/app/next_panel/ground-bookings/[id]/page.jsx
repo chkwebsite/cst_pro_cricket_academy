@@ -11,6 +11,7 @@ import {
     Mail,
     Phone,
     User,
+    UserCheck,
 } from "lucide-react";
 import pool from "@/app/components/lib/db";
 
@@ -51,6 +52,13 @@ export default async function GroundBookingDetailPage({ params }) {
                 gs.end_time,
                 gb.match_id,
                 gb.tournament_id,
+                gb.umpire_id,
+                gb.umpire_fee_id,
+                u.umpire_name,
+                u.mobile AS umpire_phone,
+                uf.match_type AS umpire_match_type,
+                uf.fee_amount AS umpire_fee_amount,
+                uf.payment_type AS umpire_payment_type,
                 gb.customer_name,
                 gb.customer_phone,
                 gb.customer_email,
@@ -69,6 +77,10 @@ export default async function GroundBookingDetailPage({ params }) {
                 ON g.id = gb.ground_id
             INNER JOIN cst_ground_slots gs
                 ON gs.id = gb.slot_id
+            LEFT JOIN cst_umpires u
+                ON u.id = gb.umpire_id
+            LEFT JOIN cst_umpire_fees uf
+                ON uf.id = gb.umpire_fee_id
             WHERE gb.id = ?
             LIMIT 1
             `,
@@ -258,6 +270,37 @@ export default async function GroundBookingDetailPage({ params }) {
                             <div className="mt-3">
                                 <label className="text-muted small">Remarks</label>
                                 <p className="mb-0">{booking.remarks}</p>
+                            </div>
+                        )}
+
+                        {booking.umpire_name ? (
+                            <div className="mt-3 pt-3 border-top">
+                                <h2 className="h6 mb-2 d-flex align-items-center gap-2">
+                                    <UserCheck size={16} className="text-primary" />
+                                    Assigned Match Umpire
+                                </h2>
+                                <div className="fw-semibold">{booking.umpire_name}</div>
+                                {booking.umpire_phone && (
+                                    <div className="small text-muted">
+                                        <Phone size={12} className="me-1" />
+                                        {booking.umpire_phone}
+                                    </div>
+                                )}
+                                <div className="small text-muted mt-1">
+                                    <span className="badge bg-light text-primary border me-1">
+                                        {booking.umpire_match_type || "Official"}
+                                    </span>
+                                    {booking.umpire_fee_amount && (
+                                        <span>
+                                            ₹{Number(booking.umpire_fee_amount).toLocaleString("en-IN")} ({booking.umpire_payment_type || "Per Match"})
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-3 pt-3 border-top text-muted small">
+                                <UserCheck size={14} className="me-1" />
+                                No umpire assigned
                             </div>
                         )}
                     </div>

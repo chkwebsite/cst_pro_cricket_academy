@@ -20,6 +20,7 @@ import {
     Sparkles,
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import UmpireDashboard from "./UmpireDashboard";
 
 export default function Dashboard() {
     const { user } = useUser();
@@ -49,8 +50,17 @@ export default function Dashboard() {
     const isAccountant = userTypeStr.includes("account");
     const isBranchAdmin = userTypeStr.includes("branch");
     const isAcademyAdmin = userTypeStr.includes("academy");
+    const isUmpire = Boolean(
+        user?.isUmpire ||
+        userTypeStr.includes("umpire") ||
+        String(user?.role || user?.role_name || "").toLowerCase().includes("umpire")
+    );
 
     useEffect(() => {
+        if (isUmpire) {
+            setLoading(false);
+            return;
+        }
         let cancelled = false;
         (async () => {
             try {
@@ -87,6 +97,10 @@ export default function Dashboard() {
             cancelled = true;
         };
     }, [currentYear]);
+
+    if (isUmpire) {
+        return <UmpireDashboard user={user} />;
+    }
 
     return (
         <div className="container-fluid px-0">

@@ -57,6 +57,13 @@ export async function GET(request, { params }) {
 
                 gb.match_id,
                 gb.tournament_id,
+                gb.umpire_id,
+                gb.umpire_fee_id,
+                u.umpire_name,
+                u.mobile AS umpire_phone,
+                uf.match_type AS umpire_match_type,
+                uf.fee_amount AS umpire_fee_amount,
+                uf.payment_type AS umpire_payment_type,
 
                 gb.customer_name,
                 gb.customer_phone,
@@ -84,6 +91,12 @@ export async function GET(request, { params }) {
 
             INNER JOIN cst_ground_slots gs
                 ON gs.id = gb.slot_id
+
+            LEFT JOIN cst_umpires u
+                ON u.id = gb.umpire_id
+
+            LEFT JOIN cst_umpire_fees uf
+                ON uf.id = gb.umpire_fee_id
 
             WHERE gb.id = ?
             AND g.is_deleted = 0
@@ -240,6 +253,8 @@ export async function PUT(request, { params }) {
             slot_id,
             match_id = null,
             tournament_id = null,
+            umpire_id = null,
+            umpire_fee_id = null,
             customer_name,
             customer_phone = null,
             customer_email = null,
@@ -368,6 +383,70 @@ export async function PUT(request, { params }) {
             );
         }
 
+        // Umpire Validation
+        let resolvedUmpireId = null;
+        let resolvedUmpireFeeId = null;
+
+        if (umpire_id) {
+            const rawUmpireId = Number(umpire_id);
+            if (rawUmpireId > 0) {
+                const [umpireRows] = await connection.query(
+                    `
+                    SELECT id, umpire_name, academy_id, branch_id
+                    FROM cst_umpires
+                    WHERE id = ?
+                      AND academy_id = ?
+                      AND (branch_id = ? OR branch_id IS NULL)
+                      AND status = 1
+                      AND is_deleted = 0
+                    LIMIT 1
+                    `,
+                    [rawUmpireId, academy_id, branch_id]
+                );
+
+                if (umpireRows.length === 0) {
+                    await connection.rollback();
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: "Selected umpire does not exist, is inactive, or is not available for this academy/branch"
+                        },
+                        { status: 400 }
+                    );
+                }
+
+                resolvedUmpireId = umpireRows[0].id;
+
+                if (umpire_fee_id) {
+                    const rawFeeId = Number(umpire_fee_id);
+                    if (rawFeeId > 0) {
+                        const [feeRows] = await connection.query(
+                            `
+                            SELECT id, fee_amount, match_type, payment_type
+                            FROM cst_umpire_fees
+                            WHERE id = ? AND umpire_id = ? AND status = 1
+                            LIMIT 1
+                            `,
+                            [rawFeeId, resolvedUmpireId]
+                        );
+
+                        if (feeRows.length === 0) {
+                            await connection.rollback();
+                            return NextResponse.json(
+                                {
+                                    success: false,
+                                    message: "Selected umpire fee record is invalid or inactive"
+                                },
+                                { status: 400 }
+                            );
+                        }
+
+                        resolvedUmpireFeeId = feeRows[0].id;
+                    }
+                }
+            }
+        }
+
         // Update booking
         await connection.query(
             `
@@ -377,6 +456,8 @@ export async function PUT(request, { params }) {
                 slot_id = ?,
                 match_id = ?,
                 tournament_id = ?,
+                umpire_id = ?,
+                umpire_fee_id = ?,
                 customer_name = ?,
                 customer_phone = ?,
                 customer_email = ?,
@@ -395,6 +476,8 @@ export async function PUT(request, { params }) {
                 slot_id,
                 match_id,
                 tournament_id,
+                resolvedUmpireId,
+                resolvedUmpireFeeId,
                 customer_name,
                 customer_phone,
                 customer_email,

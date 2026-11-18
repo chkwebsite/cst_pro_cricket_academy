@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import GroundDetailsModal from "../components/GroundDetailsModal";
 import Pagination from "../components/Pagination";
+import { useUser } from "../components/UserContext";
 
 const MATCH_TYPES = ["Practice", "Friendly", "League", "Tournament", "Knockout"];
 const MATCH_STATUSES = ["Scheduled", "Live", "Completed", "Cancelled", "Postponed"];
@@ -72,6 +73,11 @@ const getEffectiveStatus = (item) => {
 };
 
 export default function MatchesPage() {
+    const { user } = useUser();
+    const isUmpire = Boolean(
+        user?.isUmpire ||
+        String(user?.user_type || user?.role || user?.role_name || "").toLowerCase().includes("umpire")
+    );
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -168,15 +174,27 @@ export default function MatchesPage() {
                     <div className="bg-white rounded-4 shadow-sm p-4 mb-4">
                         <div className="d-flex justify-content-between align-items-center gap-3">
                             <div>
-                                <Link href="match-management" className="btn btn-sm btn-outline-secondary mb-3">
-                                <ArrowLeft size={16} className="me-2"/> Back to match management
-                                </Link>
-                                <h3 className="mb-0"><Swords /> Matches</h3>
-                                <p className="text-muted mb-0">Schedule matches, set venues, and record toss details.</p>
+                                {!isUmpire ? (
+                                    <Link href="match-management" className="btn btn-sm btn-outline-secondary mb-3">
+                                        <ArrowLeft size={16} className="me-2"/> Back to match management
+                                    </Link>
+                                ) : (
+                                    <Link href="/next_panel/dashboard" className="btn btn-sm btn-outline-secondary mb-3">
+                                        <ArrowLeft size={16} className="me-2"/> Back to Dashboard
+                                    </Link>
+                                )}
+                                <h3 className="mb-0"><Swords /> {isUmpire ? "My Assigned Matches" : "Matches"}</h3>
+                                <p className="text-muted mb-0">
+                                    {isUmpire
+                                        ? "View matches assigned to you, your fee remuneration status, and access live match scorecards."
+                                        : "Schedule matches, set venues, and record toss details."}
+                                </p>
                             </div>
-                            <Link href="/next_panel/matches/new" className="btn btn-primary px-4">
-                                <Swords size={18} /> Add Match
-                            </Link>
+                            {!isUmpire && (
+                                <Link href="/next_panel/matches/new" className="btn btn-primary px-4">
+                                    <Swords size={18} /> Add Match
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -270,7 +288,7 @@ export default function MatchesPage() {
                                         <th>Teams</th>
                                         <th>Date &amp; Time</th>
                                         <th>Venue</th>
-                                        <th>Toss</th>
+                                        {isUmpire ? <th>Umpire Fee &amp; Status</th> : <th>Toss</th>}
                                         <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
@@ -345,18 +363,48 @@ export default function MatchesPage() {
                                                         <small className="text-muted d-block">Booking {item.booking_no}</small>
                                                     )}
                                                 </td>
-                                                <td>
-                                                    {item.toss_winner_team_name ? (
-                                                        <>
-                                                            <div>{item.toss_winner_team_name}</div>
-                                                            {item.toss_decision && (
-                                                                <small className="text-muted">elected to {item.toss_decision}</small>
+                                                {isUmpire ? (
+                                                    <td>
+                                                        <div className="fw-semibold text-dark">
+                                                            ₹{Number(item.umpire_match_fee || item.umpire_booking_fee || 0).toLocaleString("en-IN")}
+                                                        </div>
+                                                        <div className="d-flex flex-wrap align-items-center gap-1 mt-1">
+                                                            {(() => {
+                                                                const pStatus = item.umpire_payment_status || "Pending";
+                                                                const isPaid = pStatus.toLowerCase() === "paid";
+                                                                const isPartial = pStatus.toLowerCase() === "partial";
+                                                                const badgeCls = isPaid
+                                                                    ? "bg-success-subtle text-success border border-success-subtle"
+                                                                    : isPartial
+                                                                    ? "bg-info-subtle text-info border border-info-subtle"
+                                                                    : "bg-warning-subtle text-warning border border-warning-subtle";
+                                                                return (
+                                                                    <span className={`badge ${badgeCls}`}>
+                                                                        {pStatus}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                            {item.umpire_role && (
+                                                                <span className="badge bg-light text-secondary border">
+                                                                    {item.umpire_role}
+                                                                </span>
                                                             )}
-                                                        </>
-                                                    ) : (
-                                                        "—"
-                                                    )}
-                                                </td>
+                                                        </div>
+                                                    </td>
+                                                ) : (
+                                                    <td>
+                                                        {item.toss_winner_team_name ? (
+                                                            <>
+                                                                <div>{item.toss_winner_team_name}</div>
+                                                                {item.toss_decision && (
+                                                                    <small className="text-muted">elected to {item.toss_decision}</small>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            "—"
+                                                        )}
+                                                    </td>
+                                                )}
                                                 <td>
                                                     <span className={`badge ${STATUS_BADGE[effStatus] || "bg-secondary"} ${effStatus === 'Live' ? 'd-inline-flex align-items-center gap-1' : ''}`}>
                                                         {effStatus === 'Live' && <span className="spinner-grow spinner-grow-sm" style={{ width: "6px", height: "6px" }} />}
@@ -380,35 +428,39 @@ export default function MatchesPage() {
                                                         >
                                                             <Trophy size={16} />
                                                         </Link>
-                                                        {effStatus === "Cancelled" ? (
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-outline-secondary"
-                                                                disabled
-                                                                title="Cancelled matches cannot be edited"
-                                                                aria-label="Edit match disabled"
-                                                            >
-                                                                <Edit size={16} />
-                                                            </button>
-                                                        ) : (
-                                                            <Link
-                                                                href={`/next_panel/matches/${item.id}/edit`}
-                                                                className="btn btn-outline-secondary"
-                                                                aria-label="Edit match"
-                                                            >
-                                                                <Edit size={16} />
-                                                            </Link>
+                                                        {!isUmpire && (
+                                                            <>
+                                                                {effStatus === "Cancelled" ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-outline-secondary"
+                                                                        disabled
+                                                                        title="Cancelled matches cannot be edited"
+                                                                        aria-label="Edit match disabled"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </button>
+                                                                ) : (
+                                                                    <Link
+                                                                        href={`/next_panel/matches/${item.id}/edit`}
+                                                                        className="btn btn-outline-secondary"
+                                                                        aria-label="Edit match"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </Link>
+                                                                )}
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-outline-danger"
+                                                                    onClick={() => handleCancel(item)}
+                                                                    disabled={closed}
+                                                                    title={closed ? `A ${effStatus.toLowerCase()} match cannot be cancelled` : "Cancel match"}
+                                                                    aria-label="Cancel match"
+                                                                >
+                                                                    <Ban size={16} />
+                                                                </button>
+                                                            </>
                                                         )}
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleCancel(item)}
-                                                            disabled={closed}
-                                                            title={closed ? `A ${effStatus.toLowerCase()} match cannot be cancelled` : "Cancel match"}
-                                                            aria-label="Cancel match"
-                                                        >
-                                                            <Ban size={16} />
-                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>

@@ -65,6 +65,21 @@ export async function GET(request) {
         if (authUser.isPlayer) {
             where += " AND (gb.customer_phone IS NOT NULL AND gb.customer_phone = ?)";
             params.push(authUser.phone || "");
+        } else if (authUser.isUmpire || String(authUser.user_type || "").toLowerCase().includes("umpire")) {
+            let umpireId = authUser.umpire_id;
+            if (!umpireId) {
+                const [uRows] = await connection.query(
+                    "SELECT id FROM cst_umpires WHERE user_id = ? AND is_deleted = 0 LIMIT 1",
+                    [authUser.id]
+                );
+                if (uRows.length > 0) umpireId = uRows[0].id;
+            }
+            if (umpireId) {
+                where += " AND gb.umpire_id = ?";
+                params.push(umpireId);
+            } else {
+                where += " AND 1 = 0";
+            }
         } else if (authUser.isBranchAdmin && authUser.branch_id) {
             where += " AND g.branch_id = ? AND g.academy_id = ?";
             params.push(authUser.branch_id, authUser.academy_id);
@@ -154,6 +169,12 @@ export async function GET(request) {
                 ON g.id = gb.ground_id
             INNER JOIN cst_ground_slots gs
                 ON gs.id = gb.slot_id
+
+            LEFT JOIN cst_umpires u
+                ON u.id = gb.umpire_id
+
+            LEFT JOIN cst_umpire_fees uf
+                ON uf.id = gb.umpire_fee_id
             ${where}
             `,
             params
@@ -182,6 +203,13 @@ export async function GET(request) {
 
                 gb.match_id,
                 gb.tournament_id,
+                gb.umpire_id,
+                gb.umpire_fee_id,
+                u.umpire_name,
+                u.mobile AS umpire_phone,
+                uf.match_type AS umpire_match_type,
+                uf.fee_amount AS umpire_fee_amount,
+                uf.payment_type AS umpire_payment_type,
 
                 gb.customer_name,
                 gb.customer_phone,
@@ -208,6 +236,12 @@ export async function GET(request) {
 
             INNER JOIN cst_ground_slots gs
                 ON gs.id = gb.slot_id
+
+            LEFT JOIN cst_umpires u
+                ON u.id = gb.umpire_id
+
+            LEFT JOIN cst_umpire_fees uf
+                ON uf.id = gb.umpire_fee_id
 
             ${where}
 
@@ -276,6 +310,8 @@ export async function POST(request) {
 
             match_id = null,
             tournament_id = null,
+            umpire_id = null,
+            umpire_fee_id = null,
 
             customer_name,
             customer_phone = null,
@@ -712,6 +748,75 @@ export async function POST(request) {
         }
 
         // ==========================================
+        // UMPIRE VALIDATION
+        // ==========================================
+
+        let resolvedUmpireId = null;
+        let resolvedUmpireFeeId = null;
+
+        if (umpire_id) {
+            const rawUmpireId = Number(umpire_id);
+            if (rawUmpireId > 0) {
+                const [umpireRows] = await connection.query(
+                    `
+                    SELECT id, umpire_name, academy_id, branch_id
+                    FROM cst_umpires
+                    WHERE id = ?
+                      AND academy_id = ?
+                      AND (branch_id = ? OR branch_id IS NULL)
+                      AND status = 1
+                      AND is_deleted = 0
+                    LIMIT 1
+                    `,
+                    [rawUmpireId, academy_id, branch_id]
+                );
+
+                if (umpireRows.length === 0) {
+                    await connection.rollback();
+
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: "Selected umpire does not exist, is inactive, or is not available for this academy/branch"
+                        },
+                        { status: 400 }
+                    );
+                }
+
+                resolvedUmpireId = umpireRows[0].id;
+
+                if (umpire_fee_id) {
+                    const rawFeeId = Number(umpire_fee_id);
+                    if (rawFeeId > 0) {
+                        const [feeRows] = await connection.query(
+                            `
+                            SELECT id, fee_amount, match_type, payment_type
+                            FROM cst_umpire_fees
+                            WHERE id = ? AND umpire_id = ? AND status = 1
+                            LIMIT 1
+                            `,
+                            [rawFeeId, resolvedUmpireId]
+                        );
+
+                        if (feeRows.length === 0) {
+                            await connection.rollback();
+
+                            return NextResponse.json(
+                                {
+                                    success: false,
+                                    message: "Selected umpire fee record is invalid or inactive"
+                                },
+                                { status: 400 }
+                            );
+                        }
+
+                        resolvedUmpireFeeId = feeRows[0].id;
+                    }
+                }
+            }
+        }
+
+        // ==========================================
         // BOOKING NUMBER
         // ==========================================
 
@@ -734,6 +839,8 @@ export async function POST(request) {
 
                 match_id,
                 tournament_id,
+                umpire_id,
+                umpire_fee_id,
 
                 customer_name,
                 customer_phone,
@@ -767,6 +874,8 @@ export async function POST(request) {
                 ?,
                 ?,
                 ?,
+                ?,
+                ?,
                 'Booked',
                 ?
             )
@@ -779,6 +888,8 @@ export async function POST(request) {
 
                 resolvedMatchId,
                 resolvedTournamentId || tournament_id,
+                resolvedUmpireId,
+                resolvedUmpireFeeId,
 
                 customer_name,
                 customer_phone,

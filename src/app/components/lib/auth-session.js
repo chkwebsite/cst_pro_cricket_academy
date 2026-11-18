@@ -53,6 +53,17 @@ export async function getServerSession() {
                                 const role = getUserRole(u);
                                 const isSuper = role === ROLES.SUPER_ADMIN || (Array.isArray(decoded.permissions) && decoded.permissions.includes("*"));
 
+                                let umpireId = decoded.umpire_id || null;
+                                if (role === ROLES.UMPIRE && !umpireId) {
+                                    try {
+                                        const [umpRows] = await pool.query(
+                                            "SELECT id FROM cst_umpires WHERE user_id = ? AND is_deleted = 0 LIMIT 1",
+                                            [u.id]
+                                        );
+                                        if (umpRows.length > 0) umpireId = umpRows[0].id;
+                                    } catch (_) {}
+                                }
+
                                 let livePermissions = [];
                                 if (isSuper) {
                                     livePermissions = ["*"];
@@ -97,6 +108,8 @@ export async function getServerSession() {
                                         isAccountant: role === ROLES.ACCOUNTANT,
                                         isCoach: role === ROLES.COACH,
                                         isPlayer: role === ROLES.PLAYER,
+                                        isUmpire: role === ROLES.UMPIRE,
+                                        umpire_id: umpireId,
                                         is_public: false,
                                     },
                                     permissions: livePermissions.length > 0 ? livePermissions : (Array.isArray(decoded.permissions) ? decoded.permissions : []),

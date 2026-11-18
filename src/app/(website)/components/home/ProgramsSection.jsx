@@ -155,7 +155,7 @@ export default function ProgramsSection({
 
   // Slick Slider Settings: 4 records on desktop, fully responsive on tablets & mobile
   const sliderSettings = {
-    dots: true,
+    dots: false,
     infinite: programs.length > 4,
     speed: 500,
     slidesToShow: 4,
@@ -192,7 +192,7 @@ export default function ProgramsSection({
           slidesToShow: 1,
           slidesToScroll: 1,
           infinite: programs.length > 1,
-          dots: true,
+          dots: false,
         },
       },
     ],

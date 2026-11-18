@@ -75,6 +75,7 @@ export async function getAuthUser(request) {
             isAccountant: role === ROLES.ACCOUNTANT,
             isCoach: role === ROLES.COACH,
             isStaff: role === ROLES.STAFF || role === ROLES.GROUND_STAFF,
+            isUmpire: role === ROLES.UMPIRE,
             isPlayer: role === ROLES.PLAYER,
         };
     } catch (err) {

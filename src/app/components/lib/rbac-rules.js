@@ -12,6 +12,7 @@ export const ROLES = {
     COACH: "COACH",
     STAFF: "STAFF",
     GROUND_STAFF: "GROUND_STAFF",
+    UMPIRE: "UMPIRE",
     PLAYER: "PLAYER",
     PUBLIC_USER: "PUBLIC_USER",
 };
@@ -22,12 +23,15 @@ export const ROLES = {
 export function getUserRole(user) {
     if (!user) return null;
 
+    if (user.isUmpire) return ROLES.UMPIRE;
+
     const roleId = Number(user.role_id || user.role);
     if (roleId === 1) return ROLES.SUPER_ADMIN;
     if (roleId === 2) return ROLES.ACADEMY_ADMIN;
     if (roleId === 3) return ROLES.BRANCH_ADMIN;
     if (roleId === 4) return ROLES.COACH;
     if (roleId === 7) return ROLES.PLAYER;
+    if (roleId === 31) return ROLES.UMPIRE;
 
     const raw = String(user.user_type || user.role_name || "")
         .trim()
@@ -42,6 +46,7 @@ export function getUserRole(user) {
     if (raw.includes("coach")) return ROLES.COACH;
     if (raw.includes("groundstaff") || raw.includes("staffground")) return ROLES.GROUND_STAFF;
     if (raw.includes("staff")) return ROLES.STAFF;
+    if (raw.includes("umpire")) return ROLES.UMPIRE;
     if (raw.includes("player") || raw === "7" || String(user.user_type) === "7") return ROLES.PLAYER;
     if (raw.includes("public")) return ROLES.PUBLIC_USER;
 
@@ -113,6 +118,7 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/product-stock",
         "/next_panel/orders",
         "/next_panel/order-payments",
+        "/next_panel/umpire-payments",
         "/next_panel/individual-training",
         "/next_panel/gallery-categories",
         "/next_panel/gallery-albums",
@@ -121,6 +127,9 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/gallery-management",
         "/next_panel/public-users",
         "/next_panel/password-resets",
+        "/next_panel/umpires",
+        "/next_panel/umpire-payments",
+        "/next_panel/financial-summary",
         "/next_panel/Settings",
     ],
 
@@ -176,6 +185,7 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/product-stock",
         "/next_panel/orders",
         "/next_panel/order-payments",
+        "/next_panel/umpire-payments",
         "/next_panel/individual-training",
         "/next_panel/gallery-categories",
         "/next_panel/gallery-albums",
@@ -184,6 +194,9 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/gallery-management",
         "/next_panel/public-users",
         "/next_panel/password-resets",
+        "/next_panel/umpires",
+        "/next_panel/umpire-payments",
+        "/next_panel/financial-summary",
         "/next_panel/Settings",
     ],
 
@@ -212,6 +225,8 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/ground-bookings",
         "/next_panel/products",
         "/next_panel/orders",
+        "/next_panel/umpire-payments",
+        "/next_panel/financial-summary",
     ],
 
     [ROLES.ACCOUNTANT]: [
@@ -226,6 +241,8 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/ground-payments",
         "/next_panel/orders",
         "/next_panel/order-payments",
+        "/next_panel/umpire-payments",
+        "/next_panel/financial-summary",
     ],
 
     [ROLES.COACH]: [
@@ -271,6 +288,19 @@ export const ROLE_ALLOWED_ROUTES = {
         "/next_panel/ground-slots",
         "/next_panel/ground-availability",
         "/next_panel/ground-bookings",
+    ],
+
+    [ROLES.UMPIRE]: [
+        "/next_panel/dashboard",
+        "/next_panel/matches",
+        "/next_panel/match-management",
+        "/next_panel/match-scorecard",
+        "/next_panel/match-players",
+        "/next_panel/match-innings",
+        "/next_panel/match-bowling-scorecard",
+        "/next_panel/ground-bookings",
+        "/next_panel/ground-availability",
+        "/next_panel/umpires",
     ],
 };
 

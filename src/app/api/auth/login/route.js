@@ -80,10 +80,11 @@ export async function POST(request) {
                 (
                     LOWER(email) = LOWER(?)
                     OR appointment_no = ?
+                    OR phone = ?
                 )
             LIMIT 1
             `,
-            [login, login]
+            [login, login, login]
         );
 
         if (users.length === 0) {
@@ -132,12 +133,14 @@ export async function POST(request) {
             user.password
         );
 
-        // Fallback for Player accounts: allow default password '123456', user phone, or appointment number
+        // Fallback for Player or Umpire accounts: allow default password '123456', user phone, or appointment number
         const isPlayerUser =
             user.user_type === "7" ||
             String(user.user_type || "").toLowerCase().includes("player");
+        const isUmpireUser =
+            String(user.user_type || "").toLowerCase().includes("umpire");
 
-        if (!passwordMatch && isPlayerUser) {
+        if (!passwordMatch && (isPlayerUser || isUmpireUser)) {
             if (
                 password === "123456" ||
                 (user.phone && password === String(user.phone).trim()) ||
@@ -148,7 +151,7 @@ export async function POST(request) {
                     const newHash = await bcrypt.hash(password, 10);
                     await connection.query("UPDATE cst_users SET password = ? WHERE id = ?", [newHash, user.id]);
                 } catch (hashErr) {
-                    console.error("Failed to update player password hash:", hashErr);
+                    console.error("Failed to update password hash:", hashErr);
                 }
             }
         }
@@ -257,6 +260,16 @@ export async function POST(request) {
             userData.current_salary = staffMatch[0].current_salary;
         }
 
+        const [umpireMatch] = await connection.query(
+            "SELECT id, umpire_name, experience_years, qualification FROM cst_umpires WHERE user_id = ? AND is_deleted = 0 LIMIT 1",
+            [user.id]
+        );
+        if (umpireMatch.length > 0) {
+            userData.umpire_id = umpireMatch[0].id;
+            userData.umpire_name = umpireMatch[0].umpire_name;
+            userData.qualification = umpireMatch[0].qualification;
+        }
+
         /*
          * Remove duplicate menu/permission combinations
          */
@@ -299,6 +312,10 @@ export async function POST(request) {
             userRole === ROLES.PLAYER ||
             String(user.user_type || "").toLowerCase().includes("player") ||
             String(user.role_name || "").toLowerCase().includes("player");
+        const isUmpire =
+            userRole === ROLES.UMPIRE ||
+            String(user.user_type || "").toLowerCase().includes("umpire") ||
+            String(user.role_name || "").toLowerCase().includes("umpire");
 
         if (isPlayer) {
             // Remove general dashboard and administrative product management menus from sidebar for player
@@ -496,6 +513,18 @@ export async function POST(request) {
                     "/next_panel/orders",
                     "/next_panel/my-orders"
                 ] : []),
+                ...(isUmpire ? [
+                    "/next_panel/dashboard",
+                    "/next_panel/matches",
+                    "/next_panel/match-management",
+                    "/next_panel/match-scorecard",
+                    "/next_panel/match-players",
+                    "/next_panel/match-innings",
+                    "/next_panel/match-bowling-scorecard",
+                    "/next_panel/ground-bookings",
+                    "/next_panel/ground-availability",
+                    "/next_panel/umpires"
+                ] : []),
             ]));
 
         const token = jwt.sign(
@@ -507,6 +536,7 @@ export async function POST(request) {
                 email: user.email,
                 user_type: user.user_type,
                 role: userRole,
+                umpire_id: userData.umpire_id || null,
                 permissions: tokenPermissions,
             },
             JWT_SECRET,

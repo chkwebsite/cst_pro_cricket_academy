@@ -141,7 +141,7 @@ export default function CoachesSection({
 
   // Slick Slider Settings: 3 records on desktop, responsive across tablets and phones
   const sliderSettings = {
-    dots: true,
+    dots: false,
     infinite: coaches.length > 3,
     speed: 500,
     slidesToShow: 3,
@@ -170,7 +170,7 @@ export default function CoachesSection({
           slidesToShow: 1,
           slidesToScroll: 1,
           infinite: coaches.length > 1,
-          dots: true,
+          dots: false,
         },
       },
     ],

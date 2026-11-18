@@ -130,6 +130,18 @@ export async function GET(request) {
             search: searchParams.get("search"),
         };
 
+        const authUser = await getAuthUser(request);
+        let currentUmpireId = authUser?.umpire_id || null;
+        if (authUser && (authUser.isUmpire || String(authUser.user_type || "").toLowerCase().includes("umpire")) && !currentUmpireId) {
+            const [uRows] = await connection.query(
+                "SELECT id FROM cst_umpires WHERE user_id = ? AND is_deleted = 0 LIMIT 1",
+                [authUser.id]
+            );
+            if (uRows.length > 0) currentUmpireId = uRows[0].id;
+        }
+
+        const safeUmpireParam = currentUmpireId ? Number(currentUmpireId) : -1;
+
         let sql = `
     SELECT
     m.id,
@@ -198,6 +210,22 @@ export async function GET(request) {
         (SELECT COUNT(*) FROM cst_match_innings WHERE match_id = m.id) AS innings_count,
         (SELECT COUNT(*) FROM cst_match_scorecard WHERE match_id = m.id) AS scorecard_count,
 
+        COALESCE(
+            (SELECT mu.fee_amount FROM cst_match_umpires mu WHERE mu.match_id = m.id AND mu.umpire_id = ${safeUmpireParam} LIMIT 1),
+            (SELECT uf.fee_amount FROM cst_ground_bookings gb_u JOIN cst_umpire_fees uf ON uf.id = gb_u.umpire_fee_id WHERE gb_u.id = m.booking_id AND gb_u.umpire_id = ${safeUmpireParam} LIMIT 1),
+            0
+        ) AS umpire_match_fee,
+        COALESCE(
+            (SELECT up.payment_status FROM cst_umpire_payments up WHERE (up.match_id = m.id OR (m.booking_id IS NOT NULL AND up.booking_id = m.booking_id)) AND up.umpire_id = ${safeUmpireParam} ORDER BY up.id DESC LIMIT 1),
+            (SELECT mu.payment_status FROM cst_match_umpires mu WHERE mu.match_id = m.id AND mu.umpire_id = ${safeUmpireParam} LIMIT 1),
+            'Pending'
+        ) AS umpire_payment_status,
+        COALESCE(
+            (SELECT mu.umpire_role FROM cst_match_umpires mu WHERE mu.match_id = m.id AND mu.umpire_id = ${safeUmpireParam} LIMIT 1),
+            'Official Umpire'
+        ) AS umpire_role,
+        (SELECT uf.fee_amount FROM cst_ground_bookings gb_u JOIN cst_umpire_fees uf ON uf.id = gb_u.umpire_fee_id WHERE gb_u.id = m.booking_id AND gb_u.umpire_id = ${safeUmpireParam} LIMIT 1) AS umpire_booking_fee,
+
         tw.team_name AS toss_winner_team_name,
 
         g.ground_name,
@@ -239,9 +267,18 @@ export async function GET(request) {
             values.push(filters.id);
         }
 
-        const authUser = await getAuthUser(request);
         if (authUser) {
-            if (authUser.isBranchAdmin && authUser.branch_id) {
+            if (authUser.isUmpire || String(authUser.user_type || "").toLowerCase().includes("umpire")) {
+                if (currentUmpireId) {
+                    sql += ` AND (
+                        m.id IN (SELECT match_id FROM cst_match_umpires WHERE umpire_id = ?)
+                        OR m.booking_id IN (SELECT id FROM cst_ground_bookings WHERE umpire_id = ?)
+                    )`;
+                    values.push(currentUmpireId, currentUmpireId);
+                } else {
+                    sql += " AND 1 = 0";
+                }
+            } else if (authUser.isBranchAdmin && authUser.branch_id) {
                 sql += ` AND (
                     (m.academy_id = ? OR (m.academy_id IS NULL AND (g.academy_id = ? OR ta.academy_id = ? OR tb.academy_id = ? OR t.academy_id = ?)))
                     AND (

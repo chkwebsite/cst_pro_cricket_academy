@@ -237,7 +237,7 @@ export default function BranchesSection({
 
   // Slick Slider Settings: 3 records on desktop, responsive across tablets and phones
   const sliderSettings = {
-    dots: true,
+    dots: false,
     infinite: branches.length > 3,
     speed: 500,
     slidesToShow: 3,
@@ -266,7 +266,7 @@ export default function BranchesSection({
           slidesToShow: 1,
           slidesToScroll: 1,
           infinite: branches.length > 1,
-          dots: true,
+          dots: false,
         },
       },
     ],

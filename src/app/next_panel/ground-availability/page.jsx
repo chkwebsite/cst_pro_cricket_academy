@@ -37,11 +37,6 @@ export default function GroundAvailabilityPage() {
     const session = typeof window !== "undefined"
         ? JSON.parse(sessionStorage.getItem("auth_session") || "null")
         : null;
-    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
-    const canCreate = permissions.some((permission) => {
-        const name = typeof permission === "string" ? permission : permission?.permission_name || permission?.name || "";
-        return name === "ground-bookings.create" || name === "ground_bookings.create" || name === "ground-bookings.create";
-    }) || !!user?.permissions?.includes("ground-bookings.create");
 
     const userRole = String(user?.user_type || "")
         .trim()
@@ -50,6 +45,12 @@ export default function GroundAvailabilityPage() {
     const isSuperAdmin = ["super admin", "superadmin", "admin"].includes(userRole);
     const isBranchAdmin = userRole === "branch admin";
     const isPlayer = userRole.includes("player") || String(user?.user_type) === "7";
+
+    const permissions = Array.isArray(session?.permissions) ? session.permissions : [];
+    const canCreate = !isPlayer || isSuperAdmin || isBranchAdmin || permissions.some((permission) => {
+        const name = typeof permission === "string" ? permission : permission?.permission_name || permission?.name || "";
+        return name === "ground-bookings.create" || name === "ground_bookings.create";
+    }) || !!user?.permissions?.includes("ground-bookings.create");
     const userAcademyId = user?.academy_id;
     const userBranchId = user?.branch_id;
     const [scope, setScope] = useState({ academy_id: "", branch_id: "" });
@@ -290,8 +291,8 @@ export default function GroundAvailabilityPage() {
                 <Link
                     href={bookHref(slot, dateKey)}
                     className="d-flex align-items-center justify-content-center gap-1 rounded-2 px-2 py-1 text-decoration-none small fw-semibold"
-                    style={{ background: FREE_STYLE.bg, border: `1px solid ${FREE_STYLE.border}`, color: FREE_STYLE.text }}
-                    title="Book this slot"
+                    style={{ background: FREE_STYLE.bg, border: `1px solid ${FREE_STYLE.border}`, color: FREE_STYLE.text, transition: "transform 0.15s ease, box-shadow 0.15s ease" }}
+                    title={`Click to book slot "${slot.slot_name}" on ${dateKey}`}
                 >
                     <Plus size={12} /> Available
                 </Link>
@@ -569,8 +570,18 @@ export default function GroundAvailabilityPage() {
                                                     <span className="small text-muted">Not booked</span>
                                                 ) : canCreate ? (
                                                     <div className="d-flex align-items-center gap-2">
-                                                        <span className="badge bg-success">Available</span>
-                                                        <Link href={bookHref(slot, selectedKey)} className="btn btn-sm btn-primary">
+                                                        <Link
+                                                            href={bookHref(slot, selectedKey)}
+                                                            className="badge bg-success text-decoration-none py-2 px-3 fw-semibold d-inline-flex align-items-center gap-1"
+                                                            style={{ cursor: "pointer", transition: "transform 0.15s ease" }}
+                                                            title={`Click to book slot "${slot.slot_name}" on ${selectedKey}`}
+                                                        >
+                                                            <Plus size={12} /> Available
+                                                        </Link>
+                                                        <Link
+                                                            href={bookHref(slot, selectedKey)}
+                                                            className="btn btn-sm btn-primary"
+                                                        >
                                                             <Plus size={14} className="me-1" /> Book slot
                                                         </Link>
                                                     </div>

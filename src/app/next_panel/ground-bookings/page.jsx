@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, Clock, Edit, Eye, Phone, Search, SearchSlash, Trash2, Trees } from "lucide-react";
+import { CalendarCheck, Clock, Edit, Eye, Phone, Search, SearchSlash, Trash2, Trees, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -39,6 +39,11 @@ function GroundBookingsList() {
     const isSuperAdmin = ["super admin", "superadmin", "admin"].includes(userRole);
     const isBranchAdmin = userRole === "branch admin";
     const isPlayer = userRole.includes("player") || String(user?.user_type) === "7";
+    const isUmpire = Boolean(
+        user?.isUmpire ||
+        userRole.includes("umpire") ||
+        String(user?.role || user?.role_name || "").toLowerCase().includes("umpire")
+    );
     const [scope, setScope] = useState({ academy_id: "", branch_id: "" });
 
     const [loading, setLoading] = useState(true);
@@ -246,10 +251,14 @@ function GroundBookingsList() {
                     <div className="bg-white rounded-4 shadow-sm p-4 mb-4">
                         <div className="d-flex justify-content-between align-items-center gap-3">
                             <div>
-                                <h3 className="mb-0"><CalendarCheck /> Ground Bookings</h3>
-                                <p className="text-muted mb-0">Manage ground reservations, payments, and balances.</p>
+                                <h3 className="mb-0"><CalendarCheck /> {isUmpire ? "My Assigned Ground Bookings" : "Ground Bookings"}</h3>
+                                <p className="text-muted mb-0">
+                                    {isUmpire
+                                        ? "View ground reservations and matches where you are assigned as the match umpire."
+                                        : "Manage ground reservations, payments, and balances."}
+                                </p>
                             </div>
-                            {!isPlayer && (
+                            {!isPlayer && !isUmpire && (
                                 <div className="d-flex gap-2">
                                     <Link href="/next_panel/ground-slots" className="btn btn-outline-secondary px-3">
                                         <Clock size={18} /> Slots
@@ -382,6 +391,21 @@ function GroundBookingsList() {
                                                 <div>{item.booking_no}</div>
                                                 <small className="text-muted d-block">{formatDate(item.booking_date)}</small>
                                                 <small className="text-muted">{item.purpose}</small>
+                                                {item.umpire_name && (
+                                                    <div className="mt-1">
+                                                        <span
+                                                            className="badge bg-primary-subtle text-primary border border-primary-subtle d-inline-flex align-items-center gap-1"
+                                                            title={`Umpire: ${item.umpire_name} (${item.umpire_match_type || 'Assigned'})`}
+                                                        >
+                                                            <UserCheck size={11} /> {item.umpire_name}
+                                                            {Number(item.umpire_fee_amount) > 0 && (
+                                                                <span className="ms-1 fw-bold text-dark">
+                                                                    (₹{Number(item.umpire_fee_amount).toLocaleString("en-IN")})
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td>
                                                 <div>{item.customer_name}</div>
@@ -427,7 +451,7 @@ function GroundBookingsList() {
                                                     >
                                                         <Eye size={16} />
                                                     </Link>
-                                                    {!isPlayer && (
+                                                    {!isPlayer && !isUmpire && (
                                                         <>
                                                             {closed ? (
                                                                 <button type="button" className="btn btn-outline-secondary" aria-label="Edit booking" disabled>

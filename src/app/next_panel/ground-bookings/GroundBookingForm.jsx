@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck } from "lucide-react";
+import { CalendarCheck, UserCheck, Search, X, Check, AlertCircle } from "lucide-react";
 import { useUser } from "../components/UserContext";
 import {
     BOOKING_STATUSES,
@@ -27,6 +27,13 @@ const EMPTY_FORM = {
     customer_email: "",
     match_id: "",
     tournament_id: "",
+    umpire_id: "",
+    umpire_fee_id: "",
+    umpire_name: "",
+    umpire_phone: "",
+    umpire_match_type: "",
+    umpire_fee_amount: 0,
+    umpire_payment_type: "Per Match",
     total_amount: 0,
     paid_amount: 0,
     payment_mode: "",
@@ -112,6 +119,65 @@ export default function GroundBookingForm({
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+
+    // Umpire modal state
+    const [showUmpireModal, setShowUmpireModal] = useState(false);
+    const [availableUmpires, setAvailableUmpires] = useState([]);
+    const [loadingUmpires, setLoadingUmpires] = useState(false);
+    const [umpireSearch, setUmpireSearch] = useState("");
+    const [selectedModalUmpireId, setSelectedModalUmpireId] = useState("");
+    const [selectedModalFeeId, setSelectedModalFeeId] = useState("");
+
+    const openUmpireModal = async () => {
+        setShowUmpireModal(true);
+        setLoadingUmpires(true);
+        try {
+            const slot = slots.find((s) => String(s.id) === String(formData.slot_id));
+            const acadId = isEdit ? academyId : (slot?.academy_id || userAcademyId);
+            const brId = isEdit ? branchId : (slot?.branch_id || userBranchId);
+
+            const params = new URLSearchParams({ status: "1" });
+            if (acadId) params.set("academy_id", String(acadId));
+            if (brId) params.set("branch_id", String(brId));
+
+            const res = await fetch(`/api/umpires?${params.toString()}`);
+            const json = await res.json();
+            if (res.ok && json.success) {
+                setAvailableUmpires(json.data || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch umpires:", err);
+        } finally {
+            setLoadingUmpires(false);
+        }
+    };
+
+    const handleAssignUmpire = (ump, feeObj) => {
+        setFormData((prev) => ({
+            ...prev,
+            umpire_id: String(ump.id),
+            umpire_fee_id: feeObj?.id ? String(feeObj.id) : "",
+            umpire_name: ump.umpire_name,
+            umpire_phone: ump.mobile,
+            umpire_match_type: feeObj?.match_type || "Standard",
+            umpire_fee_amount: Number(feeObj?.fee_amount || 0),
+            umpire_payment_type: feeObj?.payment_type || "Per Match",
+        }));
+        setShowUmpireModal(false);
+    };
+
+    const handleRemoveUmpire = () => {
+        setFormData((prev) => ({
+            ...prev,
+            umpire_id: "",
+            umpire_fee_id: "",
+            umpire_name: "",
+            umpire_phone: "",
+            umpire_match_type: "",
+            umpire_fee_amount: 0,
+            umpire_payment_type: "Per Match",
+        }));
+    };
 
     // Active grounds + active slots (slot rows carry academy_id / branch_id)
     useEffect(() => {
@@ -208,6 +274,13 @@ export default function GroundBookingForm({
                     customer_email: d.customer_email || "",
                     match_id: d.match_id ?? "",
                     tournament_id: d.tournament_id ?? "",
+                    umpire_id: d.umpire_id ? String(d.umpire_id) : "",
+                    umpire_fee_id: d.umpire_fee_id ? String(d.umpire_fee_id) : "",
+                    umpire_name: d.umpire_name || "",
+                    umpire_phone: d.umpire_phone || "",
+                    umpire_match_type: d.umpire_match_type || "",
+                    umpire_fee_amount: d.umpire_fee_amount ?? 0,
+                    umpire_payment_type: d.umpire_payment_type || "Per Match",
                     total_amount: d.total_amount ?? 0,
                     paid_amount: d.paid_amount ?? 0,
                     payment_mode: lastPayment?.payment_mode || "",
@@ -240,17 +313,44 @@ export default function GroundBookingForm({
         if (gId || bDate || cName || cPhone || cEmail || purp || rem || sId) {
             setFormData((prev) => ({
                 ...prev,
-                ground_id: prev.ground_id || (gId ? String(gId) : ""),
-                slot_id: prev.slot_id || (sId ? String(sId) : ""),
-                booking_date: prev.booking_date || (bDate ? toDateInput(bDate) : ""),
-                customer_name: prev.customer_name || cName || "",
-                customer_phone: prev.customer_phone || cPhone || "",
-                customer_email: prev.customer_email || cEmail || "",
-                purpose: prev.purpose && prev.purpose !== "Practice" ? prev.purpose : normalizePurpose(purp || prev.purpose),
-                remarks: prev.remarks || rem || (reqNo ? `Converted from Request #${reqNo}` : ""),
+                ground_id: gId ? String(gId) : prev.ground_id,
+                slot_id: sId ? String(sId) : prev.slot_id,
+                booking_date: bDate ? toDateInput(bDate) : prev.booking_date,
+                customer_name: cName || prev.customer_name,
+                customer_phone: cPhone || prev.customer_phone,
+                customer_email: cEmail || prev.customer_email,
+                purpose: purp ? normalizePurpose(purp) : prev.purpose,
+                remarks: rem || (reqNo ? `Converted from Request #${reqNo}` : prev.remarks),
             }));
         }
     }, [searchParams, isEdit]);
+
+    // Ensure slots specifically for formData.ground_id are loaded
+    useEffect(() => {
+        if (!formData.ground_id) return;
+
+        const hasSlotsForGround = slots.some((s) => String(s.ground_id) === String(formData.ground_id));
+        if (hasSlotsForGround) return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/ground-slots?ground_id=${formData.ground_id}&status=1`, { cache: "no-store" });
+                const json = await res.json();
+                if (!cancelled && res.ok && json.success && Array.isArray(json.data)) {
+                    setSlots((prev) => {
+                        const existingIds = new Set(prev.map((s) => String(s.id)));
+                        const newSlots = json.data.filter((s) => !existingIds.has(String(s.id)));
+                        return newSlots.length > 0 ? [...prev, ...newSlots] : prev;
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load ground slots:", err);
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [formData.ground_id, slots]);
 
     // If converting from a booking request, fetch full request data if needed
     useEffect(() => {
@@ -265,12 +365,12 @@ export default function GroundBookingForm({
                     const req = json.data;
                     setFormData((prev) => ({
                         ...prev,
-                        ground_id: prev.ground_id || (req.ground_id ? String(req.ground_id) : ""),
-                        booking_date: prev.booking_date || toDateInput(req.booking_date),
-                        customer_name: prev.customer_name || req.customer_name || "",
-                        customer_phone: prev.customer_phone || req.mobile || "",
-                        customer_email: prev.customer_email || req.email || "",
-                        purpose: prev.purpose && prev.purpose !== "Practice" ? prev.purpose : normalizePurpose(req.booking_purpose),
+                        ground_id: req.ground_id ? String(req.ground_id) : prev.ground_id,
+                        booking_date: req.booking_date ? toDateInput(req.booking_date) : prev.booking_date,
+                        customer_name: req.customer_name || prev.customer_name,
+                        customer_phone: req.mobile || prev.customer_phone,
+                        customer_email: req.email || prev.customer_email,
+                        purpose: req.booking_purpose ? normalizePurpose(req.booking_purpose) : prev.purpose,
                         remarks: prev.remarks || (req.special_requirements ? `[Req #${req.request_number}] ${req.special_requirements}` : `Converted from Request #${req.request_number}`),
                     }));
                 }
@@ -284,26 +384,29 @@ export default function GroundBookingForm({
         };
     }, [requestId, isEdit]);
 
-    // Auto-match slot when slots or ground_id is available
+    // Auto-match slot and price when slots or ground_id is available
     useEffect(() => {
-        if (isEdit || !slots.length || !formData.ground_id) return;
+        if (isEdit || !slots.length) return;
 
-        const currentValid = slots.some(
-            (s) => String(s.id) === String(formData.slot_id) && String(s.ground_id) === String(formData.ground_id)
-        );
-        if (currentValid) return;
-
-        const availableSlots = slots.filter((s) => String(s.ground_id) === String(formData.ground_id));
-        if (!availableSlots.length) return;
-
+        const paramGroundId = searchParams.get("ground_id");
         const paramSlotId = searchParams.get("slot_id");
+        const paramDate = searchParams.get("booking_date");
         const paramStartTime = searchParams.get("start_time");
         const paramEndTime = searchParams.get("end_time");
 
+        const targetGroundId = formData.ground_id || (paramGroundId ? String(paramGroundId) : "");
+        const targetSlotId = formData.slot_id || (paramSlotId ? String(paramSlotId) : "");
+        const targetDate = formData.booking_date || (paramDate ? toDateInput(paramDate) : "");
+
+        if (!targetGroundId) return;
+
+        const availableSlots = slots.filter((s) => String(s.ground_id) === String(targetGroundId));
+        if (!availableSlots.length) return;
+
         let matched = null;
 
-        if (paramSlotId) {
-            matched = availableSlots.find((s) => String(s.id) === String(paramSlotId));
+        if (targetSlotId) {
+            matched = availableSlots.find((s) => String(s.id) === String(targetSlotId));
         }
 
         if (!matched && paramStartTime) {
@@ -331,13 +434,32 @@ export default function GroundBookingForm({
         }
 
         if (matched) {
-            setFormData((prev) => ({
-                ...prev,
-                slot_id: String(matched.id),
-                total_amount: prev.total_amount > 0 ? prev.total_amount : (Number(matched.price) || 0),
-            }));
+            const slotPrice = Number(matched.price) || 0;
+            setFormData((prev) => {
+                const nextGroundId = String(targetGroundId);
+                const nextSlotId = String(matched.id);
+                const nextDate = prev.booking_date || targetDate;
+                const nextTotal = prev.total_amount > 0 ? prev.total_amount : slotPrice;
+
+                if (
+                    String(prev.ground_id) === nextGroundId &&
+                    String(prev.slot_id) === nextSlotId &&
+                    prev.booking_date === nextDate &&
+                    prev.total_amount === nextTotal
+                ) {
+                    return prev;
+                }
+
+                return {
+                    ...prev,
+                    ground_id: nextGroundId,
+                    slot_id: nextSlotId,
+                    booking_date: nextDate,
+                    total_amount: nextTotal,
+                };
+            });
         }
-    }, [slots, formData.ground_id, formData.slot_id, isEdit, searchParams]);
+    }, [slots, formData.ground_id, formData.slot_id, formData.booking_date, isEdit, searchParams]);
 
     const groundSlots = useMemo(
         () => slots.filter((s) => String(s.ground_id) === String(formData.ground_id)),
@@ -405,6 +527,8 @@ export default function GroundBookingForm({
             tournament_id: formData.tournament_id && !isNaN(Number(formData.tournament_id))
                 ? Number(formData.tournament_id)
                 : (formData.tournament_id ? String(formData.tournament_id).trim() : null),
+            umpire_id: formData.umpire_id ? Number(formData.umpire_id) : null,
+            umpire_fee_id: formData.umpire_fee_id ? Number(formData.umpire_fee_id) : null,
             customer_name: formData.customer_name.trim(),
             customer_phone: formData.customer_phone.trim() || null,
             customer_email: formData.customer_email.trim() || null,
@@ -656,6 +780,73 @@ export default function GroundBookingForm({
                         </div>
                     </div>
 
+                    {/* Umpire Requirement Section */}
+                    <div className="mb-4">
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                            <label className="form-label fw-bold mb-0 d-flex align-items-center gap-2">
+                                <UserCheck size={18} className="text-primary" />
+                                Match Umpire Requirement
+                            </label>
+                            {formData.umpire_id && (
+                                <span className="badge bg-success-subtle text-success border border-success-subtle">
+                                    Assigned
+                                </span>
+                            )}
+                        </div>
+
+                        {formData.umpire_id ? (
+                            <div className="card bg-light border-primary-subtle p-3 rounded-3 shadow-xs">
+                                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <div className="d-flex align-items-center gap-3">
+                                        <div className="p-2 rounded-3 bg-primary text-white">
+                                            <UserCheck size={20} />
+                                        </div>
+                                        <div>
+                                            <div className="fw-bold">{formData.umpire_name}</div>
+                                            <div className="small text-muted">
+                                                {formData.umpire_phone && (
+                                                    <span className="me-3">📞 {formData.umpire_phone}</span>
+                                                )}
+                                                <span>
+                                                    Match Format: <strong className="text-dark">{formData.umpire_match_type || "Standard"}</strong> • Fee: <strong className="text-success">₹{Number(formData.umpire_fee_amount || 0).toLocaleString("en-IN")}</strong> ({formData.umpire_payment_type || "Per Match"})
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-primary"
+                                            onClick={openUmpireModal}
+                                        >
+                                            Change Umpire
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-danger"
+                                            onClick={handleRemoveUmpire}
+                                        >
+                                            Remove Umpire
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="d-flex align-items-center justify-content-between p-3 border border-dashed rounded-3 bg-light">
+                                <div className="text-muted small">
+                                    Need a certified umpire for this match, friendly, or practice slot?
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+                                    onClick={openUmpireModal}
+                                >
+                                    <UserCheck size={16} /> + Need Umpire
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Payment */}
                     <div className="row">
                         <div className="col-md-3 mb-3">
@@ -769,6 +960,163 @@ export default function GroundBookingForm({
                         </button>
                     </div>
                 </form>
+
+                {/* Umpire Selection Modal */}
+                {showUmpireModal && (
+                    <div
+                        className="modal show d-block"
+                        tabIndex="-1"
+                        style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                    >
+                        <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                            <div className="modal-content rounded-4 border-0 shadow">
+                                <div className="modal-header border-0 pb-0">
+                                    <div className="d-flex align-items-center gap-2">
+                                        <div className="p-2 rounded-3 bg-primary-subtle text-primary">
+                                            <UserCheck size={20} />
+                                        </div>
+                                        <div>
+                                            <h5 className="modal-title fw-bold">Select Match Umpire</h5>
+                                            <small className="text-muted">
+                                                Choose an active umpire and their format billing rate
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        onClick={() => setShowUmpireModal(false)}
+                                    ></button>
+                                </div>
+
+                                <div className="modal-body p-4">
+                                    {/* Search Input */}
+                                    <div className="input-group mb-3">
+                                        <span className="input-group-text bg-white">
+                                            <Search size={16} className="text-muted" />
+                                        </span>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            placeholder="Search by umpire name, phone, or qualification..."
+                                            value={umpireSearch}
+                                            onChange={(e) => setUmpireSearch(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {loadingUmpires ? (
+                                        <div className="text-center py-4 text-muted">
+                                            <div className="spinner-border spinner-border-sm text-primary me-2"></div>
+                                            Loading umpires...
+                                        </div>
+                                    ) : availableUmpires.length === 0 ? (
+                                        <div className="text-center py-4 text-muted">
+                                            <UserCheck size={36} className="mb-2 opacity-50" />
+                                            <div>No active umpires found for this academy/branch.</div>
+                                            <Link
+                                                href="/next_panel/umpires/new"
+                                                target="_blank"
+                                                className="btn btn-sm btn-link mt-1"
+                                            >
+                                                + Register a new umpire
+                                            </Link>
+                                        </div>
+                                    ) : (
+                                        <div className="d-flex flex-column gap-3">
+                                            {availableUmpires
+                                                .filter((u) => {
+                                                    if (!umpireSearch.trim()) return true;
+                                                    const q = umpireSearch.toLowerCase();
+                                                    return (
+                                                        u.umpire_name.toLowerCase().includes(q) ||
+                                                        (u.mobile && u.mobile.includes(q)) ||
+                                                        (u.qualification && u.qualification.toLowerCase().includes(q))
+                                                    );
+                                                })
+                                                .map((ump) => {
+                                                    const isCurrentlyAssigned = String(formData.umpire_id) === String(ump.id);
+                                                    return (
+                                                        <div
+                                                            key={ump.id}
+                                                            className={`card border rounded-3 p-3 transition-all ${
+                                                                isCurrentlyAssigned
+                                                                    ? "border-primary bg-primary-subtle"
+                                                                    : "border-light-subtle bg-white hover-shadow"
+                                                            }`}
+                                                        >
+                                                            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                                                                <div>
+                                                                    <div className="fw-bold d-flex align-items-center gap-2">
+                                                                        {ump.umpire_name}
+                                                                        {isCurrentlyAssigned && (
+                                                                            <span className="badge bg-primary text-white">
+                                                                                Current
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <small className="text-muted">
+                                                                        📞 {ump.mobile}
+                                                                        {ump.qualification ? ` • ${ump.qualification}` : ""}
+                                                                        {ump.experience_years ? ` • ${ump.experience_years} yrs exp` : ""}
+                                                                    </small>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-outline-primary"
+                                                                    onClick={() => handleAssignUmpire(ump, null)}
+                                                                >
+                                                                    Assign (Standard)
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Configured Fees */}
+                                                            {ump.fees && ump.fees.length > 0 && (
+                                                                <div className="mt-2 pt-2 border-top">
+                                                                    <small className="fw-semibold text-muted d-block mb-1">
+                                                                        Available Format Fee Rates:
+                                                                    </small>
+                                                                    <div className="d-flex flex-wrap gap-2">
+                                                                        {ump.fees.map((fee) => (
+                                                                            <button
+                                                                                key={fee.id}
+                                                                                type="button"
+                                                                                className="btn btn-sm btn-light border text-start d-flex align-items-center gap-2 py-1 px-2"
+                                                                                onClick={() => handleAssignUmpire(ump, fee)}
+                                                                                title="Click to assign with this fee"
+                                                                            >
+                                                                                <span className="fw-semibold">{fee.match_type}:</span>
+                                                                                <span className="text-success fw-bold">
+                                                                                    ₹{Number(fee.fee_amount).toLocaleString("en-IN")}
+                                                                                </span>
+                                                                                <span className="text-muted small">
+                                                                                    ({fee.payment_type})
+                                                                                </span>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="modal-footer border-0 pt-0">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setShowUmpireModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
