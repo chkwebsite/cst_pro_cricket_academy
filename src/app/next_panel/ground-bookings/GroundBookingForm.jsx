@@ -372,6 +372,13 @@ export default function GroundBookingForm({
                         customer_email: req.email || prev.customer_email,
                         purpose: req.booking_purpose ? normalizePurpose(req.booking_purpose) : prev.purpose,
                         remarks: prev.remarks || (req.special_requirements ? `[Req #${req.request_number}] ${req.special_requirements}` : `Converted from Request #${req.request_number}`),
+                        umpire_id: req.umpire_id ? String(req.umpire_id) : prev.umpire_id,
+                        umpire_fee_id: req.umpire_fee_id ? String(req.umpire_fee_id) : prev.umpire_fee_id,
+                        umpire_name: req.umpire_name || prev.umpire_name,
+                        umpire_phone: req.umpire_phone || prev.umpire_phone,
+                        umpire_match_type: req.umpire_match_type || prev.umpire_match_type,
+                        umpire_fee_amount: req.umpire_fee_amount ?? prev.umpire_fee_amount,
+                        umpire_payment_type: req.umpire_payment_type || prev.umpire_payment_type,
                     }));
                 }
             } catch (err) {

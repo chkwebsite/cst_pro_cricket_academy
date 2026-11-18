@@ -23,6 +23,12 @@ export async function GET(request) {
                 r.mobile,
                 r.email,
                 r.ground_id,
+                r.umpire_id,
+                r.umpire_fee_id,
+                u.umpire_name,
+                u.mobile AS umpire_phone,
+                uf.fee_amount AS umpire_fee_amount,
+                uf.match_type AS umpire_match_type,
                 g.ground_name,
                 g.ground_code,
                 g.academy_id,
@@ -39,6 +45,8 @@ export async function GET(request) {
                 r.updated_at
             FROM cst_ground_booking_requests r
             INNER JOIN cst_ground g ON g.id = r.ground_id
+            LEFT JOIN cst_umpires u ON u.id = r.umpire_id
+            LEFT JOIN cst_umpire_fees uf ON uf.id = r.umpire_fee_id
             WHERE r.is_deleted = 0 AND g.is_deleted = 0
         `;
 
@@ -139,6 +147,8 @@ export async function POST(request) {
             mobile,
             email,
             ground_id,
+            umpire_id,
+            umpire_fee_id,
             booking_date,
             start_time,
             end_time,
@@ -285,6 +295,8 @@ export async function POST(request) {
                 mobile,
                 email,
                 ground_id,
+                umpire_id,
+                umpire_fee_id,
                 booking_date,
                 start_time,
                 end_time,
@@ -292,13 +304,15 @@ export async function POST(request) {
                 number_of_players,
                 special_requirements,
                 request_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')`,
             [
                 requestNumber,
                 customer_name.trim(),
                 mobile.trim(),
                 email || null,
                 ground_id,
+                umpire_id ? Number(umpire_id) : null,
+                umpire_fee_id ? Number(umpire_fee_id) : null,
                 booking_date,
                 start_time,
                 end_time,

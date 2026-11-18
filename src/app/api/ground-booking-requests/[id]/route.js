@@ -42,6 +42,11 @@ export async function GET(request, { params }) {
         const [rows] = await pool.execute(
             `SELECT
                 r.*,
+                u.umpire_name,
+                u.mobile AS umpire_phone,
+                uf.fee_amount AS umpire_fee_amount,
+                uf.match_type AS umpire_match_type,
+                uf.payment_type AS umpire_payment_type,
                 g.ground_name,
                 g.ground_code,
                 g.academy_id,
@@ -53,6 +58,8 @@ export async function GET(request, { params }) {
                 g.ground_facility
              FROM cst_ground_booking_requests r
              INNER JOIN cst_ground g ON g.id = r.ground_id
+             LEFT JOIN cst_umpires u ON u.id = r.umpire_id
+             LEFT JOIN cst_umpire_fees uf ON uf.id = r.umpire_fee_id
              WHERE r.id = ? AND r.is_deleted = 0 AND g.is_deleted = 0
              LIMIT 1`,
             [id]

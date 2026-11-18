@@ -15,9 +15,11 @@ export async function GET(request) {
 
     try {
         const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
-        if (errorResponse) return errorResponse;
-
         const { searchParams } = new URL(request.url);
+
+        // Allow public website visitors to list active umpires for ground booking
+        const isPublicActiveRequest = searchParams.get("status") === "1";
+        if (errorResponse && !isPublicActiveRequest) return errorResponse;
 
         const search = searchParams.get("search");
         const academy_id = searchParams.get("academy_id");
@@ -103,6 +105,17 @@ export async function GET(request) {
                     sql += " AND (u.branch_id = ? OR u.branch_id IS NULL)";
                     values.push(branch_id);
                 }
+            }
+        } else {
+            // Public website visitor (no auth token): filter active umpires
+            sql += " AND u.status = 1";
+            if (academy_id) {
+                sql += " AND u.academy_id = ?";
+                values.push(academy_id);
+            }
+            if (branch_id) {
+                sql += " AND (u.branch_id = ? OR u.branch_id IS NULL)";
+                values.push(branch_id);
             }
         }
 

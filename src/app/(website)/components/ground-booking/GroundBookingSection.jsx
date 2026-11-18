@@ -19,6 +19,7 @@ import {
     Sun,
     Trophy,
     User,
+    UserCheck,
     Users,
     X,
 } from "lucide-react";
@@ -154,7 +155,20 @@ export default function GroundBookingSection() {
         booking_purpose: "Friendly Match",
         number_of_players: 22,
         special_requirements: "",
+        umpire_id: "",
+        umpire_fee_id: "",
+        umpire_name: "",
+        umpire_phone: "",
+        umpire_match_type: "",
+        umpire_fee_amount: 0,
+        umpire_payment_type: "Per Match",
     });
+
+    // Umpire modal state
+    const [showUmpireModal, setShowUmpireModal] = useState(false);
+    const [availableUmpires, setAvailableUmpires] = useState([]);
+    const [loadingUmpires, setLoadingUmpires] = useState(false);
+    const [umpireSearch, setUmpireSearch] = useState("");
 
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState("");
@@ -555,6 +569,13 @@ export default function GroundBookingSection() {
             booking_date: targetDate,
             start_time: sStart,
             end_time: sEnd,
+            umpire_id: "",
+            umpire_fee_id: "",
+            umpire_name: "",
+            umpire_phone: "",
+            umpire_match_type: "",
+            umpire_fee_amount: 0,
+            umpire_payment_type: "Per Match",
         }));
 
         setBookingAlertMessage("");
@@ -567,8 +588,66 @@ export default function GroundBookingSection() {
     // Close booking modal
     const closeBookingModal = () => {
         setIsModalOpen(false);
+        setShowUmpireModal(false);
         setFormError("");
         setFormSuccess(null);
+    };
+
+    // Umpire Selection Handlers
+    const openUmpireModal = async () => {
+        setShowUmpireModal(true);
+        setLoadingUmpires(true);
+        try {
+            const params = new URLSearchParams({ status: "1" });
+            if (activeGround?.academy_id) params.set("academy_id", String(activeGround.academy_id));
+            if (activeGround?.branch_id) params.set("branch_id", String(activeGround.branch_id));
+
+            let res = await fetch(`/api/umpires?${params.toString()}`);
+            let json = await res.json();
+            let data = json?.success && Array.isArray(json.data) ? json.data : [];
+
+            // If none found for specific academy/branch, fallback to all active umpires
+            if (data.length === 0) {
+                const fallbackRes = await fetch("/api/umpires?status=1");
+                const fallbackJson = await fallbackRes.json();
+                if (fallbackJson?.success && Array.isArray(fallbackJson.data)) {
+                    data = fallbackJson.data;
+                }
+            }
+
+            setAvailableUmpires(data);
+        } catch (err) {
+            console.error("Failed to fetch umpires:", err);
+        } finally {
+            setLoadingUmpires(false);
+        }
+    };
+
+    const handleAssignUmpire = (ump, feeObj) => {
+        setFormData((prev) => ({
+            ...prev,
+            umpire_id: String(ump.id),
+            umpire_fee_id: feeObj?.id ? String(feeObj.id) : "",
+            umpire_name: ump.umpire_name,
+            umpire_phone: ump.mobile,
+            umpire_match_type: feeObj?.match_type || "Standard",
+            umpire_fee_amount: Number(feeObj?.fee_amount || 0),
+            umpire_payment_type: feeObj?.payment_type || "Per Match",
+        }));
+        setShowUmpireModal(false);
+    };
+
+    const handleRemoveUmpire = () => {
+        setFormData((prev) => ({
+            ...prev,
+            umpire_id: "",
+            umpire_fee_id: "",
+            umpire_name: "",
+            umpire_phone: "",
+            umpire_match_type: "",
+            umpire_fee_amount: 0,
+            umpire_payment_type: "Per Match",
+        }));
     };
 
     // Apply preset time slot
@@ -620,17 +699,25 @@ export default function GroundBookingSection() {
         try {
             setSubmitting(true);
 
+            let specialReqs = formData.special_requirements.trim();
+            if (formData.umpire_id) {
+                const umpireNote = `[Umpire Required: ${formData.umpire_name || "Yes"}${formData.umpire_match_type ? ` - ${formData.umpire_match_type}` : ""}${formData.umpire_fee_amount ? ` (Fee: ₹${Number(formData.umpire_fee_amount).toLocaleString("en-IN")})` : ""}]`;
+                specialReqs = specialReqs ? `${specialReqs}\n${umpireNote}` : umpireNote;
+            }
+
             const payload = {
                 customer_name: formData.customer_name.trim(),
                 mobile: phoneDigits,
                 email: formData.email.trim() || null,
                 ground_id: Number(formData.ground_id),
+                umpire_id: formData.umpire_id ? Number(formData.umpire_id) : null,
+                umpire_fee_id: formData.umpire_fee_id ? Number(formData.umpire_fee_id) : null,
                 booking_date: formData.booking_date,
                 start_time: formData.start_time.length === 5 ? `${formData.start_time}:00` : formData.start_time,
                 end_time: formData.end_time.length === 5 ? `${formData.end_time}:00` : formData.end_time,
                 booking_purpose: formData.booking_purpose,
                 number_of_players: formData.number_of_players ? Number(formData.number_of_players) : null,
-                special_requirements: formData.special_requirements.trim() || null,
+                special_requirements: specialReqs || null,
             };
 
             const res = await fetch("/api/ground-booking-requests", {
@@ -1609,6 +1696,73 @@ export default function GroundBookingSection() {
                                         </div>
                                     </div>
 
+                                    {/* Match Umpire Requirement Section */}
+                                    <div className="mb-3">
+                                        <div className="d-flex align-items-center justify-content-between mb-2">
+                                            <label className="form-label small fw-bold text-navy mb-0 d-flex align-items-center gap-2">
+                                                <UserCheck size={18} className="text-primary" />
+                                                Match Umpire Requirement
+                                            </label>
+                                            {formData.umpire_id && (
+                                                <span className="badge bg-success-subtle text-success border border-success-subtle">
+                                                    Assigned
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {formData.umpire_id ? (
+                                            <div className="card bg-light border-primary-subtle p-3 rounded-3 shadow-xs">
+                                                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                    <div className="d-flex align-items-center gap-3">
+                                                        <div className="p-2 rounded-3 bg-primary text-white">
+                                                            <UserCheck size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <div className="fw-bold text-navy">{formData.umpire_name}</div>
+                                                            <div className="small text-muted">
+                                                                {formData.umpire_phone && (
+                                                                    <span className="me-3">📞 {formData.umpire_phone}</span>
+                                                                )}
+                                                                <span>
+                                                                    Match Format: <strong className="text-dark">{formData.umpire_match_type || "Standard"}</strong> • Fee: <strong className="text-success">₹{Number(formData.umpire_fee_amount || 0).toLocaleString("en-IN")}</strong> ({formData.umpire_payment_type || "Per Match"})
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            onClick={openUmpireModal}
+                                                        >
+                                                            Change Umpire
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={handleRemoveUmpire}
+                                                        >
+                                                            Remove Umpire
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="d-flex align-items-center justify-content-between p-3 border border-dashed rounded-3 bg-light">
+                                                <div className="text-muted small">
+                                                    Need a certified umpire for this match, friendly, or practice slot?
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+                                                    onClick={openUmpireModal}
+                                                >
+                                                    <UserCheck size={16} /> + Need Umpire
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Special Requirements (Optional) - FULL WIDTH */}
                                     <div className="row g-3 mb-4">
                                         <div className="col-12">
@@ -1650,6 +1804,157 @@ export default function GroundBookingSection() {
                                     </div>
                                 </form>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Umpire Selection Modal */}
+            {showUmpireModal && (
+                <div
+                    className="modal show d-block"
+                    tabIndex="-1"
+                    style={{ backgroundColor: "rgba(0,0,0,0.6)", zIndex: 2200 }}
+                >
+                    <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                        <div className="modal-content rounded-4 border-0 shadow">
+                            <div className="modal-header border-0 pb-0">
+                                <div className="d-flex align-items-center gap-2">
+                                    <div className="p-2 rounded-3 bg-primary-subtle text-primary">
+                                        <UserCheck size={20} />
+                                    </div>
+                                    <div>
+                                        <h5 className="modal-title fw-bold text-navy mb-0">Select Match Umpire</h5>
+                                        <small className="text-muted">
+                                            Choose an active umpire and their format billing rate
+                                        </small>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    onClick={() => setShowUmpireModal(false)}
+                                    aria-label="Close"
+                                ></button>
+                            </div>
+
+                            <div className="modal-body p-4">
+                                {/* Search Input */}
+                                <div className="input-group mb-3">
+                                    <span className="input-group-text bg-white">
+                                        <Search size={16} className="text-muted" />
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Search by umpire name, phone, or qualification..."
+                                        value={umpireSearch}
+                                        onChange={(e) => setUmpireSearch(e.target.value)}
+                                    />
+                                </div>
+
+                                {loadingUmpires ? (
+                                    <div className="text-center py-4 text-muted">
+                                        <div className="spinner-border spinner-border-sm text-primary me-2"></div>
+                                        Loading umpires...
+                                    </div>
+                                ) : availableUmpires.length === 0 ? (
+                                    <div className="text-center py-4 text-muted">
+                                        <UserCheck size={36} className="mb-2 opacity-50" />
+                                        <div>No active umpires found for this academy/branch.</div>
+                                    </div>
+                                ) : (
+                                    <div className="d-flex flex-column gap-3">
+                                        {availableUmpires
+                                            .filter((u) => {
+                                                if (!umpireSearch.trim()) return true;
+                                                const q = umpireSearch.toLowerCase();
+                                                return (
+                                                    u.umpire_name.toLowerCase().includes(q) ||
+                                                    (u.mobile && u.mobile.includes(q)) ||
+                                                    (u.qualification && u.qualification.toLowerCase().includes(q))
+                                                );
+                                            })
+                                            .map((ump) => {
+                                                const isCurrentlyAssigned = String(formData.umpire_id) === String(ump.id);
+                                                return (
+                                                    <div
+                                                        key={ump.id}
+                                                        className={`card border rounded-3 p-3 transition-all ${
+                                                            isCurrentlyAssigned
+                                                                ? "border-primary bg-primary-subtle"
+                                                                : "border-light-subtle bg-white hover-shadow"
+                                                        }`}
+                                                    >
+                                                        <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                                                            <div>
+                                                                <div className="fw-bold d-flex align-items-center gap-2 text-navy">
+                                                                    {ump.umpire_name}
+                                                                    {isCurrentlyAssigned && (
+                                                                        <span className="badge bg-primary text-white">
+                                                                            Current
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <small className="text-muted">
+                                                                    📞 {ump.mobile}
+                                                                    {ump.qualification ? ` • ${ump.qualification}` : ""}
+                                                                    {ump.experience_years ? ` • ${ump.experience_years} yrs exp` : ""}
+                                                                </small>
+                                                            </div>
+
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-sm btn-outline-primary"
+                                                                onClick={() => handleAssignUmpire(ump, null)}
+                                                            >
+                                                                Assign (Standard)
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Configured Fees */}
+                                                        {ump.fees && ump.fees.length > 0 && (
+                                                            <div className="mt-2 pt-2 border-top">
+                                                                <small className="fw-semibold text-muted d-block mb-1">
+                                                                    Available Format Fee Rates:
+                                                                </small>
+                                                                <div className="d-flex flex-wrap gap-2">
+                                                                    {ump.fees.map((fee) => (
+                                                                        <button
+                                                                            key={fee.id}
+                                                                            type="button"
+                                                                            className="btn btn-sm btn-light border text-start d-flex align-items-center gap-2 py-1 px-2"
+                                                                            onClick={() => handleAssignUmpire(ump, fee)}
+                                                                            title="Click to assign with this fee"
+                                                                        >
+                                                                            <span className="fw-semibold">{fee.match_type}:</span>
+                                                                            <span className="text-success fw-bold">
+                                                                                ₹{Number(fee.fee_amount).toLocaleString("en-IN")}
+                                                                            </span>
+                                                                            <span className="text-muted small">
+                                                                                ({fee.payment_type})
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="modal-footer border-0 pt-0">
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-secondary"
+                                    onClick={() => setShowUmpireModal(false)}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
