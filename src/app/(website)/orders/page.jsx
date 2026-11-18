@@ -368,25 +368,25 @@ function OrdersContent() {
                         {isLoggedIn && orderType === "store" && (
                             <div className="row g-2 mt-3 pt-3 border-top border-white border-opacity-10">
                                 <div className="col-6 col-md-3">
-                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between">
+                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between px-2">
                                         <span className="small text-white-50">Total Orders:</span>
                                         <span className="fw-bold text-white fs-6">{totalStoreOrders}</span>
                                     </div>
                                 </div>
                                 <div className="col-6 col-md-3">
-                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between">
+                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between px-2">
                                         <span className="small text-white-50">In Progress:</span>
                                         <span className="fw-bold text-lime fs-6">{activeStoreOrders}</span>
                                     </div>
                                 </div>
                                 <div className="col-6 col-md-3">
-                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between">
+                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between px-2">
                                         <span className="small text-white-50">Delivered:</span>
                                         <span className="fw-bold text-success fs-6">{completedStoreOrders}</span>
                                     </div>
                                 </div>
                                 <div className="col-6 col-md-3">
-                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between">
+                                    <div className="p-2.5 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-between px-2">
                                         <span className="small text-white-50">Cancelled:</span>
                                         <span className="fw-bold text-danger fs-6">{cancelledStoreOrders}</span>
                                     </div>
