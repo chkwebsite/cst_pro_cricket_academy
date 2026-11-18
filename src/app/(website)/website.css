@@ -3571,7 +3571,7 @@ section h1, section h2 { line-height: 1.12; overflow-wrap: anywhere; }
   section { padding-block: 54px; }
   .header__inner { justify-content: space-between; }
   .hero__grid { grid-template-columns: 1fr; }
-  .hero__visual { margin-inline: auto; max-width: 680px; }
+  .hero__visual { width: 100%; margin-inline: auto; max-width: 680px; }
   .feature-modal__grid { grid-template-columns: 1fr; }
   .feature-modal__media { max-height: 42vh; }
   .footer__grid { gap: 28px; }

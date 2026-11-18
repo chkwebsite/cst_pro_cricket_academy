@@ -164,7 +164,7 @@ ul{margin:0;padding:0;list-style:none}
 .hero__cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:36px}
 .checks{display:flex;flex-wrap:wrap;gap:12px 28px;margin-top:40px;font-size:14px;font-weight:500;color:#9fe6da}
 .checks li::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:10px}
-.hero__visual{position:relative;display:grid;place-items:center;min-height:440px}
+.hero__visual{position:relative;display:grid;place-items:center;min-height:440px;width:100%}
 .hero__orb{position:relative;width:min(100%,470px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#10c9ad,var(--green) 35%,var(--teal) 85%);box-shadow:0 40px 90px -20px rgba(0,0,0,.6),inset 0 0 0 10px rgba(255,255,255,.07);animation:floaty 7s ease-in-out infinite}
 .hero__orb img{position:absolute;left:50%;bottom:7%;width:118%;max-width:none;height:auto;transform:translateX(-50%);filter:drop-shadow(0 28px 24px rgba(0,0,0,.45))}
 .hero__ring{position:absolute;width:min(112%,540px);aspect-ratio:1;border-radius:50%;border:1px dashed rgba(255,255,255,.25);animation:spin 40s linear infinite}
@@ -398,9 +398,9 @@ tbody tr{transition:background .25s}tbody tr:hover{background:var(--cream)}
   .mobile-nav{display:flex}
   .footer__grid{grid-template-columns:1fr 1fr}
 }
-@media (max-width:900px){
+@media (max-width:991.98px){
   .hero__inner{grid-template-columns:minmax(0,1fr);padding-top:60px}
-  .hero__visual{min-height:360px}
+  .hero__visual{width:100%;max-width:540px;margin-inline:auto;min-height:380px}
   .steps .step::after{display:none}
   .section{padding:80px 0}
   .split{gap:48px}
@@ -418,6 +418,12 @@ tbody tr{transition:background .25s}tbody tr:hover{background:var(--cream)}
   .coach__info .btn{opacity:1;transform:none}
   .logo__img{height:46px;}
   .header__inner{padding:14px 24px;}
+  .hero__visual{min-height:320px}
+  .hero__orb{width:min(86vw,340px)}
+  .chip{padding:10px 14px;font-size:11px;border-radius:12px}
+  .chip b{font-size:17px}
+  .chip--a{left:4px;bottom:16px}
+  .chip--b{right:4px;top:16px}
 }
 
 /* ==========================================================

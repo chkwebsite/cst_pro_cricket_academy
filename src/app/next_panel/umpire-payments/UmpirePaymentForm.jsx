@@ -150,6 +150,7 @@ export default function UmpirePaymentForm() {
                 booking_id: activeDuty?.booking_id || (paramBookingId ? Number(paramBookingId) : null),
                 academy_id: activeDuty?.academy_id || null,
                 branch_id: activeDuty?.branch_id || null,
+                umpire_role: activeDuty?.umpire_role || null,
             };
 
             const res = await fetch("/api/umpire-payments", {

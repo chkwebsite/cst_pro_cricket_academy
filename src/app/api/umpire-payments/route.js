@@ -509,22 +509,52 @@ export async function POST(request) {
                     [newStatus, remarks || null, matchUmpireId]
                 );
             } else {
-                // If umpire was assigned via ground booking, insert or ensure cst_match_umpires record
-                await connection.query(
-                    `INSERT INTO cst_match_umpires (
-                        academy_id, branch_id, match_id, umpire_id, umpire_role, fee_amount, payment_status, remarks
-                     ) VALUES (?, ?, ?, ?, 'Official Umpire', ?, ?, ?)
-                     ON DUPLICATE KEY UPDATE payment_status = VALUES(payment_status), fee_amount = VALUES(fee_amount)`,
-                    [
-                        academyId,
-                        branchId || 1,
-                        match_id,
-                        umpire_id,
-                        fee,
-                        newStatus,
-                        remarks || `Paid via ${payment_mode}`,
-                    ]
+                // Check if a record already exists for this match and umpire
+                const [existingRoles] = await connection.query(
+                    `SELECT id, umpire_id, umpire_role FROM cst_match_umpires WHERE match_id = ?`,
+                    [match_id]
                 );
+
+                const existingForUmpire = existingRoles.find((r) => Number(r.umpire_id) === Number(umpire_id));
+                if (existingForUmpire) {
+                    await connection.query(
+                        `UPDATE cst_match_umpires
+                         SET payment_status = ?,
+                             remarks = COALESCE(?, remarks)
+                         WHERE id = ?`,
+                        [newStatus, remarks || null, existingForUmpire.id]
+                    );
+                } else {
+                    const takenRoles = new Set(existingRoles.map((r) => r.umpire_role));
+                    const candidateRoles = [
+                        body.umpire_role,
+                        "Official Umpire",
+                        "On Field Umpire 1",
+                        "On Field Umpire 2",
+                        "Third Umpire",
+                        "Fourth Umpire",
+                        "Ground Official",
+                    ].filter(Boolean);
+
+                    const roleToUse = candidateRoles.find((role) => !takenRoles.has(role)) || "Official Umpire";
+
+                    await connection.query(
+                        `INSERT INTO cst_match_umpires (
+                            academy_id, branch_id, match_id, umpire_id, umpire_role, fee_amount, payment_status, remarks
+                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                         ON DUPLICATE KEY UPDATE payment_status = VALUES(payment_status), fee_amount = VALUES(fee_amount)`,
+                        [
+                            academyId,
+                            branchId || 1,
+                            match_id,
+                            umpire_id,
+                            roleToUse,
+                            fee,
+                            newStatus,
+                            remarks || `Paid via ${payment_mode}`,
+                        ]
+                    );
+                }
             }
         }
 
