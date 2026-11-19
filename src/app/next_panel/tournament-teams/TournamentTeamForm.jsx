@@ -23,6 +23,7 @@ const EMPTY_FORM = {
     team_fee: "",
     payment_status: "Pending",
     status: "Registered",
+    group_name: "Group A",
 };
 
 export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/tournament-teams" }) {
@@ -75,6 +76,7 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                     team_fee: d.team_fee ?? "",
                     payment_status: d.payment_status || "Pending",
                     status: d.status || "Registered",
+                    group_name: d.group_name || "Group A",
                 });
             } catch (err) {
                 setError(err.message);
@@ -174,6 +176,7 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
             const common = {
                 payment_status: formData.payment_status,
                 status: formData.status,
+                group_name: formData.group_name ? formData.group_name.trim() : "Group A",
                 registered_date: formData.registered_date || null,
                 // blank fee -> API uses the tournament's fee (create) / keeps current fee (edit)
                 ...(formData.team_fee !== "" ? { team_fee: Number(formData.team_fee) } : {}),
@@ -368,7 +371,7 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                     </div>
 
                     <div className="row">
-                        <div className="col-md-6 mb-3">
+                        <div className="col-md-4 mb-3">
                             <label className="form-label">Payment Status</label>
                             <select
                                 name="payment_status"
@@ -382,13 +385,47 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                             </select>
                         </div>
 
-                        <div className="col-md-6 mb-3">
+                        <div className="col-md-4 mb-3">
                             <label className="form-label">Registration Status</label>
                             <select name="status" className="form-select" value={formData.status} onChange={handleChange}>
                                 {REG_STATUSES.map((s) => (
                                     <option key={s} value={s}>{s}</option>
                                 ))}
                             </select>
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                            <label className="form-label fw-semibold">
+                                Team Group / Pool <span className="badge bg-primary-subtle text-primary ms-1">New</span>
+                            </label>
+                            <div className="input-group">
+                                <select
+                                    className="form-select"
+                                    style={{ maxWidth: "130px" }}
+                                    value={["Group A", "Group B", "Group C", "Group D", "Pool 1", "Pool 2"].includes(formData.group_name) ? formData.group_name : "Other"}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        setFormData((prev) => ({ ...prev, group_name: v === "Other" ? "" : v }));
+                                    }}
+                                >
+                                    <option value="Group A">Group A</option>
+                                    <option value="Group B">Group B</option>
+                                    <option value="Group C">Group C</option>
+                                    <option value="Group D">Group D</option>
+                                    <option value="Pool 1">Pool 1</option>
+                                    <option value="Pool 2">Pool 2</option>
+                                    <option value="Other">Custom...</option>
+                                </select>
+                                <input
+                                    type="text"
+                                    name="group_name"
+                                    className="form-control"
+                                    placeholder="e.g. Group A, Pool 1"
+                                    value={formData.group_name}
+                                    onChange={handleChange}
+                                />
+                            </div>
+                            <div className="form-text">Used for Group-wise fixtures and Points Table.</div>
                         </div>
                     </div>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
+import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
 
 // GET: Get all match innings
 // Optional filters: ?match_id=1&innings_status=In Progress
@@ -99,6 +100,10 @@ export async function GET(request) {
         sql += " ORDER BY mi.match_id DESC, mi.innings_no ASC";
 
         connection = await pool.getConnection();
+
+        if (match_id) {
+            await checkAndUpdateInningsAndMatchCompletion(connection, match_id);
+        }
 
         const [rows] = await connection.execute(sql, params);
 

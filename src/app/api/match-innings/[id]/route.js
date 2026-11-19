@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
+import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
 
 // GET: Get single innings
 export async function GET(request, { params }) {
@@ -148,6 +149,26 @@ export async function PUT(request, { params }) {
                 { success: false, message: "Forbidden. Innings belongs to another academy or branch." },
                 { status: 403 }
             );
+        }
+
+        // Rule: If innings is Completed, it cannot be edited unless user is Super Admin or Academy Admin
+        if (existing.innings_status === "Completed") {
+            const isSuperOrAcademyAdmin = Boolean(
+                authUser.isSuperAdmin ||
+                authUser.isAcademyAdmin ||
+                ["super admin", "super_admin", "academy admin", "academy_admin"].includes(
+                    String(authUser.role || authUser.user_type || "").toLowerCase()
+                )
+            );
+            if (!isSuperOrAcademyAdmin) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden. This innings is completed and locked. Only Super Admin and Academy Admin can edit completed innings records.",
+                    },
+                    { status: 403 }
+                );
+            }
         }
 
         // Validate combined values, including fields not supplied in PUT
@@ -343,6 +364,19 @@ export async function PUT(request, { params }) {
             );
         }
 
+        // Rule: If 10 wickets dismissed or overs limit reached, auto-mark Completed
+        const isTenWickets = Number(updated.total_wickets) >= 10;
+        const isOverLimit = Number(updated.total_balls) >= matchOvers * 6 || (Number(updated.total_overs) >= matchOvers && matchOvers > 0);
+        if (isTenWickets || isOverLimit) {
+            const statusIdx = updates.findIndex((u) => u.startsWith("innings_status"));
+            if (statusIdx >= 0) {
+                values[statusIdx] = "Completed";
+            } else {
+                updates.push("innings_status = ?");
+                values.push("Completed");
+            }
+        }
+
         values.push(id);
 
         await connection.execute(
@@ -351,6 +385,9 @@ export async function PUT(request, { params }) {
              WHERE id = ? `,
             values
         );
+
+        // Check and auto-update innings completion (10 dismissals or overs limit) and match completion
+        await checkAndUpdateInningsAndMatchCompletion(connection, existing.match_id, id);
 
         return NextResponse.json({
             success: true,
@@ -409,7 +446,7 @@ export async function DELETE(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            `SELECT mi.id, m.academy_id, m.branch_id
+            `SELECT mi.id, mi.match_id, mi.innings_status, m.academy_id, m.branch_id
              FROM cst_match_innings mi
              INNER JOIN cst_matches m ON m.id = mi.match_id
              WHERE mi.id = ?`,
@@ -430,10 +467,33 @@ export async function DELETE(request, { params }) {
             );
         }
 
+        // Rule: If innings is Completed, it cannot be deleted unless user is Super Admin or Academy Admin
+        if (rows[0].innings_status === "Completed") {
+            const isSuperOrAcademyAdmin = Boolean(
+                authUser.isSuperAdmin ||
+                authUser.isAcademyAdmin ||
+                ["super admin", "super_admin", "academy admin", "academy_admin"].includes(
+                    String(authUser.role || authUser.user_type || "").toLowerCase()
+                )
+            );
+            if (!isSuperOrAcademyAdmin) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden. This innings is completed and locked. Only Super Admin and Academy Admin can delete completed innings records.",
+                    },
+                    { status: 403 }
+                );
+            }
+        }
+
         await connection.execute(
             "DELETE FROM cst_match_innings WHERE id = ?",
             [id]
         );
+
+        // Check and auto-update match completion if needed
+        await checkAndUpdateInningsAndMatchCompletion(connection, rows[0].match_id, null);
 
         return NextResponse.json({
             success: true,

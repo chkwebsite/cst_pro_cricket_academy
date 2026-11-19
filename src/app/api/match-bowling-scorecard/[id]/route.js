@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
+import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
 
 
 // GET: Single bowling scorecard record
@@ -129,9 +130,10 @@ export async function PUT(request, { params }) {
         connection = await pool.getConnection();
 
         const [existingRows] = await connection.execute(
-            `SELECT bs.*, m.academy_id, m.branch_id, m.overs AS match_overs
+            `SELECT bs.*, m.academy_id, m.branch_id, m.overs AS match_overs, mi.innings_status
              FROM cst_match_bowling_scorecard bs
              INNER JOIN cst_matches m ON m.id = bs.match_id
+             INNER JOIN cst_match_innings mi ON mi.id = bs.innings_id
              WHERE bs.id = ?`,
             [id]
         );
@@ -153,6 +155,26 @@ export async function PUT(request, { params }) {
                 { success: false, message: "Forbidden. Scorecard belongs to another academy or branch." },
                 { status: 403 }
             );
+        }
+
+        // Rule: If innings is Completed, player scores cannot be modified unless user is Super Admin or Academy Admin
+        if (existing.innings_status === "Completed") {
+            const isSuperOrAcademyAdmin = Boolean(
+                authUser.isSuperAdmin ||
+                authUser.isAcademyAdmin ||
+                ["super admin", "super_admin", "academy admin", "academy_admin"].includes(
+                    String(authUser.role || authUser.user_type || "").toLowerCase()
+                )
+            );
+            if (!isSuperOrAcademyAdmin) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden. This innings is completed and player scores are locked. Only Super Admin and Academy Admin can add or edit player scores.",
+                    },
+                    { status: 403 }
+                );
+            }
         }
         const updated = { ...existing, ...body };
 
@@ -374,6 +396,9 @@ export async function PUT(request, { params }) {
             values
         );
 
+        // Check and auto-update innings completion (10 dismissals or overs limit) and match completion
+        await checkAndUpdateInningsAndMatchCompletion(connection, existing.match_id, existing.innings_id);
+
         return NextResponse.json({
             success: true,
             message: "Bowling scorecard updated successfully",
@@ -408,9 +433,10 @@ export async function DELETE(request, { params }) {
         connection = await pool.getConnection();
 
         const [rows] = await connection.execute(
-            `SELECT bs.id, m.academy_id, m.branch_id 
+            `SELECT bs.id, bs.match_id, bs.innings_id, m.academy_id, m.branch_id, mi.innings_status
              FROM cst_match_bowling_scorecard bs 
              INNER JOIN cst_matches m ON m.id = bs.match_id 
+             INNER JOIN cst_match_innings mi ON mi.id = bs.innings_id
              WHERE bs.id = ?`,
             [id]
         );
@@ -432,10 +458,33 @@ export async function DELETE(request, { params }) {
             );
         }
 
+        // Rule: If innings is Completed, player scores cannot be deleted unless user is Super Admin or Academy Admin
+        if (rows[0].innings_status === "Completed") {
+            const isSuperOrAcademyAdmin = Boolean(
+                authUser.isSuperAdmin ||
+                authUser.isAcademyAdmin ||
+                ["super admin", "super_admin", "academy admin", "academy_admin"].includes(
+                    String(authUser.role || authUser.user_type || "").toLowerCase()
+                )
+            );
+            if (!isSuperOrAcademyAdmin) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden. This innings is completed and player scores are locked. Only Super Admin and Academy Admin can add or edit player scores.",
+                    },
+                    { status: 403 }
+                );
+            }
+        }
+
         await connection.execute(
             "DELETE FROM cst_match_bowling_scorecard WHERE id = ?",
             [id]
         );
+
+        // Check and auto-update innings completion (10 dismissals or overs limit) and match completion
+        await checkAndUpdateInningsAndMatchCompletion(connection, rows[0].match_id, rows[0].innings_id);
 
         return NextResponse.json({
             success: true,

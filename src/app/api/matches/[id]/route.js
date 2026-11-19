@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthUser } from "@/app/components/lib/rbac";
+import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
 
 
 const validMatchTypes = [
@@ -88,6 +89,9 @@ export async function GET(request, { params }) {
                    AND status NOT IN ('Completed', 'Cancelled')`,
                 [matchId, todayIST]
             );
+
+            // Auto-check innings completion (10 dismissals or overs limit) and both innings match completion
+            await checkAndUpdateInningsAndMatchCompletion(connection, matchId);
         } catch (autoStatusErr) {
             console.error("Auto-update match status error:", autoStatusErr);
         }

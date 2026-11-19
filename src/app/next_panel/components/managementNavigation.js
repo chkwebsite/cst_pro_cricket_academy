@@ -1,6 +1,8 @@
 const MANAGEMENT_PATHS = [
     "/next_panel/match-management",
     "/next_panel/tournament-management",
+    "/next_panel/tournament-standings",
+    "/next_panel/tournament-results",
     "/next_panel/match-innings",
     "/next_panel/match-scorecard",
     "/next_panel/match-bowling-scorecard",
@@ -11,6 +13,8 @@ const MANAGEMENT_PATHS = [
 const MANAGEMENT_LABELS = {
     "/next_panel/match-management": "Back to Match Management",
     "/next_panel/tournament-management": "Back to Tournament Management",
+    "/next_panel/tournament-standings": "Back to Points Table & Standings",
+    "/next_panel/tournament-results": "Back to Match Results & Win List",
     "/next_panel/match-innings": "Back to Match Innings",
     "/next_panel/match-scorecard": "Back to Batting Scorecard",
     "/next_panel/match-bowling-scorecard": "Back to Bowling Scorecard",

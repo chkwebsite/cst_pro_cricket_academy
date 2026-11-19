@@ -133,6 +133,77 @@ export async function GET(request) {
             }
         } catch (_) {}
 
+        // Auto-ensure Tournament Management menus under Match & Tournament
+        try {
+            const [matchParent] = await connection.query(
+                `SELECT id FROM cst_menu
+                 WHERE (id = 28 OR menu_key = 'match-tournament' OR LOWER(menu_title) LIKE '%match%')
+                   AND is_deleted = 0
+                 LIMIT 1`
+            );
+            const parentId = matchParent && matchParent.length > 0 ? matchParent[0].id : 28;
+
+            const tournamentMenusToEnsure = [
+                {
+                    key: "tournament-management",
+                    name: "Tournament Management",
+                    title: "Tournament Management",
+                    icon: "tournament-management",
+                    url: "/next_panel/tournament-management",
+                    order: 5,
+                },
+                {
+                    key: "tournament-standings",
+                    name: "Points Table & Standings",
+                    title: "Points Table & Standings",
+                    icon: "tournament-standings",
+                    url: "/next_panel/tournament-standings",
+                    order: 6,
+                },
+                {
+                    key: "tournament-results",
+                    name: "Tournament Results & Win List",
+                    title: "Tournament Results",
+                    icon: "tournament-results",
+                    url: "/next_panel/tournament-results",
+                    order: 7,
+                },
+            ];
+
+            for (const item of tournamentMenusToEnsure) {
+                const [existing] = await connection.query(
+                    "SELECT id, is_sidebar, is_active, status, is_deleted FROM cst_menu WHERE menu_url = ? OR menu_key = ? LIMIT 1",
+                    [item.url, item.key]
+                );
+                if (!existing || existing.length === 0) {
+                    const [ins] = await connection.query(
+                        `INSERT INTO cst_menu (
+                            parent_id, menu_key, menu_name, menu_title, menu_icon, menu_url,
+                            menu_type, menu_order, is_sidebar, is_active, status, is_deleted
+                        ) VALUES (?, ?, ?, ?, ?, ?, 'link', ?, 1, 1, 1, 0)`,
+                        [parentId, item.key, item.name, item.title, item.icon, item.url, item.order]
+                    );
+                    if (ins?.insertId) {
+                        await connection.query(
+                            `INSERT IGNORE INTO cst_menu_permissions (menu_id, permission_id)
+                             SELECT ?, id FROM cst_permissions WHERE status = 1`,
+                            [ins.insertId]
+                        );
+                    }
+                } else if (existing[0].is_deleted === 1 || existing[0].is_sidebar === 0) {
+                    await connection.query(
+                        "UPDATE cst_menu SET is_sidebar = 1, is_active = 1, status = 1, is_deleted = 0 WHERE id = ?",
+                        [existing[0].id]
+                    );
+                    await connection.query(
+                        `INSERT IGNORE INTO cst_menu_permissions (menu_id, permission_id)
+                         SELECT ?, id FROM cst_permissions WHERE status = 1`,
+                        [existing[0].id]
+                    );
+                }
+            }
+        } catch (_) {}
+
         const { searchParams } = new URL(request.url);
 
         const parent_id = searchParams.get("parent_id");

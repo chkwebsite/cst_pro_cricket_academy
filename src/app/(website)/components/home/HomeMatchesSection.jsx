@@ -200,74 +200,82 @@ export default function HomeMatchesSection() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const parseMatches = useCallback((data) => {
-    return data.map((m) => {
-      const rawStatus = (m.status || "").trim().toLowerCase();
-      const isToday = isTodayDate(m.match_date);
+    return data
+      .filter((m) => {
+        const rawStatus = (m.status || "").trim().toLowerCase();
+        return rawStatus !== "cancelled" && rawStatus !== "canceled";
+      })
+      .map((m) => {
+        const rawStatus = (m.status || "").trim().toLowerCase();
+        const isToday = isTodayDate(m.match_date);
 
-      const isLive =
-        rawStatus === "live" ||
-        rawStatus === "in progress" ||
-        (isToday && rawStatus !== "completed" && rawStatus !== "cancelled");
+        const isLive =
+          rawStatus === "live" ||
+          rawStatus === "in progress" ||
+          (isToday && rawStatus !== "completed");
 
-      const isUpcoming =
-        rawStatus === "scheduled" ||
-        rawStatus === "upcoming" ||
-        (!isLive && rawStatus !== "completed" && rawStatus !== "cancelled");
+        const isUpcoming =
+          rawStatus === "scheduled" ||
+          rawStatus === "upcoming" ||
+          (!isLive && rawStatus !== "completed");
 
-      // Extract score and overs cleanly
-      let teamAScore = m.team_a_score || "";
-      let teamAOvers = "";
-      if (teamAScore.includes("(")) {
-        const parts = teamAScore.split("(");
-        teamAScore = parts[0].trim();
-        teamAOvers = `(${parts[1]}`;
-      }
+        // Extract score and overs cleanly
+        let teamAScore = m.team_a_score || "";
+        let teamAOvers = "";
+        if (teamAScore.includes("(")) {
+          const parts = teamAScore.split("(");
+          teamAScore = parts[0].trim();
+          teamAOvers = `(${parts[1]}`;
+        }
 
-      let teamBScore = m.team_b_score || "";
-      let teamBOvers = "";
-      if (teamBScore.includes("(")) {
-        const parts = teamBScore.split("(");
-        teamBScore = parts[0].trim();
-        teamBOvers = `(${parts[1]}`;
-      }
+        let teamBScore = m.team_b_score || "";
+        let teamBOvers = "";
+        if (teamBScore.includes("(")) {
+          const parts = teamBScore.split("(");
+          teamBScore = parts[0].trim();
+          teamBOvers = `(${parts[1]}`;
+        }
 
-      return {
-        id: m.id,
-        academy_id: m.academy_id || 1,
-        academy_name: m.academy_name || "CST Cricket Academy",
-        branch_name: m.branch_name,
-        tournament_name: m.tournament_name,
-        match_type: m.match_type || "Match",
-        team_a_name: m.team_a_name || "Team A",
-        team_a_code: m.team_a_code,
-        team_a_score: teamAScore || (isLive ? "145/3" : "-"),
-        team_a_overs: teamAOvers || (isLive ? "(15.4 ov)" : ""),
-        team_b_name: m.team_b_name || "Team B",
-        team_b_code: m.team_b_code,
-        team_b_score: teamBScore || (isLive ? "Yet to bat" : "-"),
-        team_b_overs: teamBOvers,
-        ground_name: m.ground_name || "Academy Ground",
-        match_date: m.match_date,
-        match_time: m.match_time,
-        remarks: m.remarks,
-        status: m.status || (isLive ? "Live" : "Scheduled"),
-        toss_winner_team_name: m.toss_winner_team_name,
-        toss_decision: m.toss_decision,
-        isLive,
-        isUpcoming,
-      };
-    });
+        return {
+          id: m.id,
+          academy_id: m.academy_id || 1,
+          academy_name: m.academy_name || "CST Cricket Academy",
+          branch_name: m.branch_name,
+          tournament_name: m.tournament_name,
+          match_type: m.match_type || "Match",
+          team_a_name: m.team_a_name || "Team A",
+          team_a_code: m.team_a_code,
+          team_a_score: teamAScore || (isLive ? "145/3" : "-"),
+          team_a_overs: teamAOvers || (isLive ? "(15.4 ov)" : ""),
+          team_b_name: m.team_b_name || "Team B",
+          team_b_code: m.team_b_code,
+          team_b_score: teamBScore || (isLive ? "Yet to bat" : "-"),
+          team_b_overs: teamBOvers,
+          ground_name: m.ground_name || "Academy Ground",
+          match_date: m.match_date,
+          match_time: m.match_time,
+          remarks: m.remarks,
+          status: m.status || (isLive ? "Live" : "Scheduled"),
+          toss_winner_team_name: m.toss_winner_team_name,
+          toss_decision: m.toss_decision,
+          isLive,
+          isUpcoming,
+        };
+      });
   }, []);
 
   const handleManualRefresh = async () => {
     setRefreshing(true);
     try {
-      const res = await fetch("/api/matches");
+      const res = await fetch("/api/matches?exclude_status=Cancelled");
       if (res.ok) {
         const json = await res.json();
-        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          setMatches(parseMatches(json.data));
-          setHasRealData(true);
+        if (json.success && Array.isArray(json.data)) {
+          const parsed = parseMatches(json.data);
+          if (parsed.length > 0) {
+            setMatches(parsed);
+            setHasRealData(true);
+          }
         }
       }
     } catch {
@@ -282,13 +290,16 @@ export default function HomeMatchesSection() {
 
     async function fetchLiveMatches() {
       try {
-        const res = await fetch("/api/matches");
+        const res = await fetch("/api/matches?exclude_status=Cancelled");
         if (!res.ok) return;
         const json = await res.json();
 
-        if (isMounted && json.success && Array.isArray(json.data) && json.data.length > 0) {
-          setMatches(parseMatches(json.data));
-          setHasRealData(true);
+        if (isMounted && json.success && Array.isArray(json.data)) {
+          const parsed = parseMatches(json.data);
+          if (parsed.length > 0) {
+            setMatches(parsed);
+            setHasRealData(true);
+          }
         }
       } catch {
         // On error, fallback remains intact

@@ -33,6 +33,8 @@ import {
     X,
     RefreshCw,
     Swords,
+    Award,
+    Trophy,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 import Header from "./Header";
@@ -87,6 +89,14 @@ const iconMap = {
     "user-check": UserCheck,
     swords: Swords,
     matches: Swords,
+    award: Award,
+    trophy: Trophy,
+    tournaments: Trophy,
+    "tournament-management": Trophy,
+    "tournament-teams": ShieldCheck,
+    "tournament-matches": Swords,
+    "tournament-standings": Layers,
+    "tournament-results": Award,
     "batch-coaches": UserCheck,
     "batch-players": Users,
     "individual-training": Activity,

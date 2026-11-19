@@ -127,6 +127,7 @@ export async function GET(request) {
             ground_id: searchParams.get("ground_id"),
             booking_id: searchParams.get("booking_id"),
             status: searchParams.get("status"),
+            exclude_status: searchParams.get("exclude_status"),
             search: searchParams.get("search"),
         };
 
@@ -375,6 +376,11 @@ export async function GET(request) {
         if (filters.status) {
             sql += " AND m.status = ?";
             values.push(filters.status);
+        }
+
+        if (filters.exclude_status) {
+            sql += " AND LOWER(m.status) != LOWER(?)";
+            values.push(filters.exclude_status);
         }
 
         if (filters.search) {

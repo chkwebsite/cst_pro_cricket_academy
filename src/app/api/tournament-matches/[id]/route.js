@@ -70,7 +70,8 @@ const MATCH_SELECT = `
         tb.team_code AS team_b_code,
         tw.team_name AS winner_team_name,
         g.ground_name,
-        g.ground_code
+        g.ground_code,
+        CONCAT_WS(' ', motm.first_name, motm.last_name) AS man_of_the_match_name
     FROM cst_tournament_matches tm
     LEFT JOIN cst_tournaments t ON t.id = tm.tournament_id
     LEFT JOIN cst_matches ma ON ma.id = tm.match_id
@@ -78,6 +79,7 @@ const MATCH_SELECT = `
     LEFT JOIN cst_teams tb ON tb.id = tm.team_b_id
     LEFT JOIN cst_teams tw ON tw.id = tm.winner_team_id
     LEFT JOIN cst_ground g ON g.id = tm.ground_id
+    LEFT JOIN cst_users motm ON motm.id = tm.man_of_the_match_id
 `;
 
 export async function GET(request, { params }) {
@@ -230,6 +232,64 @@ export async function PUT(request, { params }) {
             body.round_name === undefined
                 ? old.round_name
                 : body.round_name || null;
+
+        const groupName =
+            body.group_name === undefined
+                ? old.group_name
+                : body.group_name || null;
+
+        const winMargin =
+            body.win_margin === undefined
+                ? old.win_margin
+                : body.win_margin || null;
+
+        const resultSummary =
+            body.result_summary === undefined
+                ? old.result_summary
+                : body.result_summary || null;
+
+        const manOfTheMatchId =
+            body.man_of_the_match_id === undefined
+                ? old.man_of_the_match_id
+                : optionalId(body.man_of_the_match_id);
+
+        const teamARuns =
+            body.team_a_runs === undefined
+                ? old.team_a_runs
+                : body.team_a_runs !== null && body.team_a_runs !== ""
+                ? Number(body.team_a_runs)
+                : null;
+
+        const teamAWickets =
+            body.team_a_wickets === undefined
+                ? old.team_a_wickets
+                : body.team_a_wickets !== null && body.team_a_wickets !== ""
+                ? Number(body.team_a_wickets)
+                : null;
+
+        const teamAOvers =
+            body.team_a_overs === undefined
+                ? old.team_a_overs
+                : body.team_a_overs || null;
+
+        const teamBRuns =
+            body.team_b_runs === undefined
+                ? old.team_b_runs
+                : body.team_b_runs !== null && body.team_b_runs !== ""
+                ? Number(body.team_b_runs)
+                : null;
+
+        const teamBWickets =
+            body.team_b_wickets === undefined
+                ? old.team_b_wickets
+                : body.team_b_wickets !== null && body.team_b_wickets !== ""
+                ? Number(body.team_b_wickets)
+                : null;
+
+        const teamBOvers =
+            body.team_b_overs === undefined
+                ? old.team_b_overs
+                : body.team_b_overs || null;
 
         const roundType =
             body.round_type === undefined
@@ -499,6 +559,7 @@ export async function PUT(request, { params }) {
                     match_id = ?,
                     match_no = ?,
                     round_name = ?,
+                    group_name = ?,
                     round_type = ?,
                     overs = ?,
                     team_a_id = ?,
@@ -508,7 +569,16 @@ export async function PUT(request, { params }) {
                     ground_id = ?,
                     booking_id = ?,
                     status = ?,
-                    winner_team_id = ?
+                    winner_team_id = ?,
+                    win_margin = ?,
+                    result_summary = ?,
+                    man_of_the_match_id = ?,
+                    team_a_runs = ?,
+                    team_a_wickets = ?,
+                    team_a_overs = ?,
+                    team_b_runs = ?,
+                    team_b_wickets = ?,
+                    team_b_overs = ?
                 WHERE id = ?
             `,
             [
@@ -516,6 +586,7 @@ export async function PUT(request, { params }) {
                 matchId,
                 matchNo,
                 roundName,
+                groupName,
                 roundType,
                 overs,
                 teamAId,
@@ -526,6 +597,15 @@ export async function PUT(request, { params }) {
                 bookingId,
                 status,
                 winnerTeamId,
+                winMargin,
+                resultSummary,
+                manOfTheMatchId,
+                teamARuns,
+                teamAWickets,
+                teamAOvers,
+                teamBRuns,
+                teamBWickets,
+                teamBOvers,
                 matchRowId,
             ]
         );

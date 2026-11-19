@@ -45,6 +45,7 @@ export default function TournamentTeamsPage() {
     const [registrationNo, setRegistrationNo] = useState("");
     const [paymentStatus, setPaymentStatus] = useState("");
     const [status, setStatus] = useState("");
+    const [groupName, setGroupName] = useState("");
     const [academyId, setAcademyId] = useState(""); // super admin only
     const [branchId, setBranchId] = useState("");
 
@@ -85,6 +86,7 @@ export default function TournamentTeamsPage() {
                 if (registrationNo.trim()) params.set("registration_no", registrationNo.trim());
                 if (paymentStatus) params.set("payment_status", paymentStatus);
                 if (status) params.set("status", status);
+                if (groupName) params.set("group_name", groupName);
 
                 const query = params.toString();
                 const res = await fetch(`/api/tournament-teams${query ? `?${query}` : ""}`, { signal: controller.signal });
@@ -126,6 +128,7 @@ export default function TournamentTeamsPage() {
         setRegistrationNo("");
         setPaymentStatus("");
         setStatus("");
+        setGroupName("");
         setAcademyId("");
         setBranchId("");
     };
@@ -274,6 +277,21 @@ export default function TournamentTeamsPage() {
                                     ))}
                                 </select>
 
+                                <select
+                                    className="form-select"
+                                    value={groupName}
+                                    onChange={(e) => setGroupName(e.target.value)}
+                                    style={{ maxWidth: "150px" }}
+                                >
+                                    <option value="">All Groups</option>
+                                    <option value="Group A">Group A</option>
+                                    <option value="Group B">Group B</option>
+                                    <option value="Group C">Group C</option>
+                                    <option value="Group D">Group D</option>
+                                    <option value="Pool 1">Pool 1</option>
+                                    <option value="Pool 2">Pool 2</option>
+                                </select>
+
                                 <button
                                     type="button"
                                     className="btn btn-outline-danger"
@@ -306,6 +324,7 @@ export default function TournamentTeamsPage() {
                                                 {isSuper && <th>Academy</th>}
                                                 <th>Branch</th>
                                                 <th>Team</th>
+                                                <th>Group</th>
                                                 <th>Reg. No</th>
                                                 <th>Registered</th>
                                                 <th>Fee</th>
@@ -334,6 +353,11 @@ export default function TournamentTeamsPage() {
                                                         <small className="text-muted">
                                                             {[r.team_code, r.age_group, r.category].filter(Boolean).join(" · ") || "—"}
                                                         </small>
+                                                    </td>
+                                                    <td>
+                                                        <span className="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                                            {r.group_name || "Group A"}
+                                                        </span>
                                                     </td>
                                                     <td>{r.registration_no || "—"}</td>
                                                     <td>{fmtDate(r.registered_date)}</td>

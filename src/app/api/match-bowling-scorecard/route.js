@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
+import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
 
 // GET: All bowling scorecard records
 // Filters: ?match_id=1&innings_id=1
@@ -296,7 +297,7 @@ export async function POST(request) {
 
         // Verify innings belongs to the match
         const [inningsRows] = await connection.execute(
-            `SELECT id, match_id, batting_team_id, bowling_team_id, total_overs, total_balls, total_wickets, extras, wides, no_balls
+            `SELECT id, match_id, batting_team_id, bowling_team_id, total_overs, total_balls, total_wickets, extras, wides, no_balls, innings_status
              FROM cst_match_innings
              WHERE id = ? AND match_id = ?`,
             [innings_id, match_id]
@@ -310,6 +311,26 @@ export async function POST(request) {
                 },
                 { status: 404 }
             );
+        }
+
+        // Rule: If innings is Completed, player scores cannot be added unless user is Super Admin or Academy Admin
+        if (inningsRows[0].innings_status === "Completed") {
+            const isSuperOrAcademyAdmin = Boolean(
+                authUser.isSuperAdmin ||
+                authUser.isAcademyAdmin ||
+                ["super admin", "super_admin", "academy admin", "academy_admin"].includes(
+                    String(authUser.role || authUser.user_type || "").toLowerCase()
+                )
+            );
+            if (!isSuperOrAcademyAdmin) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Forbidden. This innings is completed and player scores are locked. Only Super Admin and Academy Admin can add or edit player scores.",
+                    },
+                    { status: 403 }
+                );
+            }
         }
 
         const rawInningsBalls = inningsRows[0].total_balls ? Number(inningsRows[0].total_balls) : 0;
@@ -470,6 +491,9 @@ export async function POST(request) {
                 economy,
             ]
         );
+
+        // Check and auto-update innings completion (10 dismissals or overs limit) and match completion
+        await checkAndUpdateInningsAndMatchCompletion(connection, match_id, innings_id);
 
         return NextResponse.json(
             {

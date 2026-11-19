@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, ArrowUpDown, Check, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Check, Lock, RefreshCw, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useUser } from "../components/UserContext";
 import {
     INNINGS_STATUSES,
     isValidCricketOvers,
@@ -30,9 +31,16 @@ const EMPTY_FORM = {
 };
 
 export default function MatchInningsForm({ id = null, returnTo = "/next_panel/match-innings" }) {
+    const { user } = useUser();
+    const userRole = String(user?.role || user?.user_type || user?.role_name || "").toLowerCase();
+    const isSuperAdmin = Boolean(user?.isSuperAdmin || userRole === "super_admin" || userRole === "super admin");
+    const isAcademyAdmin = Boolean(user?.isAcademyAdmin || userRole === "academy_admin" || userRole === "academy admin");
+    const canEditCompletedInnings = isSuperAdmin || isAcademyAdmin;
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const isEdit = Boolean(id);
+    const isLockedForCurrentUser = isEdit && formData.innings_status === "Completed" && !canEditCompletedInnings;
 
     const [formData, setFormData] = useState({
         ...EMPTY_FORM,
@@ -206,6 +214,11 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
         setError("");
         setSuccessMsg("");
 
+        if (isLockedForCurrentUser) {
+            setError("This innings is marked as Completed and is locked. Only Super Admin or Academy Admin can edit it.");
+            return;
+        }
+
         if (!formData.match_id) {
             setError("Please select a match.");
             return;
@@ -228,9 +241,18 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
 
         const enteredBalls = oversToBalls(formData.total_overs);
         const maxBalls = matchOvers * 6;
-        if (enteredBalls > maxBalls) {
+        if (maxBalls > 0 && enteredBalls > maxBalls) {
             setError(`Overs mismatch! Total overs (${formData.total_overs}) exceeds the match limit of ${matchOvers} overs (${maxBalls} balls).`);
             return;
+        }
+
+        let calculatedStatus = formData.innings_status;
+        if (
+            Number(formData.total_wickets) >= 10 ||
+            (maxBalls > 0 && enteredBalls >= maxBalls) ||
+            (matchOvers > 0 && Number(formData.total_overs) >= matchOvers)
+        ) {
+            calculatedStatus = "Completed";
         }
 
         const payload = {
@@ -241,7 +263,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             total_runs: Number(formData.total_runs) || 0,
             total_wickets: Number(formData.total_wickets) || 0,
             total_overs: Number(formData.total_overs) || 0,
-            total_balls: oversToBalls(formData.total_overs),
+            total_balls: enteredBalls,
             extras: Number(formData.extras) || 0,
             wides: Number(formData.wides) || 0,
             no_balls: Number(formData.no_balls) || 0,
@@ -249,7 +271,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             leg_byes: Number(formData.leg_byes) || 0,
             penalty_runs: Number(formData.penalty_runs) || 0,
             target_runs: formData.target_runs !== "" && formData.target_runs !== null ? Number(formData.target_runs) : null,
-            innings_status: formData.innings_status,
+            innings_status: calculatedStatus,
         };
 
         setLoading(true);
@@ -292,6 +314,14 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
         <form onSubmit={handleSubmit}>
             {error && <div className="alert alert-danger">{error}</div>}
             {successMsg && <div className="alert alert-success">{successMsg}</div>}
+            {isLockedForCurrentUser && (
+                <div className="alert alert-warning d-flex align-items-center gap-2 mb-3">
+                    <Lock size={18} className="text-warning flex-shrink-0" />
+                    <div>
+                        <strong>Innings Completed (Locked):</strong> This innings has ended (all out or overs limit reached). Player scores and innings details can only be edited by a Super Admin or Academy Admin.
+                    </div>
+                </div>
+            )}
 
             <div className="row g-3">
                 {/* Match Selection */}
@@ -598,7 +628,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                     <Link href={returnTo} className="btn btn-outline-secondary px-4">
                         Cancel
                     </Link>
-                    <button type="submit" className="btn btn-primary px-4" disabled={loading}>
+                    <button type="submit" className="btn btn-primary px-4" disabled={loading || isLockedForCurrentUser}>
                         {loading ? (
                             <>
                                 <RefreshCw className="spinner-border spinner-border-sm me-2" />

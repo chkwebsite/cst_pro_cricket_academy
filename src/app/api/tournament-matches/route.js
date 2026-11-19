@@ -85,7 +85,9 @@ const MATCH_SELECT = `
         tw.team_name AS winner_team_name,
 
         g.ground_name,
-        g.ground_code
+        g.ground_code,
+
+        CONCAT_WS(' ', motm.first_name, motm.last_name) AS man_of_the_match_name
 
     FROM cst_tournament_matches tm
 
@@ -106,6 +108,9 @@ const MATCH_SELECT = `
 
     LEFT JOIN cst_ground g
         ON g.id = tm.ground_id
+
+    LEFT JOIN cst_users motm
+        ON motm.id = tm.man_of_the_match_id
 `;
 
 const VALIDATE_TEAMS_SQL = `
@@ -141,6 +146,7 @@ export async function GET(request) {
         const matchId = searchParams.get("match_id");
         const matchNo = searchParams.get("match_no");
         const roundType = searchParams.get("round_type");
+        const groupName = searchParams.get("group_name");
         const teamAId = searchParams.get("team_a_id");
         const teamBId = searchParams.get("team_b_id");
         const groundId = searchParams.get("ground_id");
@@ -182,6 +188,7 @@ export async function GET(request) {
             ["tm.match_id", matchId],
             ["tm.match_no", matchNo],
             ["tm.round_type", roundType],
+            ["tm.group_name", groupName],
             ["tm.team_a_id", teamAId],
             ["tm.team_b_id", teamBId],
             ["tm.ground_id", groundId],
@@ -260,10 +267,58 @@ export async function GET(request) {
 
         const [rows] = await connection.query(sql, params);
 
+        // Enrich with innings scores from cst_match_innings if linked to cst_matches
+        const linkedMatchIds = [...new Set(rows.map((r) => r.match_id).filter(Boolean))];
+        let inningsMap = {};
+        if (linkedMatchIds.length > 0) {
+            try {
+                const placeholders = linkedMatchIds.map(() => "?").join(",");
+                const [inningsRows] = await connection.query(
+                    `SELECT mi.id, mi.match_id, mi.innings_no, mi.batting_team_id, mi.bowling_team_id,
+                            mi.total_runs, mi.total_wickets, mi.total_overs, mi.total_balls, mi.innings_status,
+                            bt.team_name AS batting_team_name
+                     FROM cst_match_innings mi
+                     LEFT JOIN cst_teams bt ON bt.id = mi.batting_team_id
+                     WHERE mi.match_id IN (${placeholders})
+                     ORDER BY mi.match_id ASC, mi.innings_no ASC`,
+                    linkedMatchIds
+                );
+                inningsRows.forEach((inn) => {
+                    if (!inningsMap[inn.match_id]) inningsMap[inn.match_id] = [];
+                    inningsMap[inn.match_id].push(inn);
+                });
+            } catch (errInns) {
+                console.error("Error enriching tournament matches with innings:", errInns);
+            }
+        }
+
+        const enrichedRows = rows.map((r) => {
+            const matchInnings = r.match_id ? (inningsMap[r.match_id] || []) : [];
+            const innA = matchInnings.find((i) => Number(i.batting_team_id) === Number(r.team_a_id));
+            const innB = matchInnings.find((i) => Number(i.batting_team_id) === Number(r.team_b_id));
+            const scoreA = innA
+                ? `${innA.total_runs}/${innA.total_wickets} (${innA.total_overs} ov)`
+                : r.team_a_runs !== null && r.team_a_runs !== undefined
+                ? `${r.team_a_runs}/${r.team_a_wickets ?? 0} (${r.team_a_overs || r.overs || 20} ov)`
+                : null;
+            const scoreB = innB
+                ? `${innB.total_runs}/${innB.total_wickets} (${innB.total_overs} ov)`
+                : r.team_b_runs !== null && r.team_b_runs !== undefined
+                ? `${r.team_b_runs}/${r.team_b_wickets ?? 0} (${r.team_b_overs || r.overs || 20} ov)`
+                : null;
+
+            return {
+                ...r,
+                innings: matchInnings,
+                team_a_score: scoreA,
+                team_b_score: scoreB,
+            };
+        });
+
         return NextResponse.json({
             success: true,
-            count: rows.length,
-            data: rows,
+            count: enrichedRows.length,
+            data: enrichedRows,
         });
     } catch (error) {
         console.error("GET tournament matches error:", error);
@@ -302,6 +357,7 @@ export async function POST(request) {
             match_no,
             round_name = null,
             round_type = "League",
+            group_name = null,
             overs = null,
             team_a_id = null,
             team_b_id = null,
@@ -311,6 +367,15 @@ export async function POST(request) {
             booking_id = null,
             status = "Scheduled",
             winner_team_id = null,
+            win_margin = null,
+            result_summary = null,
+            man_of_the_match_id = null,
+            team_a_runs = null,
+            team_a_wickets = null,
+            team_a_overs = null,
+            team_b_runs = null,
+            team_b_wickets = null,
+            team_b_overs = null,
         } = body;
 
         const tournamentId = requiredId(tournament_id);
@@ -561,6 +626,7 @@ export async function POST(request) {
                     match_id,
                     match_no,
                     round_name,
+                    group_name,
                     round_type,
                     overs,
                     team_a_id,
@@ -570,15 +636,25 @@ export async function POST(request) {
                     ground_id,
                     booking_id,
                     status,
-                    winner_team_id
+                    winner_team_id,
+                    win_margin,
+                    result_summary,
+                    man_of_the_match_id,
+                    team_a_runs,
+                    team_a_wickets,
+                    team_a_overs,
+                    team_b_runs,
+                    team_b_wickets,
+                    team_b_overs
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             [
                 tournamentId,
                 matchId,
                 matchNo,
                 round_name || null,
+                group_name || null,
                 round_type,
                 overs ? Number(overs) : 20,
                 teamAId,
@@ -589,6 +665,15 @@ export async function POST(request) {
                 bookingId,
                 status,
                 winnerTeamId,
+                win_margin || null,
+                result_summary || null,
+                man_of_the_match_id ? Number(man_of_the_match_id) : null,
+                team_a_runs !== null && team_a_runs !== undefined && team_a_runs !== "" ? Number(team_a_runs) : null,
+                team_a_wickets !== null && team_a_wickets !== undefined && team_a_wickets !== "" ? Number(team_a_wickets) : null,
+                team_a_overs || null,
+                team_b_runs !== null && team_b_runs !== undefined && team_b_runs !== "" ? Number(team_b_runs) : null,
+                team_b_wickets !== null && team_b_wickets !== undefined && team_b_wickets !== "" ? Number(team_b_wickets) : null,
+                team_b_overs || null,
             ]
         );
 

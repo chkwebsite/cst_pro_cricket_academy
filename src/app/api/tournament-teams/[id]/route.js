@@ -60,6 +60,7 @@ export async function GET(request, { params }) {
                 tt.team_fee,
                 tt.payment_status,
                 tt.status,
+                tt.group_name,
                 tt.created_by,
                 CONCAT_WS(
                     ' ',
@@ -190,7 +191,8 @@ export async function PUT(request, { params }) {
             registered_date,
             team_fee,
             payment_status,
-            status
+            status,
+            group_name
         } = body;
 
         if (team_fee !== undefined && team_fee !== null && team_fee !== "") {
@@ -211,7 +213,8 @@ export async function PUT(request, { params }) {
                 registered_date = COALESCE(?, registered_date),
                 team_fee = COALESCE(?, team_fee),
                 payment_status = COALESCE(?, payment_status),
-                status = COALESCE(?, status)
+                status = COALESCE(?, status),
+                group_name = COALESCE(?, group_name)
             WHERE id = ?
             `,
             [
@@ -220,6 +223,7 @@ export async function PUT(request, { params }) {
                 team_fee !== undefined && team_fee !== null && team_fee !== "" ? Number(team_fee) : null,
                 payment_status || null,
                 status || null,
+                group_name !== undefined && group_name !== null ? group_name.trim() : null,
                 regId
             ]
         );

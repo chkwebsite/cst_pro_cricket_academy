@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import useCurrentUser, { ROLES } from "../teams/useCurrentUser";
 import useTeamOptions from "../team-players/useTeamOptions";
 import useTournamentOptions from "../tournament-teams/useTournamentOptions";
@@ -29,6 +30,7 @@ const EMPTY_FORM = {
     match_no: "",
     round_name: "",
     round_type: "League",
+    group_name: "",
     overs: "20",
     team_a_id: "",
     team_b_id: "",
@@ -38,6 +40,14 @@ const EMPTY_FORM = {
     booking_id: "",
     status: "Scheduled",
     winner_team_id: "",
+    win_margin: "",
+    result_summary: "",
+    team_a_runs: "",
+    team_a_wickets: "",
+    team_a_overs: "",
+    team_b_runs: "",
+    team_b_wickets: "",
+    team_b_overs: "",
 };
 
 const optionalId = (value) => (String(value).trim() === "" ? null : Number(value));
@@ -54,6 +64,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
     const [grounds, setGrounds] = useState([]);
     const [bookings, setBookings] = useState([]);
     const [matches, setMatches] = useState([]);
+    const [tournamentTeams, setTournamentTeams] = useState([]);
     const [bookingsLoading, setBookingsLoading] = useState(false);
     const [bookingsReload, setBookingsReload] = useState(0);
     const [bookingsDate, setBookingsDate] = useState("");
@@ -62,13 +73,70 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
 
+    // Fetch tournament teams for the selected tournament to know their assigned groups
+    useEffect(() => {
+        if (!formData.tournament_id) {
+            setTournamentTeams([]);
+            return;
+        }
+        const controller = new AbortController();
+        (async () => {
+            try {
+                const res = await fetch(`/api/tournament-teams?tournament_id=${formData.tournament_id}`, {
+                    signal: controller.signal,
+                });
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    setTournamentTeams(result.data || []);
+                }
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    console.error("Failed to load tournament teams", err);
+                }
+            }
+        })();
+        return () => controller.abort();
+    }, [formData.tournament_id]);
+
+    const teamGroupMap = useMemo(() => {
+        const map = {};
+        for (const item of tournamentTeams) {
+            if (item.team_id) {
+                map[Number(item.team_id)] = item.group_name || "";
+            }
+        }
+        return map;
+    }, [tournamentTeams]);
+
     const selectedTournament = tournaments.find((t) => Number(t.id) === Number(formData.tournament_id));
-    const teamOptions = teams.filter(
+    const rawTeamOptions = teams.filter(
         (team) =>
             !selectedTournament?.academy_id ||
             team.academy_id == null ||
             Number(team.academy_id) === Number(selectedTournament.academy_id)
     );
+
+    // Prioritize teams belonging to the selected group/pool, then all grouped teams, then ungrouped
+    const teamOptions = useMemo(() => {
+        const list = [...rawTeamOptions];
+        const selectedGroup = (formData.group_name || "").trim().toLowerCase();
+        list.sort((a, b) => {
+            const grpA = (teamGroupMap[Number(a.id)] || "").trim();
+            const grpB = (teamGroupMap[Number(b.id)] || "").trim();
+            if (selectedGroup) {
+                const matchA = grpA.toLowerCase() === selectedGroup;
+                const matchB = grpB.toLowerCase() === selectedGroup;
+                if (matchA && !matchB) return -1;
+                if (!matchA && matchB) return 1;
+            }
+            if (grpA && !grpB) return -1;
+            if (!grpA && grpB) return 1;
+            if (grpA && grpB && grpA !== grpB) return grpA.localeCompare(grpB);
+            return (a.team_name || "").localeCompare(b.team_name || "");
+        });
+        return list;
+    }, [rawTeamOptions, teamGroupMap, formData.group_name]);
+
     const teamBOptions = teamOptions.filter((team) => Number(team.id) !== Number(formData.team_a_id));
     const teamA = teams.find((t) => Number(t.id) === Number(formData.team_a_id));
     const teamB = teams.find((t) => Number(t.id) === Number(formData.team_b_id));
@@ -232,6 +300,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     match_no: d.match_no ?? "",
                     round_name: d.round_name || "",
                     round_type: d.round_type || "League",
+                    group_name: d.group_name || "",
                     overs: d.overs != null ? String(d.overs) : "20",
                     team_a_id: d.team_a_id ?? "",
                     team_b_id: d.team_b_id ?? "",
@@ -241,6 +310,14 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     booking_id: d.booking_id ?? "",
                     status: d.status || "Scheduled",
                     winner_team_id: d.winner_team_id ?? "",
+                    win_margin: d.win_margin || "",
+                    result_summary: d.result_summary || "",
+                    team_a_runs: d.team_a_runs ?? "",
+                    team_a_wickets: d.team_a_wickets ?? "",
+                    team_a_overs: d.team_a_overs || "",
+                    team_b_runs: d.team_b_runs ?? "",
+                    team_b_wickets: d.team_b_wickets ?? "",
+                    team_b_overs: d.team_b_overs || "",
                 });
             } catch (err) {
                 setError(err.message);
@@ -342,6 +419,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     match_no: matchNo,
                     round_name: formData.round_name.trim() || null,
                     round_type: formData.round_type,
+                    group_name: formData.group_name.trim() || null,
                     overs: formData.overs ? Number(formData.overs) : 20,
                     team_a_id: a,
                     team_b_id: b,
@@ -351,6 +429,14 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     booking_id: optionalId(formData.booking_id),
                     status: submitStatus,
                     winner_team_id: winner,
+                    win_margin: formData.win_margin.trim() || null,
+                    result_summary: formData.result_summary.trim() || null,
+                    team_a_runs: formData.team_a_runs !== "" ? Number(formData.team_a_runs) : null,
+                    team_a_wickets: formData.team_a_wickets !== "" ? Number(formData.team_a_wickets) : null,
+                    team_a_overs: formData.team_a_overs.trim() || null,
+                    team_b_runs: formData.team_b_runs !== "" ? Number(formData.team_b_runs) : null,
+                    team_b_wickets: formData.team_b_wickets !== "" ? Number(formData.team_b_wickets) : null,
+                    team_b_overs: formData.team_b_overs.trim() || null,
                 }),
             });
             const data = await res.json();
@@ -368,7 +454,12 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
 
     if (fetching) return <div className="text-center py-5">Loading...</div>;
 
-    const teamLabel = (t) => `${t.team_name}${t.team_code ? ` (${t.team_code})` : ""}`;
+    const teamLabel = (t) => {
+        const grp = teamGroupMap[Number(t.id)];
+        const groupPart = grp ? ` (${grp})` : "";
+        const codePart = t.team_code ? ` (${t.team_code})` : "";
+        return `${t.team_name}${groupPart}${codePart}`;
+    };
 
     return (
         <div className="card shadow-sm">
@@ -412,7 +503,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     </div>
 
                     <div className="row">
-                        <div className="col-md-4 mb-3">
+                        <div className="col-md-3 mb-3">
                             <label className="form-label">Round Type</label>
                             <select name="round_type" className="form-select" value={formData.round_type} onChange={handleChange}>
                                 {ROUND_TYPES.map((r) => (
@@ -420,7 +511,19 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                 ))}
                             </select>
                         </div>
-                        <div className="col-md-4 mb-3">
+                        <div className="col-md-3 mb-3">
+                            <label className="form-label">Group / Pool</label>
+                            <select name="group_name" className="form-select" value={formData.group_name} onChange={handleChange}>
+                                <option value="">None / Knockout</option>
+                                <option value="Group A">Group A</option>
+                                <option value="Group B">Group B</option>
+                                <option value="Group C">Group C</option>
+                                <option value="Group D">Group D</option>
+                                <option value="Pool 1">Pool 1</option>
+                                <option value="Pool 2">Pool 2</option>
+                            </select>
+                        </div>
+                        <div className="col-md-3 mb-3">
                             <label className="form-label">
                                 Overs <span className="text-danger">*</span>
                             </label>
@@ -436,9 +539,9 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                 required
                             />
                         </div>
-                        <div className="col-md-4 mb-3">
-                            <label className="form-label">Round Name (optional)</label>
-                            <input type="text" name="round_name" className="form-control" value={formData.round_name} onChange={handleChange} placeholder="e.g. Group A – Match 3" />
+                        <div className="col-md-3 mb-3">
+                            <label className="form-label">Round / Match Name (optional)</label>
+                            <input type="text" name="round_name" className="form-control" value={formData.round_name} onChange={handleChange} placeholder="e.g. Match 14 or Semi Final 1" />
                         </div>
                     </div>
 
@@ -451,6 +554,11 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                     <option key={t.id} value={t.id}>{teamLabel(t)}</option>
                                 ))}
                             </select>
+                            {formData.group_name && (
+                                <div className="form-text text-muted">
+                                    {formData.group_name} teams are listed first with their group tag.
+                                </div>
+                            )}
                         </div>
                         <div className="col-md-6 mb-3">
                             <label className="form-label">Team B (optional)</label>
@@ -460,6 +568,11 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                     <option key={t.id} value={t.id}>{teamLabel(t)}</option>
                                 ))}
                             </select>
+                            {formData.group_name && (
+                                <div className="form-text text-muted">
+                                    {formData.group_name} teams are listed first with their group tag.
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -527,14 +640,144 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                         </div>
 
                         {formData.status === "Completed" && (
-                            <div className="col-md-6 mb-3">
-                                <label className="form-label">Winner (optional)</label>
-                                <select name="winner_team_id" className="form-select" value={formData.winner_team_id} onChange={handleChange} disabled={!teamA && !teamB}>
-                                    <option value="">No result / tie</option>
-                                    {teamA && <option value={teamA.id}>{teamA.team_name}</option>}
-                                    {teamB && <option value={teamB.id}>{teamB.team_name}</option>}
-                                </select>
-                            </div>
+                            <>
+                                <div className="col-12 mb-3">
+                                    <div className="card bg-light border p-3 rounded-3">
+                                        <h6 className="fw-bold mb-3 text-dark d-flex align-items-center justify-content-between">
+                                            <span>Team Innings &amp; Match Scores</span>
+                                            {formData.match_id && (
+                                                <Link
+                                                    href={`/next_panel/match-scorecard/center?match_id=${formData.match_id}`}
+                                                    target="_blank"
+                                                    className="btn btn-sm btn-outline-primary"
+                                                >
+                                                    Open Match Scorecard Center ↗
+                                                </Link>
+                                            )}
+                                        </h6>
+                                        <div className="row g-3">
+                                            {/* Team A Score */}
+                                            <div className="col-md-6 border-end">
+                                                <div className="fw-semibold text-primary mb-2">
+                                                    {teamA ? teamA.team_name : "Team A"} Score
+                                                </div>
+                                                <div className="row g-2">
+                                                    <div className="col-4">
+                                                        <label className="form-label small text-muted">Runs</label>
+                                                        <input
+                                                            type="number"
+                                                            name="team_a_runs"
+                                                            className="form-control"
+                                                            placeholder="e.g. 175"
+                                                            value={formData.team_a_runs}
+                                                            onChange={handleChange}
+                                                        />
+                                                    </div>
+                                                    <div className="col-4">
+                                                        <label className="form-label small text-muted">Wickets</label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="10"
+                                                            name="team_a_wickets"
+                                                            className="form-control"
+                                                            placeholder="e.g. 6"
+                                                            value={formData.team_a_wickets}
+                                                            onChange={handleChange}
+                                                        />
+                                                    </div>
+                                                    <div className="col-4">
+                                                        <label className="form-label small text-muted">Overs</label>
+                                                        <input
+                                                            type="text"
+                                                            name="team_a_overs"
+                                                            className="form-control"
+                                                            placeholder="e.g. 20.0"
+                                                            value={formData.team_a_overs}
+                                                            onChange={handleChange}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Team B Score */}
+                                            <div className="col-md-6">
+                                                <div className="fw-semibold text-primary mb-2">
+                                                    {teamB ? teamB.team_name : "Team B"} Score
+                                                </div>
+                                                <div className="row g-2">
+                                                    <div className="col-4">
+                                                        <label className="form-label small text-muted">Runs</label>
+                                                        <input
+                                                            type="number"
+                                                            name="team_b_runs"
+                                                            className="form-control"
+                                                            placeholder="e.g. 142"
+                                                            value={formData.team_b_runs}
+                                                            onChange={handleChange}
+                                                        />
+                                                    </div>
+                                                    <div className="col-4">
+                                                        <label className="form-label small text-muted">Wickets</label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="10"
+                                                            name="team_b_wickets"
+                                                            className="form-control"
+                                                            placeholder="e.g. 10"
+                                                            value={formData.team_b_wickets}
+                                                            onChange={handleChange}
+                                                        />
+                                                    </div>
+                                                    <div className="col-4">
+                                                        <label className="form-label small text-muted">Overs</label>
+                                                        <input
+                                                            type="text"
+                                                            name="team_b_overs"
+                                                            className="form-control"
+                                                            placeholder="e.g. 18.4"
+                                                            value={formData.team_b_overs}
+                                                            onChange={handleChange}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="col-md-6 mb-3">
+                                    <label className="form-label">Winner Team</label>
+                                    <select name="winner_team_id" className="form-select" value={formData.winner_team_id} onChange={handleChange} disabled={!teamA && !teamB}>
+                                        <option value="">No result / tie</option>
+                                        {teamA && <option value={teamA.id}>{teamA.team_name}</option>}
+                                        {teamB && <option value={teamB.id}>{teamB.team_name}</option>}
+                                    </select>
+                                </div>
+                                <div className="col-md-6 mb-3">
+                                    <label className="form-label">Win Margin (optional)</label>
+                                    <input
+                                        type="text"
+                                        name="win_margin"
+                                        className="form-control"
+                                        value={formData.win_margin}
+                                        onChange={handleChange}
+                                        placeholder="e.g. by 28 runs, by 4 wickets"
+                                    />
+                                </div>
+                                <div className="col-12 mb-3">
+                                    <label className="form-label">Match Result Summary (optional)</label>
+                                    <input
+                                        type="text"
+                                        name="result_summary"
+                                        className="form-control"
+                                        value={formData.result_summary}
+                                        onChange={handleChange}
+                                        placeholder="e.g. CST Lions won by 28 runs against Warrior XI"
+                                    />
+                                </div>
+                            </>
                         )}
                     </div>
 

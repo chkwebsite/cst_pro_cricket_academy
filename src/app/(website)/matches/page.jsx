@@ -174,68 +174,79 @@ export default function MatchesPage() {
     let isMounted = true;
     async function fetchMatches() {
       try {
-        const res = await fetch("/api/matches");
+        const res = await fetch("/api/matches?exclude_status=Cancelled");
         if (!res.ok) return;
         const json = await res.json();
-        if (isMounted && json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const mapped = json.data.map((m) => {
+        if (isMounted && json.success && Array.isArray(json.data)) {
+          // Filter out any cancelled matches so they never appear on the public website
+          const activeMatches = json.data.filter((m) => {
             const rawStatus = (m.status || "").trim().toLowerCase();
-            const isToday = isTodayDate(m.match_date);
-
-            const isLive =
-              rawStatus === "live" ||
-              rawStatus === "in progress" ||
-              (isToday && rawStatus !== "completed" && rawStatus !== "cancelled");
-
-            const isCompleted = rawStatus === "completed";
-
-            // Extract score and overs cleanly
-            let teamAScore = m.team_a_score || "";
-            let teamAOvers = "";
-            if (teamAScore.includes("(")) {
-              const parts = teamAScore.split("(");
-              teamAScore = parts[0].trim();
-              teamAOvers = `(${parts[1]}`;
-            }
-
-            let teamBScore = m.team_b_score || "";
-            let teamBOvers = "";
-            if (teamBScore.includes("(")) {
-              const parts = teamBScore.split("(");
-              teamBScore = parts[0].trim();
-              teamBOvers = `(${parts[1]}`;
-            }
-
-            return {
-              id: m.id,
-              academy_id: m.academy_id || 1,
-              academy_name: m.academy_name || "CST Cricket Academy",
-              branch_name: m.branch_name,
-              tournament_name: m.tournament_name,
-              match_type: m.match_type || "Match",
-              status: isLive ? "LIVE" : isCompleted ? "RECENT RESULT" : "UPCOMING",
-              type: isLive ? "live" : isCompleted ? "recent" : "up",
-              team_a: m.team_a_name || "Team A",
-              team_a_name: m.team_a_name || "Team A",
-              team_a_code: m.team_a_code,
-              team_a_score: teamAScore || (isLive ? "145/3" : isCompleted ? "180/7" : "-"),
-              team_a_overs: teamAOvers || (isLive ? "(15.4 ov)" : isCompleted ? "(20.0 ov)" : ""),
-              team_b: m.team_b_name || "Team B",
-              team_b_name: m.team_b_name || "Team B",
-              team_b_code: m.team_b_code,
-              team_b_score: teamBScore || (isLive ? "Yet to bat" : isCompleted ? "162/8" : "-"),
-              team_b_overs: teamBOvers || (isCompleted ? "(20.0 ov)" : ""),
-              result: m.result_note || m.remarks || (isCompleted ? "Match Completed" : ""),
-              remarks: m.remarks,
-              ground_name: m.ground_name || "Academy Ground",
-              venue: `${m.ground_name || "Academy Ground"} · ${m.match_date ? formatMatchDate(m.match_date) : "Upcoming"}`,
-              match_date: m.match_date,
-              match_time: m.match_time,
-              toss_winner_team_name: m.toss_winner_team_name,
-              toss_decision: m.toss_decision,
-            };
+            return rawStatus !== "cancelled" && rawStatus !== "canceled";
           });
-          setMatches(mapped);
+
+          if (activeMatches.length > 0) {
+            const mapped = activeMatches.map((m) => {
+              const rawStatus = (m.status || "").trim().toLowerCase();
+              const isToday = isTodayDate(m.match_date);
+
+              const isLive =
+                rawStatus === "live" ||
+                rawStatus === "in progress" ||
+                (isToday && rawStatus !== "completed");
+
+              const isCompleted = rawStatus === "completed";
+
+              // Extract score and overs cleanly
+              let teamAScore = m.team_a_score || "";
+              let teamAOvers = "";
+              if (teamAScore.includes("(")) {
+                const parts = teamAScore.split("(");
+                teamAScore = parts[0].trim();
+                teamAOvers = `(${parts[1]}`;
+              }
+
+              let teamBScore = m.team_b_score || "";
+              let teamBOvers = "";
+              if (teamBScore.includes("(")) {
+                const parts = teamBScore.split("(");
+                teamBScore = parts[0].trim();
+                teamBOvers = `(${parts[1]}`;
+              }
+
+              return {
+                id: m.id,
+                academy_id: m.academy_id || 1,
+                academy_name: m.academy_name || "CST Cricket Academy",
+                branch_name: m.branch_name,
+                tournament_name: m.tournament_name,
+                match_type: m.match_type || "Match",
+                status: isLive ? "LIVE" : isCompleted ? "RECENT RESULT" : "UPCOMING",
+                type: isLive ? "live" : isCompleted ? "recent" : "up",
+                team_a: m.team_a_name || "Team A",
+                team_a_name: m.team_a_name || "Team A",
+                team_a_code: m.team_a_code,
+                team_a_score: teamAScore || (isLive ? "145/3" : isCompleted ? "180/7" : "-"),
+                team_a_overs: teamAOvers || (isLive ? "(15.4 ov)" : isCompleted ? "(20.0 ov)" : ""),
+                team_b: m.team_b_name || "Team B",
+                team_b_name: m.team_b_name || "Team B",
+                team_b_code: m.team_b_code,
+                team_b_score: teamBScore || (isLive ? "Yet to bat" : isCompleted ? "162/8" : "-"),
+                team_b_overs: teamBOvers || (isCompleted ? "(20.0 ov)" : ""),
+                result: m.result_note || m.remarks || (isCompleted ? "Match Completed" : ""),
+                remarks: m.remarks,
+                ground_name: m.ground_name || "Academy Ground",
+                venue: `${m.ground_name || "Academy Ground"} · ${m.match_date ? formatMatchDate(m.match_date) : "Upcoming"}`,
+                match_date: m.match_date,
+                match_time: m.match_time,
+                toss_winner_team_name: m.toss_winner_team_name,
+                toss_decision: m.toss_decision,
+              };
+            });
+            setMatches(mapped);
+          } else if (json.data.length > 0) {
+            // All matches in database were cancelled
+            setMatches([]);
+          }
         }
       } catch (e) {
         // Fallback in place
@@ -340,7 +351,29 @@ export default function MatchesPage() {
 
           {/* Redesigned Match Cards Grid */}
           <div className="matches-grid">
-            {filteredMatches.map((m, idx) => {
+            {filteredMatches.length === 0 ? (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  textAlign: "center",
+                  padding: "50px 20px",
+                  background: "#ffffff",
+                  borderRadius: "16px",
+                  border: "1px dashed rgba(7,30,38,0.15)",
+                }}
+              >
+                <Trophy size={42} style={{ margin: "0 auto 12px", opacity: 0.35, color: "var(--teal)" }} />
+                <h4 style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: 700, color: "var(--dark)" }}>
+                  No Active Matches
+                </h4>
+                <p style={{ margin: 0, fontSize: "14px", color: "var(--muted)" }}>
+                  {filterTab === "ALL"
+                    ? "There are currently no active matches scheduled."
+                    : `There are currently no matches in the ${filterTab} category.`}
+                </p>
+              </div>
+            ) : (
+              filteredMatches.map((m, idx) => {
               const isLive = m.type === "live";
               const isUp = m.type === "up";
               const isRecent = m.type === "recent";
@@ -540,7 +573,7 @@ export default function MatchesPage() {
                   </div>
                 </article>
               );
-            })}
+            }))}
           </div>
         </div>
       </section>

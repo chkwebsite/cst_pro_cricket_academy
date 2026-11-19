@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Check, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, Check, Lock, RefreshCw, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useUser } from "../components/UserContext";
 import {
     DISMISSAL_TYPES,
     calculateStrikeRate,
@@ -27,6 +28,12 @@ const EMPTY_FORM = {
 };
 
 export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/match-scorecard" }) {
+    const { user } = useUser();
+    const userRole = String(user?.role || user?.user_type || user?.role_name || "").toLowerCase();
+    const isSuperAdmin = Boolean(user?.isSuperAdmin || userRole === "super_admin" || userRole === "super admin");
+    const isAcademyAdmin = Boolean(user?.isAcademyAdmin || userRole === "academy_admin" || userRole === "academy admin");
+    const canEditCompletedInnings = isSuperAdmin || isAcademyAdmin;
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const isEdit = Boolean(id);
@@ -150,6 +157,7 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                     setAllMatchPlayers(all);
 
                     const currentInnings = inningsList.find((i) => String(i.id) === String(formData.innings_id));
+    const isLockedForCurrentUser = currentInnings?.innings_status === "Completed" && !canEditCompletedInnings;
                     if (currentInnings) {
                         const batting = all.filter((p) => Number(p.team_id) === Number(currentInnings.batting_team_id));
                         const bowling = all.filter((p) => Number(p.team_id) === Number(currentInnings.bowling_team_id));
@@ -257,6 +265,11 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
         setError("");
         setSuccessMsg("");
 
+        if (isLockedForCurrentUser) {
+            setError("This innings is completed. Only Super Admin and Academy Admin can add or edit player scores.");
+            return;
+        }
+
         if (!formData.match_id || !formData.innings_id || !formData.match_player_id) {
             setError("Match, Innings and Batter are required.");
             return;
@@ -345,6 +358,7 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
     const matchMaxBalls = matchOvers * 6;
 
     const currentInnings = inningsList.find((i) => String(i.id) === String(formData.innings_id));
+    const isLockedForCurrentUser = currentInnings?.innings_status === "Completed" && !canEditCompletedInnings;
     const inningsTotalRuns = Number(currentInnings?.total_runs) || 0;
     const inningsExtras = Number(currentInnings?.extras) || 0;
     const inningsTargetRuns = currentInnings?.target_runs !== null && currentInnings?.target_runs !== undefined && currentInnings?.target_runs !== ""
@@ -413,6 +427,16 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
             {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
             <div className="row g-3">
+                {/* Innings Completed Locked Alert */}
+                {isLockedForCurrentUser && (
+                    <div className="col-12">
+                        <div className="alert alert-warning border border-warning-subtle d-flex align-items-center gap-2 mb-0">
+                            <Lock size={18} className="text-warning flex-shrink-0" />
+                            <span>This innings is completed and locked. Only Super Admin and Academy Admin have permission to add or edit player scores.</span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Match Selection */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
@@ -459,9 +483,19 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
 
                 {/* Batter & Position */}
                 <div className="col-md-8">
-                    <label className="form-label fw-semibold">
-                        Batter (Batting Team) <span className="text-danger">*</span>
-                    </label>
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                        <label className="form-label fw-semibold mb-0">
+                            Batter (Batting Team) <span className="text-danger">*</span>
+                        </label>
+                        {formData.innings_id && (
+                            <Link
+                                href={`/next_panel/match-players/new?match_id=${formData.match_id}&team_id=${currentInnings?.batting_team_id}&returnTo=${encodeURIComponent(`/next_panel/match-scorecard/new?match_id=${formData.match_id}&innings_id=${formData.innings_id}`)}`}
+                                className="small text-primary text-decoration-none fw-semibold"
+                            >
+                                + Add Player to Squad
+                            </Link>
+                        )}
+                    </div>
                     <select
                         name="match_player_id"
                         className="form-select"
@@ -470,13 +504,30 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                         disabled={isEdit || !formData.innings_id}
                         required
                     >
-                        <option value="">Select a player...</option>
+                        <option value="">
+                            {battingPlayers.length === 0 && formData.innings_id
+                                ? `No squad players found for ${currentInnings?.batting_team_name || "batting team"}`
+                                : "Select a player..."}
+                        </option>
                         {battingPlayers.map((p) => (
                             <option key={p.id} value={p.id}>
                                 {getPlayerDisplayName(p)} {p.jersey_no ? `(#${p.jersey_no})` : ""} - {p.team_name}
                             </option>
                         ))}
                     </select>
+                    {formData.innings_id && battingPlayers.length === 0 && (
+                        <div className="alert alert-warning py-2 px-3 mt-2 small d-flex flex-wrap align-items-center justify-content-between gap-2 rounded-3">
+                            <span>
+                                No players found in match squad for <strong>{currentInnings?.batting_team_name}</strong>.
+                            </span>
+                            <Link
+                                href={`/next_panel/match-players/new?match_id=${formData.match_id}&team_id=${currentInnings?.batting_team_id}&returnTo=${encodeURIComponent(`/next_panel/match-scorecard/new?match_id=${formData.match_id}&innings_id=${formData.innings_id}`)}`}
+                                className="btn btn-sm btn-primary text-white py-1 px-2"
+                            >
+                                + Add Player to Squad
+                            </Link>
+                        </div>
+                    )}
                 </div>
 
                 <div className="col-md-4">
@@ -723,7 +774,7 @@ export default function MatchScorecardForm({ id = null, returnTo = "/next_panel/
                     <Link href={returnTo} className="btn btn-outline-secondary px-4">
                         Cancel
                     </Link>
-                    <button type="submit" className="btn btn-primary px-4" disabled={loading || hasValidationErrors}>
+                    <button type="submit" className="btn btn-primary px-4" disabled={loading || hasValidationErrors || isLockedForCurrentUser}>
                         {loading ? (
                             <>
                                 <RefreshCw className="spinner-border spinner-border-sm me-2" />

@@ -31,7 +31,7 @@ export default function ManagementHub({ title, description, activeHref, sections
             </div>
 
             <div className="row g-3">
-                {sections.map(({ title: sectionTitle, description: sectionDescription, href, createHref, Icon }) => (
+                {sections.map(({ title: sectionTitle, description: sectionDescription, href, createHref, manageLabel, createLabel, Icon }) => (
                     <div className="col-sm-6 col-xl-3" key={sectionTitle}>
                         <section className="bg-white border rounded-3 shadow-sm p-4 h-100 d-flex flex-column">
                             <div className="d-flex align-items-center gap-3 mb-3">
@@ -42,15 +42,20 @@ export default function ManagementHub({ title, description, activeHref, sections
                             </div>
                             <p className="text-muted mb-4">{sectionDescription}</p>
                             <div className="d-flex gap-2 mt-auto">
-                                <Link href={href} className="btn btn-outline-primary btn-sm flex-fill">
-                                    Manage <ArrowRight size={15} className="ms-1" />
-                                </Link>
                                 <Link
-                                    href={`${createHref}?returnTo=${encodeURIComponent(activeHref)}`}
-                                    className="btn btn-primary btn-sm flex-fill"
+                                    href={href}
+                                    className={`btn ${createHref ? "btn-outline-primary flex-fill" : "btn-primary w-100"} btn-sm`}
                                 >
-                                    <Plus size={15} className="me-1" /> Create
+                                    {manageLabel || (createHref ? "Manage" : "View")} <ArrowRight size={15} className="ms-1" />
                                 </Link>
+                                {Boolean(createHref) && (
+                                    <Link
+                                        href={`${createHref}?returnTo=${encodeURIComponent(activeHref)}`}
+                                        className="btn btn-primary btn-sm flex-fill"
+                                    >
+                                        <Plus size={15} className="me-1" /> {createLabel || "Create"}
+                                    </Link>
+                                )}
                             </div>
                         </section>
                     </div>

@@ -203,7 +203,11 @@ export async function GET(request) {
                 u.first_name AS created_by_name,
 
                 t.created_at,
-                t.updated_at
+                t.updated_at,
+
+                (SELECT COUNT(*) FROM cst_tournament_matches tm WHERE tm.tournament_id = t.id) AS total_matches,
+                (SELECT COUNT(*) FROM cst_tournament_matches tm WHERE tm.tournament_id = t.id AND tm.status = 'Completed') AS completed_matches,
+                (SELECT COUNT(*) FROM cst_tournament_matches tm WHERE tm.tournament_id = t.id AND (tm.status != 'Completed' OR tm.status IS NULL)) AS pending_matches
 
             FROM cst_tournaments t
 

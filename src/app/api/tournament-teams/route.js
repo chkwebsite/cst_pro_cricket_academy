@@ -19,6 +19,7 @@ export async function GET(request) {
         const registration_no = searchParams.get("registration_no");
         const payment_status = searchParams.get("payment_status");
         const status = searchParams.get("status");
+        const group_name = searchParams.get("group_name");
         const academy_id = searchParams.get("academy_id");
         const branch_id = searchParams.get("branch_id");
 
@@ -45,6 +46,7 @@ export async function GET(request) {
                 tt.team_fee,
                 tt.payment_status,
                 tt.status,
+                tt.group_name,
 
                 tt.created_by,
                 CONCAT_WS(
@@ -133,6 +135,11 @@ export async function GET(request) {
             params.push(status);
         }
 
+        if (group_name) {
+            sql += ` AND tt.group_name = ?`;
+            params.push(group_name);
+        }
+
         sql += ` ORDER BY tt.id DESC`;
 
         const [rows] = await connection.query(sql, params);
@@ -191,7 +198,8 @@ export async function POST(request) {
             registered_date,
             team_fee,
             payment_status,
-            status
+            status,
+            group_name
         } = body;
 
         if (
@@ -347,9 +355,10 @@ export async function POST(request) {
                 team_fee,
                 payment_status,
                 status,
+                group_name,
                 created_by
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             [
                 tournamentId,
@@ -359,6 +368,7 @@ export async function POST(request) {
                 finalTeamFee,
                 payment_status || "Pending",
                 status || "Registered",
+                group_name && group_name.trim() ? group_name.trim() : "Group A",
                 authUser.id
             ]
         );
