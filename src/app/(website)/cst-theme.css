@@ -1973,3 +1973,7 @@ img, video, iframe { max-width: 100%; }
   .facilities-feature__title { font-size: 23px !important; }
   .facilities-feature .badge { font-size: 10px; letter-spacing: .04em; }
 }
+
+.page-link {
+    white-space: nowrap !important;
+}
