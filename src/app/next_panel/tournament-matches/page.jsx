@@ -1,12 +1,13 @@
 "use client";
 
-import { Activity, ArrowLeft, Edit, ExternalLink, MapPin, Plus, Search, SearchSlash, Swords, Trash2, Trophy, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Calendar, Edit, ExternalLink, Lock, MapPin, Plus, Search, SearchSlash, Swords, Trash2, Trophy, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import GroundDetailsModal from "../components/GroundDetailsModal";
 import useCurrentUser from "../teams/useCurrentUser";
 import useTournamentOptions from "../tournament-teams/useTournamentOptions";
 import Pagination from "../components/Pagination";
+import { isMatchDateInFuture } from "../components/cricketHelpers";
 
 const ROUND_TYPES = ["League", "Round Robin", "Quarter Final", "Semi Final", "Final", "Qualifier", "Eliminator", "Custom"];
 const MATCH_STATUSES = ["Scheduled", "Live", "Completed", "Cancelled", "Postponed"];
@@ -89,9 +90,17 @@ export default function TournamentMatchesPage() {
     const [savingScore, setSavingScore] = useState(false);
     const [openingScorecardId, setOpeningScorecardId] = useState(null);
     const [scoreError, setScoreError] = useState("");
+    const [futureNoticeModal, setFutureNoticeModal] = useState(null);
 
     const handleOpenScorecard = async (fixture) => {
         if (!fixture) return;
+
+        // Rule: Scorecard and innings cannot be initialized before match date
+        if (isMatchDateInFuture(fixture.scheduled_date)) {
+            setFutureNoticeModal({ match: fixture, actionType: "Scorecard" });
+            return;
+        }
+
         setOpeningScorecardId(fixture.id);
         setScoreError("");
         try {
@@ -116,6 +125,11 @@ export default function TournamentMatchesPage() {
     };
 
     const openScoreModal = (match) => {
+        if (!match) return;
+        if (isMatchDateInFuture(match.scheduled_date)) {
+            setFutureNoticeModal({ match, actionType: "Quick Score" });
+            return;
+        }
         setScoreModalMatch(match);
         setScoreError("");
         setScoreForm({
@@ -162,6 +176,13 @@ export default function TournamentMatchesPage() {
     const handleSaveScore = async (e) => {
         e.preventDefault();
         if (!scoreModalMatch) return;
+
+        // Rule: Match scores cannot be recorded before match date
+        if (isMatchDateInFuture(scoreModalMatch.scheduled_date)) {
+            setScoreError(`Scores cannot be recorded before the scheduled match date (${formatDate(scoreModalMatch.scheduled_date)}).`);
+            return;
+        }
+
         setSavingScore(true);
         setScoreError("");
         try {
@@ -350,19 +371,82 @@ export default function TournamentMatchesPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Match</th>
                                         <th>Teams</th>
                                         <th>Schedule</th>
                                         <th>Venue</th>
                                         <th>Winner</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedRows.map((item, idx) => (
                                         <tr key={item.id}>
                                             <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                {(() => {
+                                                    const isFutureFixture = isMatchDateInFuture(item.scheduled_date);
+                                                    return (
+                                                        <div className="d-flex justify-content-start gap-1">
+                                                            {isFutureFixture ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1"
+                                                                    onClick={() => setFutureNoticeModal({ match: item, actionType: "Scorecard" })}
+                                                                    title={`Scorecard locked until match date (${formatDate(item.scheduled_date)}). Click to view details.`}
+                                                                >
+                                                                    <Lock size={13} />
+                                                                    <span>Scorecard</span>
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1"
+                                                                    onClick={() => handleOpenScorecard(item)}
+                                                                    disabled={openingScorecardId === item.id}
+                                                                    title="Open Player Scorecard Center (Batters & Bowlers)"
+                                                                >
+                                                                    {openingScorecardId === item.id ? (
+                                                                        <span className="spinner-border spinner-border-sm" />
+                                                                    ) : (
+                                                                        <Activity size={13} />
+                                                                    )}
+                                                                    <span>Scorecard</span>
+                                                                </button>
+                                                            )}
+
+                                                            {isFutureFixture ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1"
+                                                                    onClick={() => setFutureNoticeModal({ match: item, actionType: "Quick Score" })}
+                                                                    title={`Quick Score locked until match date (${formatDate(item.scheduled_date)}). Click to view details.`}
+                                                                >
+                                                                    <Lock size={13} />
+                                                                    <span>Quick Score</span>
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
+                                                                    onClick={() => openScoreModal(item)}
+                                                                    title="Enter or update match score"
+                                                                >
+                                                                    <Trophy size={14} />
+                                                                    <span>Quick Score</span>
+                                                                </button>
+                                                            )}
+                                                            <Link href={`/next_panel/tournament-matches/${item.id}/edit`} className="btn btn-sm btn-outline-secondary" aria-label="Edit tournament match">
+                                                                <Edit size={14} />
+                                                            </Link>
+                                                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(item)} aria-label="Delete tournament match">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </td>
                                             <td>
                                                 <div>Match {item.match_no}{item.round_name ? ` · ${item.round_name}` : ""}</div>
                                                 <div className="d-flex align-items-center gap-1 mt-1">
@@ -440,39 +524,6 @@ export default function TournamentMatchesPage() {
                                                     );
                                                 })()}
                                             </td>
-                                            <td>
-                                                <div className="d-flex justify-content-start gap-1">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1"
-                                                        onClick={() => handleOpenScorecard(item)}
-                                                        disabled={openingScorecardId === item.id}
-                                                        title="Open Player Scorecard Center (Batters & Bowlers)"
-                                                    >
-                                                        {openingScorecardId === item.id ? (
-                                                            <span className="spinner-border spinner-border-sm" />
-                                                        ) : (
-                                                            <Activity size={13} />
-                                                        )}
-                                                        <span>Scorecard</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
-                                                        onClick={() => openScoreModal(item)}
-                                                        title="Enter or update match score"
-                                                    >
-                                                        <Trophy size={14} />
-                                                        <span>Quick Score</span>
-                                                    </button>
-                                                    <Link href={`/next_panel/tournament-matches/${item.id}/edit`} className="btn btn-sm btn-outline-secondary" aria-label="Edit tournament match">
-                                                        <Edit size={14} />
-                                                    </Link>
-                                                    <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(item)} aria-label="Delete tournament match">
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -515,6 +566,15 @@ export default function TournamentMatchesPage() {
                             <form onSubmit={handleSaveScore}>
                                 <div className="modal-body p-4">
                                     {scoreError && <div className="alert alert-danger mb-3">{scoreError}</div>}
+
+                                    {isMatchDateInFuture(scoreModalMatch.scheduled_date) && (
+                                        <div className="alert alert-warning border border-warning-subtle d-flex align-items-center gap-2 p-3 mb-3 rounded-3 shadow-sm">
+                                            <Calendar size={20} className="text-warning flex-shrink-0" />
+                                            <div>
+                                                <strong>Upcoming Match ({formatDate(scoreModalMatch.scheduled_date)}):</strong> Scores cannot be recorded before the scheduled match day.
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2 p-3 mb-3 rounded-3">
                                         <div>
@@ -697,13 +757,122 @@ export default function TournamentMatchesPage() {
                                     <button
                                         type="submit"
                                         className="btn btn-success d-inline-flex align-items-center gap-2"
-                                        disabled={savingScore}
+                                        disabled={savingScore || isMatchDateInFuture(scoreModalMatch.scheduled_date)}
                                     >
                                         <Trophy size={16} />
                                         <span>{savingScore ? "Saving..." : "Save Score & Update Points Table"}</span>
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Future Match Locked Notice Popup Modal */}
+            {futureNoticeModal && (
+                <div
+                    className="modal d-block"
+                    role="dialog"
+                    aria-modal="true"
+                    style={{ background: "rgba(0,0,0,0.55)", zIndex: 1060 }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setFutureNoticeModal(null);
+                    }}
+                >
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
+                            <div className="modal-header bg-warning bg-opacity-10 border-bottom border-warning-subtle p-3">
+                                <div className="d-flex align-items-center gap-2">
+                                    <div className="p-2 bg-warning bg-opacity-25 text-warning-emphasis rounded-circle">
+                                        <Lock size={20} className="text-warning-emphasis" />
+                                    </div>
+                                    <div>
+                                        <h5 className="modal-title mb-0 fw-bold text-dark">
+                                            {futureNoticeModal.actionType === "Scorecard"
+                                                ? "Scorecard Locked"
+                                                : "Quick Score Locked"}
+                                        </h5>
+                                        <small className="text-muted">
+                                            Match #{futureNoticeModal.match.match_no} &bull; {futureNoticeModal.match.tournament_name || "Tournament Match"}
+                                        </small>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    onClick={() => setFutureNoticeModal(null)}
+                                    aria-label="Close"
+                                />
+                            </div>
+
+                            <div className="modal-body p-4">
+                                <div className="alert alert-warning border border-warning-subtle rounded-3 p-3 mb-3 d-flex align-items-start gap-2">
+                                    <AlertTriangle size={20} className="text-warning flex-shrink-0 mt-1" />
+                                    <div>
+                                        <div className="fw-bold fs-6 mb-1 text-warning-emphasis">
+                                            Match scores cannot be recorded or updated before the scheduled match date.
+                                        </div>
+                                        <div className="small text-muted">
+                                            Scores, innings, and player scorecards cannot be entered or updated before the scheduled match date.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="card bg-light border rounded-3 p-3 mb-3">
+                                    <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                                        <span className="text-muted small">Teams:</span>
+                                        <span className="fw-semibold text-dark">
+                                            {futureNoticeModal.match.team_a_name || "TBD"}{" "}
+                                            <span className="text-muted fw-normal">vs</span>{" "}
+                                            {futureNoticeModal.match.team_b_name || "TBD"}
+                                        </span>
+                                    </div>
+                                    <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                                        <span className="text-muted small">Scheduled Date:</span>
+                                        <span className="badge bg-primary-subtle text-primary border border-primary-subtle fs-6 px-2 py-1 d-inline-flex align-items-center gap-1">
+                                            <Calendar size={13} />
+                                            {formatDate(futureNoticeModal.match.scheduled_date)}
+                                        </span>
+                                    </div>
+                                    {futureNoticeModal.match.scheduled_time && (
+                                        <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                                            <span className="text-muted small">Scheduled Time:</span>
+                                            <span className="fw-medium text-dark">
+                                                {formatTime(futureNoticeModal.match.scheduled_time)}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {futureNoticeModal.match.ground_name && (
+                                        <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                                            <span className="text-muted small">Venue / Ground:</span>
+                                            <span className="fw-medium text-dark">
+                                                {futureNoticeModal.match.ground_name}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="d-flex justify-content-between align-items-center">
+                                        <span className="text-muted small">Current Status:</span>
+                                        <span className="badge bg-secondary">
+                                            {futureNoticeModal.match.status || "Scheduled"}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <p className="text-muted small mb-0">
+                                    Match scores, innings, and scorecard entries will become available on <strong>{formatDate(futureNoticeModal.match.scheduled_date)}</strong> once the match is Live.
+                                </p>
+                            </div>
+
+                            <div className="modal-footer bg-light p-3 border-top">
+                                <button
+                                    type="button"
+                                    className="btn btn-primary px-4"
+                                    onClick={() => setFutureNoticeModal(null)}
+                                >
+                                    Understood
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

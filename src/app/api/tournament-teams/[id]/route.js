@@ -162,9 +162,11 @@ export async function PUT(request, { params }) {
 
         const [existingRows] = await connection.query(
             `
-            SELECT tt.id, tt.tournament_id, tt.team_id, t.academy_id, t.branch_id
+            SELECT tt.id, tt.tournament_id, tt.team_id, tt.registration_no, tt.team_fee, tt.payment_status, tt.status,
+                   t.academy_id, t.branch_id, tm.team_name
             FROM cst_tournament_teams tt
             INNER JOIN cst_tournaments t ON t.id = tt.tournament_id
+            INNER JOIN cst_teams tm ON tm.id = tt.team_id
             WHERE tt.id = ? AND tt.is_deleted = 0
             LIMIT 1
             `,
@@ -227,6 +229,117 @@ export async function PUT(request, { params }) {
                 regId
             ]
         );
+
+        // Synchronize with cst_fee_status ledger
+        const [feeRows] = await connection.query(
+            `
+            SELECT id, fee_amount, paid_amount, status
+            FROM cst_fee_status
+            WHERE tournament_team_id = ? AND fee_type = 'Tournament Team'
+            LIMIT 1
+            `,
+            [regId]
+        );
+
+        const targetFee = team_fee !== undefined && team_fee !== null && team_fee !== ""
+            ? Number(team_fee)
+            : Number(existingRows[0].team_fee || 0);
+
+        if (feeRows.length > 0) {
+            const feeRecord = feeRows[0];
+            let targetPaidAmount = Number(feeRecord.paid_amount);
+            let targetStatus = feeRecord.status;
+
+            if (payment_status) {
+                if (payment_status === "Paid") {
+                    targetPaidAmount = targetFee;
+                    targetStatus = "Paid";
+                } else if (payment_status === "Pending") {
+                    targetPaidAmount = 0.00;
+                    targetStatus = "Pending";
+                } else if (payment_status === "Partial") {
+                    if (targetPaidAmount <= 0 || targetPaidAmount >= targetFee) {
+                        targetPaidAmount = Math.round((targetFee / 2) * 100) / 100;
+                    }
+                    targetStatus = "Partial";
+                } else if (payment_status === "Cancelled") {
+                    targetStatus = "Cancelled";
+                }
+            } else if (team_fee !== undefined && team_fee !== null && team_fee !== "") {
+                if (targetStatus === "Paid") {
+                    targetPaidAmount = targetFee;
+                } else if (targetStatus === "Partial") {
+                    if (targetPaidAmount > targetFee) targetPaidAmount = targetFee;
+                }
+            }
+
+            await connection.query(
+                `
+                UPDATE cst_fee_status
+                SET fee_amount = ?,
+                    paid_amount = ?,
+                    status = ?,
+                    academy_id = ?,
+                    branch_id = ?
+                WHERE id = ?
+                `,
+                [
+                    targetFee,
+                    targetPaidAmount,
+                    targetStatus,
+                    existingRows[0].academy_id,
+                    existingRows[0].branch_id,
+                    feeRecord.id
+                ]
+            );
+        } else {
+            const targetPaymentStatus = payment_status || existingRows[0].payment_status || "Pending";
+            let targetPaidAmount = 0.00;
+            let targetStatus = "Pending";
+
+            if (targetPaymentStatus === "Paid") {
+                targetPaidAmount = targetFee;
+                targetStatus = "Paid";
+            } else if (targetPaymentStatus === "Partial") {
+                targetPaidAmount = Math.round((targetFee / 2) * 100) / 100;
+                targetStatus = "Partial";
+            } else if (targetPaymentStatus === "Cancelled") {
+                targetPaidAmount = 0.00;
+                targetStatus = "Cancelled";
+            }
+
+            const regNo = registration_no || existingRows[0].registration_no;
+            const tName = existingRows[0].team_name || `Team #${existingRows[0].team_id}`;
+
+            await connection.query(
+                `
+                INSERT INTO cst_fee_status (
+                    academy_id,
+                    branch_id,
+                    fee_type,
+                    tournament_id,
+                    tournament_team_id,
+                    fee_amount,
+                    paid_amount,
+                    status,
+                    remarks,
+                    created_by
+                )
+                VALUES (?, ?, 'Tournament Team', ?, ?, ?, ?, ?, ?, ?)
+                `,
+                [
+                    existingRows[0].academy_id,
+                    existingRows[0].branch_id,
+                    existingRows[0].tournament_id,
+                    regId,
+                    targetFee,
+                    targetPaidAmount,
+                    targetStatus,
+                    `Team registration fee for ${tName} (${regNo})`,
+                    authUser.id
+                ]
+            );
+        }
 
         return NextResponse.json({
             success: true,
@@ -303,6 +416,11 @@ export async function DELETE(request, { params }) {
 
         await connection.query(
             `UPDATE cst_tournament_teams SET is_deleted = 1 WHERE id = ?`,
+            [regId]
+        );
+
+        await connection.query(
+            `UPDATE cst_fee_status SET status = 'Cancelled' WHERE tournament_team_id = ? AND fee_type = 'Tournament Team'`,
             [regId]
         );
 

@@ -690,6 +690,8 @@ export default function StaffSalaryStructurePage() {
                         <table className={styles.table}>
                             <thead>
                                 <tr>
+                                    <th style={{ width: "50px" }}>#</th>
+                                    <th style={{ width: "100px" }}>Actions</th>
                                     <th>Staff Member</th>
                                     <th>Role &amp; Branch</th>
                                     <th>Monthly Gross</th>
@@ -699,14 +701,34 @@ export default function StaffSalaryStructurePage() {
                                     <th>Advance Deduct</th>
                                     <th>Net Salary (In-Hand)</th>
                                     <th>Status</th>
-                                    <th className="text-end">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredList.map((item) => {
+                                {filteredList.map((item, idx) => {
                                     const allowancesSum = (Number(item.hra) || 0) + (Number(item.conveyance_allowance) || 0) + (Number(item.other_allowance) || 0);
                                     return (
                                         <tr key={item.id}>
+                                            <th>{idx + 1}</th>
+                                            <td>
+                                                {canEdit ? (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                                                        onClick={() => handleOpenEdit(item)}
+                                                        title="Edit Salary Structure"
+                                                    >
+                                                        <Edit2 size={13} />
+                                                        Edit
+                                                    </button>
+                                                ) : (
+                                                    <span
+                                                        className="badge bg-light text-muted border py-1 px-2"
+                                                        title="Branch Admin cannot edit salary structures. Only Academy Admin and Super Admin have edit permission."
+                                                    >
+                                                        View Only
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td>
                                                 <div className="fw-bold text-dark">{item.first_name} {item.last_name}</div>
                                                 <div className="text-muted small">#{item.appointment_no}</div>
@@ -753,26 +775,6 @@ export default function StaffSalaryStructurePage() {
                                                 <span className={`badge ${item.status === "Active" ? "bg-success" : "bg-secondary"}`}>
                                                     {item.status}
                                                 </span>
-                                            </td>
-                                            <td className="text-end">
-                                                {canEdit ? (
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
-                                                        onClick={() => handleOpenEdit(item)}
-                                                        title="Edit Salary Structure"
-                                                    >
-                                                        <Edit2 size={13} />
-                                                        Edit
-                                                    </button>
-                                                ) : (
-                                                    <span
-                                                        className="badge bg-light text-muted border py-1 px-2"
-                                                        title="Branch Admin cannot edit salary structures. Only Academy Admin and Super Admin have edit permission."
-                                                    >
-                                                        View Only
-                                                    </span>
-                                                )}
                                             </td>
                                         </tr>
                                     );

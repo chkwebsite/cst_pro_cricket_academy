@@ -492,26 +492,27 @@ export default function CoachesPage() {
                     <table className="table table-hover align-middle mb-0">
                         <thead className="table-light text-uppercase small fw-semibold text-muted">
                             <tr>
-                                <th scope="col" className="ps-4">Coach Profile</th>
+                                <th scope="col" className="ps-4" style={{ width: "50px" }}>#</th>
+                                <th scope="col" style={{ width: "120px" }}>Actions</th>
+                                <th scope="col">Coach Profile</th>
                                 <th scope="col">Academy & Branch</th>
                                 <th scope="col">Specialization</th>
                                 <th scope="col">Employment</th>
                                 <th scope="col">Contact</th>
                                 <th scope="col">Status</th>
-                                <th scope="col" className="text-end pe-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={7} className="text-center py-5 text-muted">
+                                    <td colSpan={8} className="text-center py-5 text-muted">
                                         <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
                                         Loading coaches...
                                     </td>
                                 </tr>
                             ) : coaches.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="text-center py-5 text-muted">
+                                    <td colSpan={8} className="text-center py-5 text-muted">
                                         <div className="mb-2">
                                             <Users size={36} className="text-muted opacity-50" />
                                         </div>
@@ -520,7 +521,7 @@ export default function CoachesPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                pagedCoaches.map((coach) => {
+                                pagedCoaches.map((coach, idx) => {
                                     const specs = coach.specialization
                                         ? coach.specialization.split(",").map((s) => s.trim()).filter(Boolean)
                                         : [];
@@ -533,7 +534,35 @@ export default function CoachesPage() {
 
                                     return (
                                         <tr key={coach.id}>
-                                            <td className="ps-4">
+                                            <th className="ps-4">{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start align-items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedCoach(coach)}
+                                                        className="btn btn-sm btn-light border text-muted"
+                                                        title="View Details"
+                                                    >
+                                                        <Eye size={15} />
+                                                    </button>
+                                                    <Link
+                                                        href={`/next_panel/coaches/${coach.id}/edit`}
+                                                        className="btn btn-sm btn-light border text-primary"
+                                                        title="Edit Coach"
+                                                    >
+                                                        <Edit size={15} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDeleteConfirmCoach(coach)}
+                                                        className="btn btn-sm btn-light border text-danger"
+                                                        title="Delete Coach"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td>
                                                 <div className="d-flex align-items-center gap-3">
                                                     {coach.profile_image ? (
                                                         <img
@@ -647,33 +676,6 @@ export default function CoachesPage() {
                                                 >
                                                     {Number(coach.status) === 1 ? "Active" : "Inactive"}
                                                 </button>
-                                            </td>
-                                            <td className="text-end pe-4">
-                                                <div className="d-flex justify-content-end align-items-center gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setSelectedCoach(coach)}
-                                                        className="btn btn-sm btn-light border text-muted"
-                                                        title="View Details"
-                                                    >
-                                                        <Eye size={15} />
-                                                    </button>
-                                                    <Link
-                                                        href={`/next_panel/coaches/${coach.id}/edit`}
-                                                        className="btn btn-sm btn-light border text-primary"
-                                                        title="Edit Coach"
-                                                    >
-                                                        <Edit size={15} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setDeleteConfirmCoach(coach)}
-                                                        className="btn btn-sm btn-light border text-danger"
-                                                        title="Delete Coach"
-                                                    >
-                                                        <Trash2 size={15} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     );

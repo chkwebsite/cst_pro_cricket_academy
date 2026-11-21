@@ -589,20 +589,40 @@ export default function ProductImagesPage() {
                         <table className="table table-hover align-middle mb-0">
                             <thead className="table-light small">
                                 <tr>
+                                    <th style={{ width: "50px" }}>#</th>
+                                    <th style={{ width: "95px" }}>Actions</th>
                                     <th style={{ width: "80px" }}>Preview</th>
                                     <th>Product</th>
                                     <th>Caption / Alt</th>
                                     <th style={{ width: "120px" }}>Role</th>
                                     <th style={{ width: "100px" }}>Sort Order</th>
                                     <th style={{ width: "100px" }}>Status</th>
-                                    <th style={{ width: "140px" }} className="text-end">
-                                        Actions
-                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {pagedImages.map((item) => (
+                                {pagedImages.map((item, idx) => (
                                     <tr key={item.id}>
+                                        <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                        <td>
+                                            <div className="btn-group btn-group-sm">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenEdit(item)}
+                                                    className="btn btn-outline-primary"
+                                                    title="Edit"
+                                                >
+                                                    <Edit size={13} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(item)}
+                                                    className="btn btn-outline-danger"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td>
                                             <div
                                                 className="rounded bg-light border d-flex align-items-center justify-content-center overflow-hidden cursor-pointer"
@@ -652,26 +672,6 @@ export default function ProductImagesPage() {
                                             >
                                                 {Number(item.status) === 1 ? "Active" : "Inactive"}
                                             </span>
-                                        </td>
-                                        <td className="text-end">
-                                            <div className="btn-group btn-group-sm">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleOpenEdit(item)}
-                                                    className="btn btn-outline-primary"
-                                                    title="Edit"
-                                                >
-                                                    <Edit size={13} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDelete(item)}
-                                                    className="btn btn-outline-danger"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={13} />
-                                                </button>
-                                            </div>
                                         </td>
                                     </tr>
                                 ))}

@@ -149,16 +149,37 @@ export default function RolesPage() {
                                 <table className="table align-middle mb-0">
                                     <thead className="table-light">
                                         <tr>
+                                            <th scope="col" style={{ width: "50px" }}>#</th>
+                                            <th scope="col" style={{ width: "120px" }}>Actions</th>
                                             <th scope="col">Role</th>
                                             <th scope="col">Scope</th>
                                             <th scope="col">Description</th>
                                             <th scope="col">Status</th>
-                                            <th scope="col" className="text-end">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {pagedRoles.map((role) => (
+                                        {pagedRoles.map((role, idx) => (
                                             <tr key={role.id}>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="btn-group btn-group-sm" role="group">
+                                                        <Link href={`/next_panel/roles/${role.id}`} className="btn btn-outline-primary" aria-label="View role">
+                                                            <ArrowUpRight size={16} />
+                                                        </Link>
+                                                        <Link href={`/next_panel/roles/${role.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit role">
+                                                            <Edit size={16} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-danger"
+                                                            onClick={() => handleDelete(role)}
+                                                            disabled={deletingId === role.id}
+                                                            aria-label="Delete role"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <span className="fw-semibold">{role.role_name}</span>
                                                 </td>
@@ -177,29 +198,6 @@ export default function RolesPage() {
                                                     <span className={`badge ${role.status === 1 ? "bg-success" : "bg-secondary"}`}>
                                                         {role.status === 1 ? "Active" : "Inactive"}
                                                     </span>
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="btn-group btn-group-sm" role="group">
-                                                        <Link href={`/next_panel/roles/${role.id}`} className="btn btn-outline-primary" aria-label="View role">
-                                                            <ArrowUpRight size={16} />
-                                                        </Link>
-                                                        {/* {userInfo.permissions.includes("roles.edit") && ( */}
-                                                        <Link href={`/next_panel/roles/${role.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit role">
-                                                            <Edit size={16} />
-                                                        </Link>
-                                                        {/* )}
-                                                        {userInfo.permissions.includes("roles.delete") && ( */}
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleDelete(role)}
-                                                            disabled={deletingId === role.id}
-                                                            aria-label="Delete role"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                        {/* )} */}
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

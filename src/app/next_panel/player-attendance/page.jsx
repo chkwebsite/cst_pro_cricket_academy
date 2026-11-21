@@ -326,33 +326,54 @@ export default function PlayerAttendancePage() {
                         <table className="table table-hover align-middle mb-0">
                             <thead className="table-light">
                                 <tr>
-                                    <th className="ps-3">Date</th>
+                                    <th className="ps-3" style={{ width: "50px" }}>#</th>
+                                    <th style={{ width: "95px" }}>Actions</th>
+                                    <th>Date</th>
                                     <th>Player</th>
                                     <th>Admission No</th>
                                     <th>Program &amp; Batch</th>
                                     <th>Status</th>
                                     <th>Marked By</th>
                                     <th>Remarks</th>
-                                    <th className="text-end pe-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan="8" className="text-center py-5 text-muted">
+                                        <td colSpan="9" className="text-center py-5 text-muted">
                                             Loading attendance records...
                                         </td>
                                     </tr>
                                 ) : attendanceList.length === 0 ? (
                                     <tr>
-                                        <td colSpan="8" className="text-center py-5 text-muted">
+                                        <td colSpan="9" className="text-center py-5 text-muted">
                                             No attendance records found. Click <strong>Mark Attendance</strong> to record one.
                                         </td>
                                     </tr>
                                 ) : (
-                                    pagedAttendance.map((item) => (
+                                    pagedAttendance.map((item, idx) => (
                                         <tr key={item.id}>
-                                            <td className="ps-3 fw-medium">
+                                            <th className="ps-3">{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start gap-1">
+                                                    <Link
+                                                        href={`/next_panel/player-attendance/${item.id}/edit`}
+                                                        className="btn btn-sm btn-outline-primary p-1"
+                                                        title="Edit Attendance"
+                                                    >
+                                                        <Edit size={16} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger p-1"
+                                                        onClick={() => handleDelete(item)}
+                                                        title="Delete Record"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="fw-medium">
                                                 {item.attendance_date ? item.attendance_date.slice(0, 10) : "—"}
                                             </td>
                                             <td>
@@ -379,25 +400,6 @@ export default function PlayerAttendancePage() {
                                             <td className="text-muted small">{item.marked_by_name || "—"}</td>
                                             <td className="text-muted small" style={{ maxWidth: 220 }}>
                                                 {item.remarks || "—"}
-                                            </td>
-                                            <td className="text-end pe-3">
-                                                <div className="d-flex justify-content-end gap-1">
-                                                    <Link
-                                                        href={`/next_panel/player-attendance/${item.id}/edit`}
-                                                        className="btn btn-sm btn-outline-primary p-1"
-                                                        title="Edit Attendance"
-                                                    >
-                                                        <Edit size={16} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger p-1"
-                                                        onClick={() => handleDelete(item)}
-                                                        title="Delete Record"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     ))

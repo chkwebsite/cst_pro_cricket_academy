@@ -241,6 +241,7 @@ export default function GalleryAlbumsPage() {
                                 <thead className="table-light">
                                     <tr>
                                         <th style={{ width: "50px" }}>#</th>
+                                        <th style={{ width: "220px" }} className="text-end">Actions</th>
                                         <th style={{ width: "90px" }}>Cover</th>
                                         <th>Album Title</th>
                                         <th>Category</th>
@@ -248,7 +249,6 @@ export default function GalleryAlbumsPage() {
                                         <th>Event Date</th>
                                         <th style={{ width: "80px" }}>Featured</th>
                                         <th style={{ width: "90px" }}>Status</th>
-                                        <th style={{ width: "220px" }} className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -269,6 +269,40 @@ export default function GalleryAlbumsPage() {
                                         pagedAlbums.map((album, idx) => (
                                             <tr key={album.id}>
                                                 <td className="text-muted small">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                                <td className="text-end">
+                                                    <div className="d-flex justify-content-end gap-1">
+                                                        <Link
+                                                            href={`/next_panel/gallery-images?album_id=${album.id}`}
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            title="Manage photos in this album"
+                                                        >
+                                                            <Images size={14} className="me-1" /> Photos
+                                                        </Link>
+                                                        <Link
+                                                            href={`/next_panel/gallery-videos?album_id=${album.id}`}
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            title="Manage videos in this album"
+                                                        >
+                                                            <Video size={14} className="me-1" /> Videos
+                                                        </Link>
+                                                        <Link
+                                                            href={`/next_panel/gallery-albums/${album.id}/edit`}
+                                                            className="btn btn-sm btn-outline-secondary"
+                                                            title="Edit album"
+                                                        >
+                                                            <Edit size={15} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => handleDelete(album)}
+                                                            disabled={deletingId === album.id}
+                                                            title="Delete album"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     {album.cover_image ? (
                                                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -344,40 +378,6 @@ export default function GalleryAlbumsPage() {
                                                             Inactive
                                                         </span>
                                                     )}
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="d-flex justify-content-end gap-1">
-                                                        <Link
-                                                            href={`/next_panel/gallery-images?album_id=${album.id}`}
-                                                            className="btn btn-sm btn-outline-primary"
-                                                            title="Manage photos in this album"
-                                                        >
-                                                            <Images size={14} className="me-1" /> Photos
-                                                        </Link>
-                                                        <Link
-                                                            href={`/next_panel/gallery-videos?album_id=${album.id}`}
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            title="Manage videos in this album"
-                                                        >
-                                                            <Video size={14} className="me-1" /> Videos
-                                                        </Link>
-                                                        <Link
-                                                            href={`/next_panel/gallery-albums/${album.id}/edit`}
-                                                            className="btn btn-sm btn-outline-secondary"
-                                                            title="Edit album"
-                                                        >
-                                                            <Edit size={15} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() => handleDelete(album)}
-                                                            disabled={deletingId === album.id}
-                                                            title="Delete album"
-                                                        >
-                                                            <Trash2 size={15} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))

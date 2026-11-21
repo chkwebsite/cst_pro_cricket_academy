@@ -276,13 +276,13 @@ export default function UserRolesPage() {
                                     <thead className="table-light">
                                         <tr>
                                             <th>ID</th>
+                                            <th className="text-end">
+                                                Actions
+                                            </th>
                                             <th>User</th>
                                             <th>Email</th>
                                             <th>Role</th>
                                             <th>Assigned</th>
-                                            <th className="text-end">
-                                                Actions
-                                            </th>
                                         </tr>
                                     </thead>
 
@@ -292,28 +292,6 @@ export default function UserRolesPage() {
 
                                                 <td>
                                                     {r.id}
-                                                </td>
-
-                                                <td>
-                                                    {r.first_name ?? "—"} {r.last_name ?? ""}
-                                                </td>
-
-                                                <td>
-                                                    {r.email ?? "—"}
-                                                </td>
-
-                                                <td>
-                                                    <span className="badge bg-info-subtle text-info-emphasis">
-                                                        {r.role_name ?? `Role #${r.role_id}`}
-                                                    </span>
-                                                </td>
-
-                                                <td>
-                                                    {r.created_at
-                                                        ? new Date(
-                                                            r.created_at
-                                                        ).toLocaleDateString()
-                                                        : "—"}
                                                 </td>
 
                                                 <td className="text-end">
@@ -352,6 +330,28 @@ export default function UserRolesPage() {
                                                         </button>
 
                                                     </div>
+                                                </td>
+
+                                                <td>
+                                                    {r.first_name ?? "—"} {r.last_name ?? ""}
+                                                </td>
+
+                                                <td>
+                                                    {r.email ?? "—"}
+                                                </td>
+
+                                                <td>
+                                                    <span className="badge bg-info-subtle text-info-emphasis">
+                                                        {r.role_name ?? `Role #${r.role_id}`}
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    {r.created_at
+                                                        ? new Date(
+                                                            r.created_at
+                                                        ).toLocaleDateString()
+                                                        : "—"}
                                                 </td>
 
                                             </tr>

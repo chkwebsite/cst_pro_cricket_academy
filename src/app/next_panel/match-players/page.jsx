@@ -234,19 +234,29 @@ export default function MatchPlayersPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Player</th>
                                         <th>Team</th>
                                         <th>Match</th>
                                         <th>Selection</th>
                                         <th>Roles</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedItems.map((item, idx) => (
                                         <tr key={item.id}>
                                             <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start gap-2">
+                                                    <Link href={`/next_panel/match-players/${item.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit match player">
+                                                        <Edit size={16} />
+                                                    </Link>
+                                                    <button type="button" className="btn btn-outline-danger" onClick={() => handleDelete(item)} aria-label="Remove match player">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div>
                                                     {playerName(item)}
@@ -283,16 +293,6 @@ export default function MatchPlayersPage() {
                                                 <span className={`badge ${item.status ? "bg-success" : "bg-secondary"}`}>
                                                     {item.status ? "Active" : "Inactive"}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                <div className="d-flex justify-content-start gap-2">
-                                                    <Link href={`/next_panel/match-players/${item.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit match player">
-                                                        <Edit size={16} />
-                                                    </Link>
-                                                    <button type="button" className="btn btn-outline-danger" onClick={() => handleDelete(item)} aria-label="Remove match player">
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}

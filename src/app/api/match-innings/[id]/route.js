@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
+import { validateMatchDateForScoring } from "@/app/components/lib/match-date-validator";
 
 // GET: Get single innings
 export async function GET(request, { params }) {
@@ -128,7 +129,7 @@ export async function PUT(request, { params }) {
 
         // Check existing innings
         const [existingRows] = await connection.execute(
-            `SELECT mi.*, m.academy_id, m.branch_id, m.overs AS match_overs
+            `SELECT mi.*, m.academy_id, m.branch_id, m.overs AS match_overs, m.match_date
              FROM cst_match_innings mi
              INNER JOIN cst_matches m ON m.id = mi.match_id
              WHERE mi.id = ?`,
@@ -143,6 +144,15 @@ export async function PUT(request, { params }) {
         }
 
         const existing = existingRows[0];
+
+        // Rule: Innings cannot be updated before match date
+        const dateCheck = validateMatchDateForScoring(existing.match_date, "Innings");
+        if (!dateCheck.allowed) {
+            return NextResponse.json(
+                { success: false, message: dateCheck.message },
+                { status: 400 }
+            );
+        }
 
         if (!verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.branch_id })) {
             return NextResponse.json(

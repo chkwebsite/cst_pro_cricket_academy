@@ -510,6 +510,7 @@ export default function OrderPaymentsPage() {
                         <thead className="table-light border-bottom">
                             <tr className="text-uppercase small text-muted">
                                 <th className="ps-4">ID</th>
+                                <th className="text-end pe-4">Actions</th>
                                 <th>Order #</th>
                                 <th>Academy</th>
                                 <th>Customer</th>
@@ -518,7 +519,6 @@ export default function OrderPaymentsPage() {
                                 <th>Status</th>
                                 <th>Txn Ref</th>
                                 <th>Date</th>
-                                <th className="text-end pe-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -549,6 +549,34 @@ export default function OrderPaymentsPage() {
                                     return (
                                         <tr key={p.id}>
                                             <td className="ps-4 fw-semibold text-muted small">#{p.id}</td>
+                                            <td className="text-end pe-4">
+                                                <div className="d-flex align-items-center justify-content-end gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setViewPayment(p)}
+                                                        className="btn btn-sm btn-light border p-1.5 text-navy"
+                                                        title="View Receipt Details"
+                                                    >
+                                                        <Receipt size={14} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenEdit(p)}
+                                                        className="btn btn-sm btn-light border p-1.5 text-navy"
+                                                        title="Edit Status & Notes"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeletePayment(p.id)}
+                                                        className="btn btn-sm btn-light border p-1.5 text-danger"
+                                                        title="Delete Payment"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <Link
                                                     href={`/next_panel/orders?search=${encodeURIComponent(p.order_no || "")}`}
@@ -602,34 +630,6 @@ export default function OrderPaymentsPage() {
                                             </td>
                                             <td className="small text-dark fw-medium">
                                                 {formatPaymentDate(p.payment_date || p.created_at)}
-                                            </td>
-                                            <td className="text-end pe-4">
-                                                <div className="d-flex align-items-center justify-content-end gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setViewPayment(p)}
-                                                        className="btn btn-sm btn-light border p-1.5 text-navy"
-                                                        title="View Receipt Details"
-                                                    >
-                                                        <Receipt size={14} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenEdit(p)}
-                                                        className="btn btn-sm btn-light border p-1.5 text-navy"
-                                                        title="Edit Status & Notes"
-                                                    >
-                                                        <Edit size={14} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeletePayment(p.id)}
-                                                        className="btn btn-sm btn-light border p-1.5 text-danger"
-                                                        title="Delete Payment"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     );

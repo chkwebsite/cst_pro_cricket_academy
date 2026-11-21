@@ -384,13 +384,13 @@ export default function BatchesPage() {
                                 <thead className="table-light">
                                     <tr>
                                         <th style={{ width: "40px" }} className="text-center">#</th>
+                                        <th style={{ width: "150px" }} className="text-end">Actions</th>
                                         <th style={{ minWidth: "200px" }}>Batch Details</th>
                                         <th style={{ minWidth: "150px" }}>Program & Age</th>
                                         <th style={{ minWidth: "160px" }}>Schedule & Days</th>
                                         <th style={{ minWidth: "130px" }}>Branch</th>
                                         <th style={{ width: "100px" }} className="text-center">Capacity</th>
                                         <th style={{ width: "90px" }} className="text-center">Status</th>
-                                        <th style={{ width: "150px" }} className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -404,6 +404,33 @@ export default function BatchesPage() {
                                         return (
                                             <tr key={batch.id}>
                                                 <td className="text-center text-muted small">{(page - 1) * PAGE_SIZE + index + 1}</td>
+
+                                                <td className="text-end">
+                                                    <div className="d-inline-flex align-items-center gap-1">
+                                                        <Link
+                                                            href={`/next_panel/batches/${batch.id}`}
+                                                            className="btn btn-sm btn-outline-info p-1"
+                                                            title="View Roster & Hub"
+                                                        >
+                                                            <Eye size={14} />
+                                                        </Link>
+                                                        <Link
+                                                            href={`/next_panel/batches/${batch.id}/edit`}
+                                                            className="btn btn-sm btn-outline-primary p-1"
+                                                            title="Edit Batch"
+                                                        >
+                                                            <Edit size={14} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteBatch(batch)}
+                                                            className="btn btn-sm btn-outline-danger p-1"
+                                                            title="Delete Batch"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <div className="fw-bold text-dark">
                                                         <Link
@@ -477,33 +504,6 @@ export default function BatchesPage() {
                                                             Inactive
                                                         </span>
                                                     )}
-                                                </td>
-
-                                                <td className="text-end">
-                                                    <div className="d-inline-flex align-items-center gap-1">
-                                                        <Link
-                                                            href={`/next_panel/batches/${batch.id}`}
-                                                            className="btn btn-sm btn-outline-info p-1"
-                                                            title="View Roster & Hub"
-                                                        >
-                                                            <Eye size={14} />
-                                                        </Link>
-                                                        <Link
-                                                            href={`/next_panel/batches/${batch.id}/edit`}
-                                                            className="btn btn-sm btn-outline-primary p-1"
-                                                            title="Edit Batch"
-                                                        >
-                                                            <Edit size={14} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDeleteBatch(batch)}
-                                                            className="btn btn-sm btn-outline-danger p-1"
-                                                            title="Delete Batch"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         );

@@ -241,13 +241,13 @@ export default function GalleryCategoriesPage() {
                                 <thead className="table-light">
                                     <tr>
                                         <th style={{ width: "60px" }}>#</th>
+                                        <th style={{ width: "150px" }} className="text-end">Actions</th>
                                         <th style={{ width: "100px" }}>Image</th>
                                         <th>Category Name</th>
                                         <th>Slug</th>
                                         <th>Academy</th>
                                         <th style={{ width: "90px" }}>Sort</th>
                                         <th style={{ width: "100px" }}>Status</th>
-                                        <th style={{ width: "150px" }} className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -268,6 +268,33 @@ export default function GalleryCategoriesPage() {
                                         pagedCategories.map((cat, idx) => (
                                             <tr key={cat.id}>
                                                 <td className="text-muted small">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                                <td className="text-end">
+                                                    <div className="d-flex justify-content-end gap-1">
+                                                        <Link
+                                                            href={`/next_panel/gallery-albums?category_id=${cat.id}`}
+                                                            className="btn btn-sm btn-outline-info"
+                                                            title="View albums in this category"
+                                                        >
+                                                            Albums
+                                                        </Link>
+                                                        <Link
+                                                            href={`/next_panel/gallery-categories/${cat.id}/edit`}
+                                                            className="btn btn-sm btn-outline-secondary"
+                                                            title="Edit category"
+                                                        >
+                                                            <Edit size={15} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => handleDelete(cat)}
+                                                            disabled={deletingId === cat.id}
+                                                            title="Delete category"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     {cat.featured_image ? (
                                                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -319,33 +346,6 @@ export default function GalleryCategoriesPage() {
                                                             Inactive
                                                         </span>
                                                     )}
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="d-flex justify-content-end gap-1">
-                                                        <Link
-                                                            href={`/next_panel/gallery-albums?category_id=${cat.id}`}
-                                                            className="btn btn-sm btn-outline-info"
-                                                            title="View albums in this category"
-                                                        >
-                                                            Albums
-                                                        </Link>
-                                                        <Link
-                                                            href={`/next_panel/gallery-categories/${cat.id}/edit`}
-                                                            className="btn btn-sm btn-outline-secondary"
-                                                            title="Edit category"
-                                                        >
-                                                            <Edit size={15} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() => handleDelete(cat)}
-                                                            disabled={deletingId === cat.id}
-                                                            title="Delete category"
-                                                        >
-                                                            <Trash2 size={15} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))

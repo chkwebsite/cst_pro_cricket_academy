@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
+import { autoUpdateTodayLiveMatches } from "@/app/components/lib/match-date-validator";
 
 
 const ROUND_TYPES = [
@@ -125,16 +126,9 @@ export async function GET(request) {
     try {
         connection = await pool.getConnection();
 
-        // Auto-update tournament matches to 'Live' when scheduled_date is today
+        // Auto-update matches & tournament matches to 'Live' on match date
         try {
-            const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-            await connection.execute(
-                `UPDATE cst_tournament_matches
-                 SET status = 'Live', updated_at = NOW()
-                 WHERE (scheduled_date = CURDATE() OR scheduled_date = DATE(DATE_ADD(NOW(), INTERVAL 330 MINUTE)) OR scheduled_date = ?)
-                   AND status NOT IN ('Completed', 'Cancelled', 'Live')`,
-                [todayIST]
-            );
+            await autoUpdateTodayLiveMatches(connection);
         } catch (autoLiveErr) {
             console.error("Auto-update live tournament matches error:", autoLiveErr);
         }

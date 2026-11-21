@@ -124,25 +124,17 @@ export default function RolePermissionsPage() {
                                     <thead className="table-success">
                                         <tr>
                                             <th>#</th>
+                                            <th>Actions</th>
                                             <th>Role</th>
                                             <th>Module</th>
                                             <th>Permission</th>
                                             <th>Assigned On</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pagedRolePermissions.map((item, idx) => (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                                <td>{item.role_name}</td>
-                                                <td>{item.module_name}</td>
-                                                <td>{item.permission_name}</td>
-                                                <td>
-                                                    {item.created_at
-                                                        ? new Date(item.created_at).toLocaleDateString()
-                                                        : "—"}
-                                                </td>
                                                 <td>
                                                     <div className="d-flex justify-content-start gap-2">
                                                         <Link
@@ -161,6 +153,14 @@ export default function RolePermissionsPage() {
                                                             <Trash2 size={16} />
                                                         </button>
                                                     </div>
+                                                </td>
+                                                <td>{item.role_name}</td>
+                                                <td>{item.module_name}</td>
+                                                <td>{item.permission_name}</td>
+                                                <td>
+                                                    {item.created_at
+                                                        ? new Date(item.created_at).toLocaleDateString()
+                                                        : "—"}
                                                 </td>
                                             </tr>
                                         ))}

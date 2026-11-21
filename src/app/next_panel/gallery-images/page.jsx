@@ -373,19 +373,47 @@ export default function GalleryImagesPage() {
                                     <thead className="table-light">
                                         <tr>
                                             <th style={{ width: "50px" }}>#</th>
+                                            <th style={{ width: "130px" }} className="text-end">Actions</th>
                                             <th style={{ width: "100px" }}>Photo</th>
                                             <th>Caption / Title</th>
                                             <th>Album</th>
                                             <th>Alt Text</th>
                                             <th style={{ width: "80px" }}>Sort</th>
                                             <th style={{ width: "90px" }}>Status</th>
-                                            <th style={{ width: "130px" }} className="text-end">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pagedImages.map((img, idx) => (
                                             <tr key={img.id}>
                                                 <td className="text-muted small">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                                <td className="text-end">
+                                                    <div className="d-flex justify-content-end gap-1">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-info"
+                                                            onClick={() => setLightboxImage(img)}
+                                                            title="Preview full size"
+                                                        >
+                                                            <Eye size={15} />
+                                                        </button>
+                                                        <Link
+                                                            href={`/next_panel/gallery-images/${img.id}/edit`}
+                                                            className="btn btn-sm btn-outline-secondary"
+                                                            title="Edit image"
+                                                        >
+                                                            <Edit size={15} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => handleDelete(img)}
+                                                            disabled={deletingId === img.id}
+                                                            title="Delete image"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img
@@ -427,34 +455,6 @@ export default function GalleryImagesPage() {
                                                             Inactive
                                                         </span>
                                                     )}
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="d-flex justify-content-end gap-1">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-info"
-                                                            onClick={() => setLightboxImage(img)}
-                                                            title="Preview full size"
-                                                        >
-                                                            <Eye size={15} />
-                                                        </button>
-                                                        <Link
-                                                            href={`/next_panel/gallery-images/${img.id}/edit`}
-                                                            className="btn btn-sm btn-outline-secondary"
-                                                            title="Edit image"
-                                                        >
-                                                            <Edit size={15} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() => handleDelete(img)}
-                                                            disabled={deletingId === img.id}
-                                                            title="Delete image"
-                                                        >
-                                                            <Trash2 size={15} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

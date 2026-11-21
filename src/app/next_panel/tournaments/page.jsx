@@ -230,6 +230,8 @@ export default function TournamentsPage() {
                             <table className="table align-middle mb-0">
                                 <thead>
                                     <tr>
+                                        <th style={{ width: "50px" }}>#</th>
+                                        <th style={{ width: "110px" }}>Actions</th>
                                         <th>Tournament</th>
                                         <th>Branch</th>
                                         <th>Format</th>
@@ -237,23 +239,43 @@ export default function TournamentsPage() {
                                         <th>Teams</th>
                                         <th>Fee</th>
                                         <th>Status</th>
-                                        <th className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan={8} className="text-center text-muted py-5">Loading tournaments...</td></tr>
+                                        <tr><td colSpan={9} className="text-center text-muted py-5">Loading tournaments...</td></tr>
                                     ) : rows.length === 0 ? (
                                         <tr>
-                                            <td colSpan={8} className="text-center text-muted py-5">
+                                            <td colSpan={9} className="text-center text-muted py-5">
                                                 {hasFilters
                                                     ? "No tournaments match these filters."
                                                     : "No tournaments yet. Add one to get started."}
                                             </td>
                                         </tr>
                                     ) : (
-                                        pagedRows.map((row) => (
+                                        pagedRows.map((row, idx) => (
                                             <tr key={row.id}>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="d-inline-flex gap-2">
+                                                        <Link
+                                                            href={`${BASE}/${row.id}/edit`}
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            aria-label={`Edit ${row.tournament_name}`}
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            disabled={busyId === row.id}
+                                                            onClick={() => remove(row)}
+                                                            aria-label={`Delete ${row.tournament_name}`}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <div className="fw-semibold">{row.tournament_name}</div>
                                                     <div className="small text-muted">
@@ -278,26 +300,6 @@ export default function TournamentsPage() {
                                                 <td>{formatFee(row.team_fee)}</td>
                                                 <td>
                                                     <span className={`badge ${STATUS_BADGE[row.status] || "bg-secondary"}`}>{row.status}</span>
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="d-inline-flex gap-2">
-                                                        <Link
-                                                            href={`${BASE}/${row.id}/edit`}
-                                                            className="btn btn-sm btn-outline-primary"
-                                                            aria-label={`Edit ${row.tournament_name}`}
-                                                        >
-                                                            <Pencil size={14} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            disabled={busyId === row.id}
-                                                            onClick={() => remove(row)}
-                                                            aria-label={`Delete ${row.tournament_name}`}
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))

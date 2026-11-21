@@ -400,6 +400,7 @@ export default function ProductStockPage() {
                             <thead className="table-light text-secondary small text-uppercase">
                                 <tr>
                                     <th style={{ width: "50px" }} className="text-center">#</th>
+                                    <th style={{ width: "100px" }} className="text-end pe-3">Action</th>
                                     <th>Product</th>
                                     <th>Academy</th>
                                     <th>Branch</th>
@@ -408,7 +409,6 @@ export default function ProductStockPage() {
                                     <th className="text-center">Available</th>
                                     <th className="text-center">Low Stock Alert</th>
                                     <th className="text-center">Stock Status</th>
-                                    <th style={{ width: "100px" }} className="text-end pe-3">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -423,6 +423,16 @@ export default function ProductStockPage() {
                                     return (
                                         <tr key={item.id}>
                                             <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                            <td className="text-end pe-3">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+                                                    onClick={() => handleOpenEdit(item)}
+                                                >
+                                                    <Edit size={14} />
+                                                    <span>Adjust</span>
+                                                </button>
+                                            </td>
                                             <td>
                                                 <div className="fw-bold text-dark">{item.product_name}</div>
                                                 <div className="small text-muted">
@@ -451,16 +461,6 @@ export default function ProductStockPage() {
                                                 <span className={`badge ${badgeClass} px-2 py-1`}>
                                                     {item.stock_status}
                                                 </span>
-                                            </td>
-                                            <td className="text-end pe-3">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
-                                                    onClick={() => handleOpenEdit(item)}
-                                                >
-                                                    <Edit size={14} />
-                                                    <span>Adjust</span>
-                                                </button>
                                             </td>
                                         </tr>
                                     );

@@ -218,6 +218,8 @@ export default function FeePaymentForm({ id = null }) {
         if (f.outside_player_name) return f.outside_player_name;
         if (f.player_name) return f.player_name;
         if (f.outside_player_id) return `Outside player #${f.outside_player_id}`;
+        if (f.tournament_team_name) return f.tournament_team_name;
+        if (f.match_team_name) return f.match_team_name;
         return "";
     };
 

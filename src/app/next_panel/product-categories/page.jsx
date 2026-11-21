@@ -382,6 +382,7 @@ export default function ProductCategoriesPage() {
                             <thead className="table-light text-secondary small text-uppercase">
                                 <tr>
                                     <th style={{ width: "60px" }} className="text-center">#</th>
+                                    <th style={{ width: "120px" }} className="text-end pe-3">Actions</th>
                                     <th style={{ width: "70px" }}>Image</th>
                                     <th>Category Name</th>
                                     <th>Academy</th>
@@ -389,13 +390,32 @@ export default function ProductCategoriesPage() {
                                     <th>Description</th>
                                     <th className="text-center">Sort Order</th>
                                     <th className="text-center">Status</th>
-                                    <th style={{ width: "120px" }} className="text-end pe-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pagedCategories.map((item, idx) => (
                                     <tr key={item.id}>
                                         <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                        <td className="text-end pe-3">
+                                            <div className="btn-group btn-group-sm">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary"
+                                                    onClick={() => handleOpenEdit(item)}
+                                                    title="Edit Category"
+                                                >
+                                                    <Edit size={15} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-danger"
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Delete Category"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td>
                                             {item.category_image ? (
                                                 <img
@@ -445,26 +465,6 @@ export default function ProductCategoriesPage() {
                                             >
                                                 {Number(item.status) === 1 ? "Active" : "Inactive"}
                                             </button>
-                                        </td>
-                                        <td className="text-end pe-3">
-                                            <div className="btn-group btn-group-sm">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-secondary"
-                                                    onClick={() => handleOpenEdit(item)}
-                                                    title="Edit Category"
-                                                >
-                                                    <Edit size={15} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-danger"
-                                                    onClick={() => handleDelete(item)}
-                                                    title="Delete Category"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            </div>
                                         </td>
                                     </tr>
                                 ))}

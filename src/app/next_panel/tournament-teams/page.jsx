@@ -320,6 +320,7 @@ export default function TournamentTeamsPage() {
                                         <thead className="table-success">
                                             <tr>
                                                 <th>#</th>
+                                                <th>Actions</th>
                                                 <th>Tournament</th>
                                                 {isSuper && <th>Academy</th>}
                                                 <th>Branch</th>
@@ -330,13 +331,44 @@ export default function TournamentTeamsPage() {
                                                 <th>Fee</th>
                                                 <th>Payment</th>
                                                 <th>Status</th>
-                                                <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {pagedRows.map((r, idx) => (
                                                 <tr key={r.id} className={isMine(r) ? "table-warning" : ""}>
                                                     <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                    <td>
+                                                        <div className="d-flex justify-content-start gap-2">
+                                                            {canManage(r) ? (
+                                                                <>
+                                                                    <Link
+                                                                        href={`/next_panel/tournament-teams/${r.id}/edit`}
+                                                                        className="btn btn-outline-secondary"
+                                                                        aria-label="Edit registration"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </Link>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-outline-danger"
+                                                                        onClick={() => handleDelete(r)}
+                                                                        aria-label="Remove registration"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-outline-secondary"
+                                                                    disabled
+                                                                    title="Only registrations of your own branch can be changed"
+                                                                >
+                                                                    <Lock size={16} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                     <td>
                                                         <div>{r.tournament_name}</div>
                                                         <small className="text-muted">{r.tournament_code || "—"}</small>
@@ -371,38 +403,6 @@ export default function TournamentTeamsPage() {
                                                         <span className={`badge ${STATUS_BADGE[r.status] || "bg-secondary"}`}>
                                                             {r.status}
                                                         </span>
-                                                    </td>
-                                                    <td>
-                                                        <div className="d-flex justify-content-start gap-2">
-                                                            {canManage(r) ? (
-                                                                <>
-                                                                    <Link
-                                                                        href={`/next_panel/tournament-teams/${r.id}/edit`}
-                                                                        className="btn btn-outline-secondary"
-                                                                        aria-label="Edit registration"
-                                                                    >
-                                                                        <Edit size={16} />
-                                                                    </Link>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn btn-outline-danger"
-                                                                        onClick={() => handleDelete(r)}
-                                                                        aria-label="Remove registration"
-                                                                    >
-                                                                        <Trash2 size={16} />
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-outline-secondary"
-                                                                    disabled
-                                                                    title="Only registrations of your own branch can be changed"
-                                                                >
-                                                                    <Lock size={16} />
-                                                                </button>
-                                                            )}
-                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}

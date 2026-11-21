@@ -217,6 +217,7 @@ export default function StaffPage() {
                                     <thead className="table-success">
                                         <tr>
                                             <th>#</th>
+                                            <th>Actions</th>
                                             <th>Appointment No</th>
                                             <th>Name</th>
                                             <th>Role</th>
@@ -224,24 +225,12 @@ export default function StaffPage() {
                                             <th>Speciality</th>
                                             <th>Current Salary</th>
                                             <th>Status</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pagedStaff.map((item, idx) => (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                                <td>{item.appointment_no}</td>
-                                                <td>{item.first_name} {item.last_name || ""}</td>
-                                                <td>{item.role_name || "—"}</td>
-                                                <td>{item.academy_name}-{item.branch_name || "—"}</td>
-                                                <td>{item.speciality || "—"}</td>
-                                                <td>{formatSalary(item.current_salary)}</td>
-                                                <td>
-                                                    <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
-                                                        {item.status === 1 ? "Active" : "Inactive"}
-                                                    </span>
-                                                </td>
                                                 <td>
                                                     <div className="d-flex justify-content-start gap-2">
                                                         <Link
@@ -260,6 +249,17 @@ export default function StaffPage() {
                                                             <Trash2 size={16} />
                                                         </button>
                                                     </div>
+                                                </td>
+                                                <td>{item.appointment_no}</td>
+                                                <td>{item.first_name} {item.last_name || ""}</td>
+                                                <td>{item.role_name || "—"}</td>
+                                                <td>{item.academy_name}-{item.branch_name || "—"}</td>
+                                                <td>{item.speciality || "—"}</td>
+                                                <td>{formatSalary(item.current_salary)}</td>
+                                                <td>
+                                                    <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
+                                                        {item.status === 1 ? "Active" : "Inactive"}
+                                                    </span>
                                                 </td>
                                             </tr>
                                         ))}

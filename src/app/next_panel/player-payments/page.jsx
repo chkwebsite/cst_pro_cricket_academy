@@ -414,6 +414,7 @@ function PlayerPaymentsContent() {
                         <thead className="table-light">
                             <tr>
                                 <th>Receipt No</th>
+                                <th className="text-center" style={{ width: "130px" }}>Actions</th>
                                 <th>Date</th>
                                 <th>Player Details</th>
                                 <th>Program & Month</th>
@@ -421,7 +422,6 @@ function PlayerPaymentsContent() {
                                 <th>Mode & Reference</th>
                                 <th>Received By</th>
                                 <th className="text-center">Status</th>
-                                <th className="text-center" style={{ width: "130px" }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -462,6 +462,34 @@ function PlayerPaymentsContent() {
                                                 {p.receipt_no}
                                             </Link>
                                         </td>
+                                        <td className="text-center">
+                                            <div className="d-flex justify-content-center gap-1">
+                                                <Link
+                                                    href={`/next_panel/player-payments/${p.id}`}
+                                                    className="btn btn-sm btn-outline-primary"
+                                                    title="View Receipt"
+                                                >
+                                                    <Eye size={14} />
+                                                </Link>
+                                                <Link
+                                                    href={`/next_panel/player-payments/${p.id}/edit`}
+                                                    className="btn btn-sm btn-outline-secondary"
+                                                    title="Edit Payment Note"
+                                                >
+                                                    <Edit size={14} />
+                                                </Link>
+                                                {p.payment_status === "Failed" && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => handleDelete(p)}
+                                                        title="Delete Failed Record"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="small text-muted">
                                             {p.payment_date ? p.payment_date.slice(0, 10) : "-"}
                                         </td>
@@ -491,34 +519,6 @@ function PlayerPaymentsContent() {
                                             <span className={`badge ${STATUS_BADGE[p.payment_status] || "bg-secondary"}`}>
                                                 {p.payment_status || "Success"}
                                             </span>
-                                        </td>
-                                        <td className="text-center">
-                                            <div className="d-flex justify-content-center gap-1">
-                                                <Link
-                                                    href={`/next_panel/player-payments/${p.id}`}
-                                                    className="btn btn-sm btn-outline-primary"
-                                                    title="View Receipt"
-                                                >
-                                                    <Eye size={14} />
-                                                </Link>
-                                                <Link
-                                                    href={`/next_panel/player-payments/${p.id}/edit`}
-                                                    className="btn btn-sm btn-outline-secondary"
-                                                    title="Edit Payment Note"
-                                                >
-                                                    <Edit size={14} />
-                                                </Link>
-                                                {p.payment_status === "Failed" && (
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => handleDelete(p)}
-                                                        title="Delete Failed Record"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                )}
-                                            </div>
                                         </td>
                                     </tr>
                                 ))

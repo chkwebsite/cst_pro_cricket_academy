@@ -318,6 +318,8 @@ export default function MatchBowlingScorecardPage() {
                             <table className="table align-middle table-hover mb-0">
                                 <thead className="table-success">
                                     <tr>
+                                        <th style={{ width: "50px" }}>#</th>
+                                        <th style={{ width: "110px" }}>Actions</th>
                                         <th>Bowler</th>
                                         <th className="text-center">O</th>
                                         <th className="text-center">Balls</th>
@@ -327,12 +329,31 @@ export default function MatchBowlingScorecardPage() {
                                         <th className="text-center">Econ</th>
                                         <th className="text-center">WD</th>
                                         <th className="text-center">NB</th>
-                                        <th className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pagedBowling.map((item) => (
+                                    {pagedBowling.map((item, idx) => (
                                         <tr key={item.id}>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start gap-2">
+                                                    <Link
+                                                        href={`/next_panel/match-bowling-scorecard/${item.id}/edit`}
+                                                        className="btn btn-sm btn-outline-secondary"
+                                                        title="Edit Bowling Record"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => handleDelete(item)}
+                                                        title="Delete Bowling Record"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div className="fw-bold text-dark">
                                                     {item.player_name || `Bowler #${item.match_player_id}`}
@@ -373,25 +394,6 @@ export default function MatchBowlingScorecardPage() {
                                             </td>
                                             <td className="text-center text-muted">{item.wides}</td>
                                             <td className="text-center text-muted">{item.no_balls}</td>
-                                            <td className="text-end">
-                                                <div className="d-flex justify-content-end gap-2">
-                                                    <Link
-                                                        href={`/next_panel/match-bowling-scorecard/${item.id}/edit`}
-                                                        className="btn btn-sm btn-outline-secondary"
-                                                        title="Edit Bowling Record"
-                                                    >
-                                                        <Edit size={14} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => handleDelete(item)}
-                                                        title="Delete Bowling Record"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

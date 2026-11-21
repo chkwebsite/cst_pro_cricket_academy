@@ -195,11 +195,11 @@ console.log("payment", payments);
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Transaction No.</th>
                                         <th>Booking</th>
                                         <th>Payment Date</th>
                                         <th className="text-end">Amount</th>
                                         <th>Mode</th>
-                                        <th>Transaction No.</th>
                                         <th>Remarks</th>
                                         <th>Actions</th>
                                     </tr>
@@ -208,14 +208,6 @@ console.log("payment", payments);
                                     {pagedPayments.map((item, idx) => (
                                         <tr key={item.id}>
                                             <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                            <td>#{item.booking_id}-{item.booking_no}</td>
-                                            <td>{formatDate(item.payment_date)}</td>
-                                            <td className="text-end">{formatAmount(item.amount)}</td>
-                                            <td>
-                                                <span className="badge text-bg-light border">{item.payment_mode}</span>
-                                            </td>
-                                            <td>{item.transaction_no || "—"}</td>
-                                            <td style={{ maxWidth: "240px" }}>{item.remarks || "—"}</td>
                                             <td>
                                                 <div className="d-flex justify-content-start gap-2">
                                                     <Link
@@ -235,6 +227,14 @@ console.log("payment", payments);
                                                     </button>
                                                 </div>
                                             </td>
+                                            <td>#{item.booking_id}-{item.booking_no}</td>
+                                            <td>{formatDate(item.payment_date)}</td>
+                                            <td className="text-end">{formatAmount(item.amount)}</td>
+                                            <td>
+                                                <span className="badge text-bg-light border">{item.payment_mode}</span>
+                                            </td>
+                                            <td>{item.transaction_no || "—"}</td>
+                                            <td style={{ maxWidth: "240px" }}>{item.remarks || "—"}</td>
                                         </tr>
                                     ))}
                                 </tbody>

@@ -293,12 +293,12 @@ export default function PlayerProgramFeeDetailPage() {
                                 <thead className="table-light">
                                     <tr>
                                         <th>Receipt No</th>
+                                        <th className="text-center d-print-none" style={{ width: "120px" }}>Actions</th>
                                         <th>Date</th>
                                         <th>Mode</th>
                                         <th>Txn / Ref No</th>
                                         <th>Received By</th>
                                         <th className="text-end">Paid Amount</th>
-                                        <th className="text-center d-print-none" style={{ width: "120px" }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -309,11 +309,6 @@ export default function PlayerProgramFeeDetailPage() {
                                                     {p.receipt_no}
                                                 </Link>
                                             </td>
-                                            <td>{p.payment_date?.slice(0, 10)}</td>
-                                            <td><span className="badge bg-light text-dark border">{p.payment_mode}</span></td>
-                                            <td className="text-muted small">{p.transaction_no || "—"}</td>
-                                            <td className="text-muted small">{p.received_by_name || "Staff"}</td>
-                                            <td className="text-end fw-bold text-success">₹{Number(p.paid_amount).toFixed(2)}</td>
                                             <td className="text-center d-print-none">
                                                 <Link
                                                     href={`/next_panel/player-payments/${p.id}`}
@@ -322,6 +317,11 @@ export default function PlayerProgramFeeDetailPage() {
                                                     Receipt
                                                 </Link>
                                             </td>
+                                            <td>{p.payment_date?.slice(0, 10)}</td>
+                                            <td><span className="badge bg-light text-dark border">{p.payment_mode}</span></td>
+                                            <td className="text-muted small">{p.transaction_no || "—"}</td>
+                                            <td className="text-muted small">{p.received_by_name || "Staff"}</td>
+                                            <td className="text-end fw-bold text-success">₹{Number(p.paid_amount).toFixed(2)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

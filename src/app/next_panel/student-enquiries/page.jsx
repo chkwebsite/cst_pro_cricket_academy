@@ -425,13 +425,13 @@ export default function StudentEnquiriesPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th className="text-end">Actions</th>
                                         <th>Student</th>
                                         <th>Contact</th>
                                         <th>Branch &amp; Program</th>
                                         <th>Source</th>
                                         <th>Status</th>
                                         <th>Follow-ups</th>
-                                        <th className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -446,6 +446,33 @@ export default function StudentEnquiriesPage() {
                                                     <span className="badge bg-light text-dark border">
                                                         #{item.id}
                                                     </span>
+                                                </td>
+                                                <td className="text-end">
+                                                    <div className="d-flex justify-content-end gap-1">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-info"
+                                                            onClick={() => setSelectedEnquiry(item)}
+                                                            title="View Details"
+                                                        >
+                                                            <Eye size={14} />
+                                                        </button>
+                                                        <Link
+                                                            href={`/next_panel/student-enquiries/${item.id}/edit`}
+                                                            className="btn btn-sm btn-outline-secondary"
+                                                            title="Edit Enquiry"
+                                                        >
+                                                            <Edit size={14} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => handleDelete(item)}
+                                                            title="Delete Enquiry"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                                 <td>
                                                     <div className="fw-bold text-dark">{item.student_name}</div>
@@ -513,33 +540,6 @@ export default function StudentEnquiriesPage() {
                                                             Next: {formatDate(item.next_follow_up_date)}
                                                         </small>
                                                     )}
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="d-flex justify-content-end gap-1">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-info"
-                                                            onClick={() => setSelectedEnquiry(item)}
-                                                            title="View Details"
-                                                        >
-                                                            <Eye size={14} />
-                                                        </button>
-                                                        <Link
-                                                            href={`/next_panel/student-enquiries/${item.id}/edit`}
-                                                            className="btn btn-sm btn-outline-secondary"
-                                                            title="Edit Enquiry"
-                                                        >
-                                                            <Edit size={14} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() => handleDelete(item)}
-                                                            title="Delete Enquiry"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         );

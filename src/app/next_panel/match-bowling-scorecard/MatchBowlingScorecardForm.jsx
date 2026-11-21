@@ -1,13 +1,15 @@
 "use client";
 
-import { ArrowLeft, Check, Lock, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, Calendar, Check, Lock, RefreshCw, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
 import {
     calculateEconomy,
+    formatDate,
     getPlayerDisplayName,
+    isMatchDateInFuture,
     isValidCricketOvers,
     oversToBalls,
 } from "../components/cricketHelpers";
@@ -225,6 +227,11 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
             return;
         }
 
+        if (isFutureMatch) {
+            setError(`Bowling scores cannot be added or updated before the scheduled match date (${formatDate(selectedMatch?.match_date)}).`);
+            return;
+        }
+
         if (!formData.match_id || !formData.innings_id || !formData.match_player_id) {
             setError("Match, Innings and Bowler are required.");
             return;
@@ -308,6 +315,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
     };
 
     const selectedMatch = matches.find((m) => String(m.id) === String(formData.match_id));
+    const isFutureMatch = Boolean(selectedMatch?.match_date && isMatchDateInFuture(selectedMatch.match_date));
     const matchOvers = selectedMatch?.overs ? Number(selectedMatch.overs) : 20;
     const maxMatchBalls = matchOvers * 6;
 
@@ -378,6 +386,18 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
             {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
             <div className="row g-3">
+                {/* Future Match Locked Alert */}
+                {isFutureMatch && (
+                    <div className="col-12">
+                        <div className="alert alert-warning border border-warning-subtle d-flex align-items-center gap-2 mb-0 shadow-sm">
+                            <Calendar size={18} className="text-warning flex-shrink-0" />
+                            <span>
+                                <strong>Upcoming Match ({formatDate(selectedMatch?.match_date)}):</strong> Bowling scores cannot be added or updated before the scheduled match date.
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Innings Completed Locked Alert */}
                 {isLockedForCurrentUser && (
                     <div className="col-12">
@@ -665,7 +685,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                     <Link href={returnTo} className="btn btn-outline-secondary px-4">
                         Cancel
                     </Link>
-                    <button type="submit" className="btn btn-primary px-4" disabled={loading || hasValidationErrors || isLockedForCurrentUser}>
+                    <button type="submit" className="btn btn-primary px-4" disabled={loading || hasValidationErrors || isLockedForCurrentUser || isFutureMatch}>
                         {loading ? (
                             <>
                                 <RefreshCw className="spinner-border spinner-border-sm me-2" />

@@ -1,12 +1,14 @@
 "use client";
 
-import { ArrowLeft, ArrowUpDown, Check, Lock, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Calendar, Check, Lock, RefreshCw, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useUser } from "../components/UserContext";
 import {
     INNINGS_STATUSES,
+    formatDate,
+    isMatchDateInFuture,
     isValidCricketOvers,
     oversToBalls,
 } from "../components/cricketHelpers";
@@ -40,35 +42,96 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
     const router = useRouter();
     const searchParams = useSearchParams();
     const isEdit = Boolean(id);
-    const isLockedForCurrentUser = isEdit && formData.innings_status === "Completed" && !canEditCompletedInnings;
 
     const [formData, setFormData] = useState({
         ...EMPTY_FORM,
         match_id: searchParams.get("match_id") || "",
     });
     const [matches, setMatches] = useState([]);
+
+    // Match / Tournament selection states
+    const [selectedType, setSelectedType] = useState("Match"); // "Match" | "Tournament"
+    const [tournaments, setTournaments] = useState([]);
+    const [tournamentsLoading, setTournamentsLoading] = useState(false);
+    const [selectedTournamentId, setSelectedTournamentId] = useState("");
+    const [tournamentMatches, setTournamentMatches] = useState([]);
+    const [tournamentMatchesLoading, setTournamentMatchesLoading] = useState(false);
+    const [initializingFixture, setInitializingFixture] = useState(false);
+
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
     const [error, setError] = useState("");
     const [successMsg, setSuccessMsg] = useState("");
     const [autoSumExtras, setAutoSumExtras] = useState(true);
 
+    const isLockedForCurrentUser = isEdit && formData.innings_status === "Completed" && !canEditCompletedInnings;
+
     // Fetch matches list for selection
+    const fetchMatchesList = async () => {
+        try {
+            const res = await fetch("/api/matches");
+            const json = await res.json();
+            if (res.ok && json.success) {
+                setMatches(json.data || []);
+                return json.data || [];
+            }
+        } catch {
+            /* matches dropdown */
+        }
+        return [];
+    };
+
+    useEffect(() => {
+        fetchMatchesList();
+    }, []);
+
+    // Fetch tournaments list
     useEffect(() => {
         const controller = new AbortController();
         (async () => {
             try {
-                const res = await fetch("/api/matches", { signal: controller.signal });
+                setTournamentsLoading(true);
+                const res = await fetch("/api/tournaments", { signal: controller.signal });
                 const json = await res.json();
                 if (res.ok && json.success) {
-                    setMatches(json.data || []);
+                    setTournaments(json.data || []);
                 }
             } catch {
-                /* matches dropdown */
+                /* tournaments dropdown */
+            } finally {
+                setTournamentsLoading(false);
             }
         })();
         return () => controller.abort();
     }, []);
+
+    // Load tournament matches when Tournament type is active
+    useEffect(() => {
+        if (selectedType !== "Tournament") {
+            setTournamentMatches([]);
+            return;
+        }
+
+        const controller = new AbortController();
+        (async () => {
+            try {
+                setTournamentMatchesLoading(true);
+                const query = selectedTournamentId ? `?tournament_id=${selectedTournamentId}` : "";
+                const res = await fetch(`/api/tournament-matches${query}`, { signal: controller.signal });
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    setTournamentMatches(json.data || []);
+                }
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    console.error("Failed to load tournament matches", err);
+                }
+            } finally {
+                setTournamentMatchesLoading(false);
+            }
+        })();
+        return () => controller.abort();
+    }, [selectedType, selectedTournamentId]);
 
     // If Edit mode, fetch the existing innings data
     useEffect(() => {
@@ -111,8 +174,25 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
         return () => controller.abort();
     }, [id, isEdit]);
 
+    // Auto-detect whether match is a Tournament match or regular Match
+    useEffect(() => {
+        if (!formData.match_id || matches.length === 0) return;
+        const m = matches.find((item) => String(item.id) === String(formData.match_id));
+        if (m && m.tournament_id) {
+            setSelectedType("Tournament");
+            setSelectedTournamentId(String(m.tournament_id));
+        }
+    }, [formData.match_id, matches]);
+
+    // Regular matches (excluding tournament-linked matches for clean separation)
+    const regularMatches = useMemo(() => {
+        const reg = matches.filter((m) => !m.tournament_id);
+        return reg.length > 0 ? reg : matches;
+    }, [matches]);
+
     // Current selected match object
     const selectedMatch = matches.find((m) => String(m.id) === String(formData.match_id));
+    const isFutureMatch = Boolean(selectedMatch?.match_date && isMatchDateInFuture(selectedMatch.match_date));
     const matchOvers = selectedMatch?.overs ? Number(selectedMatch.overs) : 20;
 
     // Auto-fill total_overs from selected match when match changes or loads in New mode
@@ -121,27 +201,51 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             const mOvers = selectedMatch.overs ? Number(selectedMatch.overs) : 20;
             setFormData((prev) => ({
                 ...prev,
-                total_overs: mOvers,
-                total_balls: oversToBalls(mOvers),
+                total_overs: prev.total_overs || mOvers,
+                total_balls: prev.total_balls || oversToBalls(mOvers),
             }));
         }
     }, [selectedMatch, isEdit]);
 
     // When a match is selected in New mode, auto-set batting & bowling teams and match overs
     const handleMatchChange = async (newMatchId) => {
-        const targetMatch = matches.find((m) => String(m.id) === String(newMatchId));
+        if (!newMatchId) {
+            setFormData((prev) => ({
+                ...prev,
+                match_id: "",
+                batting_team_id: "",
+                bowling_team_id: "",
+            }));
+            return;
+        }
+
+        let targetMatch = matches.find((m) => String(m.id) === String(newMatchId));
+        if (!targetMatch) {
+            try {
+                const res = await fetch(`/api/matches/${newMatchId}`);
+                const json = await res.json();
+                if (res.ok && json.success && json.data) {
+                    targetMatch = json.data;
+                    setMatches((prev) => {
+                        if (prev.some((item) => String(item.id) === String(newMatchId))) return prev;
+                        return [...prev, targetMatch];
+                    });
+                }
+            } catch {
+                /* ignore */
+            }
+        }
+
         const mOvers = targetMatch?.overs ? Number(targetMatch.overs) : 20;
 
         setFormData((prev) => ({
             ...prev,
             match_id: newMatchId,
-            batting_team_id: "",
-            bowling_team_id: "",
+            batting_team_id: targetMatch?.team_a_id ? String(targetMatch.team_a_id) : "",
+            bowling_team_id: targetMatch?.team_b_id ? String(targetMatch.team_b_id) : "",
             total_overs: mOvers,
             total_balls: oversToBalls(mOvers),
         }));
-
-        if (!newMatchId) return;
 
         // Ensure match teams are initialized via /api/match-teams
         try {
@@ -163,6 +267,87 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             }
         } catch {
             /* ignore */
+        }
+    };
+
+    // When switching between Match and Tournament types
+    const handleTypeChange = (newType) => {
+        setSelectedType(newType);
+        setError("");
+        setFormData((prev) => ({
+            ...prev,
+            match_id: "",
+            batting_team_id: "",
+            bowling_team_id: "",
+        }));
+    };
+
+    // When switching tournament filter
+    const handleTournamentChange = (tId) => {
+        setSelectedTournamentId(tId);
+        setError("");
+        setFormData((prev) => ({
+            ...prev,
+            match_id: "",
+            batting_team_id: "",
+            bowling_team_id: "",
+        }));
+    };
+
+    // When selecting a tournament fixture
+    const handleTournamentMatchSelect = async (e) => {
+        const val = e.target.value;
+        if (!val) {
+            handleMatchChange("");
+            return;
+        }
+
+        const fixtureId = val.startsWith("tm_") ? Number(val.replace("tm_", "")) : Number(val);
+        const fixture = tournamentMatches.find((tm) => Number(tm.id) === fixtureId);
+
+        if (!fixture) {
+            handleMatchChange(val);
+            return;
+        }
+
+        // Rule: Match date validation
+        if (isMatchDateInFuture(fixture.scheduled_date)) {
+            setError(`Tournament match ${fixture.match_no} (${fixture.team_a_name || "Team A"} vs ${fixture.team_b_name || "Team B"}) is scheduled for ${formatDate(fixture.scheduled_date)}. Innings cannot be created before the scheduled match date.`);
+            return;
+        }
+
+        // If fixture already has match_id linked in cst_matches
+        if (fixture.match_id) {
+            await handleMatchChange(String(fixture.match_id));
+            return;
+        }
+
+        // If not yet linked, initialize fixture scorecard
+        setInitializingFixture(true);
+        setError("");
+        try {
+            const res = await fetch(`/api/tournament-matches/${fixture.id}/scorecard`, {
+                method: "POST",
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || "Failed to initialize tournament scorecard");
+            }
+
+            // Update fixture's match_id in tournamentMatches
+            setTournamentMatches((prev) =>
+                prev.map((item) => (item.id === fixture.id ? { ...item, match_id: data.match_id } : item))
+            );
+
+            // Refresh regular/all matches
+            await fetchMatchesList();
+
+            // Bind match and teams
+            await handleMatchChange(String(data.match_id));
+        } catch (err) {
+            setError(err.message || "Unable to initialize tournament match scorecard");
+        } finally {
+            setInitializingFixture(false);
         }
     };
 
@@ -216,6 +401,11 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
 
         if (isLockedForCurrentUser) {
             setError("This innings is marked as Completed and is locked. Only Super Admin or Academy Admin can edit it.");
+            return;
+        }
+
+        if (isFutureMatch) {
+            setError(`Innings cannot be created or updated before the scheduled match date (${formatDate(selectedMatch?.match_date)}).`);
             return;
         }
 
@@ -275,6 +465,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
         };
 
         setLoading(true);
+
         try {
             const url = isEdit ? `/api/match-innings/${id}` : "/api/match-innings";
             const method = isEdit ? "PUT" : "POST";
@@ -314,6 +505,14 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
         <form onSubmit={handleSubmit}>
             {error && <div className="alert alert-danger">{error}</div>}
             {successMsg && <div className="alert alert-success">{successMsg}</div>}
+            {isFutureMatch && (
+                <div className="alert alert-warning border border-warning-subtle d-flex align-items-center gap-2 mb-3 shadow-sm">
+                    <Calendar size={18} className="text-warning flex-shrink-0" />
+                    <div>
+                        <strong>Upcoming Match ({formatDate(selectedMatch?.match_date)}):</strong> Innings cannot be created or updated before the scheduled match date.
+                    </div>
+                </div>
+            )}
             {isLockedForCurrentUser && (
                 <div className="alert alert-warning d-flex align-items-center gap-2 mb-3">
                     <Lock size={18} className="text-warning flex-shrink-0" />
@@ -324,30 +523,104 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             )}
 
             <div className="row g-3">
-                {/* Match Selection */}
-                <div className="col-md-6">
+                {/* 1. Match Type Dropdown: Match vs Tournament */}
+                <div className="col-md-3">
                     <label className="form-label fw-semibold">
-                        Match <span className="text-danger">*</span>
+                        Type <span className="text-danger">*</span>
                     </label>
                     <select
-                        name="match_id"
-                        className="form-select"
-                        value={formData.match_id}
-                        onChange={(e) => handleMatchChange(e.target.value)}
+                        className="form-select fw-semibold"
+                        value={selectedType}
+                        onChange={(e) => handleTypeChange(e.target.value)}
                         disabled={isEdit}
-                        required
                     >
-                        <option value="">Select a match...</option>
-                        {matches.map((m) => (
-                            <option key={m.id} value={m.id}>
-                                {m.match_no ? `Match ${m.match_no}` : `Match #${m.id}`}: {m.team_a_name} vs {m.team_b_name}
-                            </option>
-                        ))}
+                        <option value="Match">Match</option>
+                        <option value="Tournament">Tournament</option>
                     </select>
                 </div>
 
+                {/* 2. Tournament Selection (Visible when Tournament is selected) */}
+                {selectedType === "Tournament" && (
+                    <div className="col-md-4">
+                        <label className="form-label fw-semibold">
+                            Tournament
+                        </label>
+                        <select
+                            className="form-select"
+                            value={selectedTournamentId}
+                            onChange={(e) => handleTournamentChange(e.target.value)}
+                            disabled={isEdit || tournamentsLoading}
+                        >
+                            <option value="">All Tournaments</option>
+                            {tournaments.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                    {t.tournament_name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                {/* 3. Match Selection Dropdown (Binds based on Type and Tournament selection) */}
+                <div className={selectedType === "Tournament" ? "col-md-5" : "col-md-9"}>
+                    <label className="form-label fw-semibold">
+                        {selectedType === "Tournament" ? "Tournament Match" : "Match"}{" "}
+                        <span className="text-danger">*</span>
+                    </label>
+                    {selectedType === "Tournament" ? (
+                        <select
+                            className="form-select"
+                            value={(() => {
+                                const fixture = tournamentMatches.find(
+                                    (tm) => tm.match_id && String(tm.match_id) === String(formData.match_id)
+                                );
+                                if (fixture) return `tm_${fixture.id}`;
+                                return "";
+                            })()}
+                            onChange={handleTournamentMatchSelect}
+                            disabled={isEdit || tournamentMatchesLoading || initializingFixture}
+                            required
+                        >
+                            <option value="">
+                                {tournamentMatchesLoading
+                                    ? "Loading tournament matches..."
+                                    : initializingFixture
+                                    ? "Initializing fixture scorecard..."
+                                    : tournamentMatches.length === 0
+                                    ? "No matches found in tournament"
+                                    : "Select a tournament match..."}
+                            </option>
+                            {tournamentMatches.map((tm) => {
+                                const effStatus = tm.status || "Scheduled";
+                                return (
+                                    <option key={tm.id} value={`tm_${tm.id}`}>
+                                        Match {tm.match_no}: {tm.team_a_name || "TBD"} vs {tm.team_b_name || "TBD"}{" "}
+                                        {tm.group_name ? `(${tm.group_name})` : ""} · [{effStatus}]
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    ) : (
+                        <select
+                            name="match_id"
+                            className="form-select"
+                            value={formData.match_id}
+                            onChange={(e) => handleMatchChange(e.target.value)}
+                            disabled={isEdit}
+                            required
+                        >
+                            <option value="">Select a match...</option>
+                            {regularMatches.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                    {m.match_no ? `Match ${m.match_no}` : `Match #${m.id}`}: {m.team_a_name} vs {m.team_b_name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+
                 {/* Innings No & Status */}
-                <div className="col-md-3">
+                <div className="col-md-6">
                     <label className="form-label fw-semibold">
                         Innings No <span className="text-danger">*</span>
                     </label>
@@ -365,7 +638,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                     </select>
                 </div>
 
-                <div className="col-md-3">
+                <div className="col-md-6">
                     <label className="form-label fw-semibold">
                         Innings Status <span className="text-danger">*</span>
                     </label>
@@ -461,83 +734,79 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
 
                 {/* Score & Overs */}
                 <div className="col-md-3">
-                    <label className="form-label fw-semibold">Total Runs</label>
+                    <label className="form-label fw-semibold">
+                        Total Runs <span className="text-danger">*</span>
+                    </label>
                     <input
                         type="number"
                         name="total_runs"
                         className="form-control"
                         min="0"
+                        placeholder="e.g. 175"
                         value={formData.total_runs}
                         onChange={handleChange}
+                        required
                     />
                 </div>
 
                 <div className="col-md-3">
-                    <label className="form-label fw-semibold">Total Wickets</label>
+                    <label className="form-label fw-semibold">
+                        Total Wickets <span className="text-danger">*</span>
+                    </label>
                     <input
                         type="number"
                         name="total_wickets"
                         className="form-control"
                         min="0"
                         max="10"
+                        placeholder="0-10"
                         value={formData.total_wickets}
                         onChange={handleChange}
+                        required
                     />
                 </div>
 
                 <div className="col-md-3">
-                    <label className="form-label fw-semibold d-flex justify-content-between align-items-center">
-                        <span>Total Overs <small className="text-muted">(auto-filled)</small></span>
-                        <span className="badge bg-secondary-subtle text-secondary border">
-                            {matchOvers} ov (Read-only)
-                        </span>
+                    <label className="form-label fw-semibold">
+                        Total Overs <span className="text-danger">*</span>
                     </label>
                     <input
                         type="number"
                         step="0.1"
                         name="total_overs"
-                        className="form-control bg-light"
+                        className="form-control"
                         min="0"
+                        placeholder="e.g. 19.4"
                         value={formData.total_overs}
-                        readOnly
-                        title={`Locked to match limit: ${matchOvers} overs`}
+                        onChange={handleChange}
+                        required
                     />
-                    <div className="d-flex justify-content-between align-items-center mt-1">
-                        <small className="text-muted">
-                            Balls bowled: {formData.total_balls || oversToBalls(formData.total_overs)}
-                        </small>
-                        <small className="text-muted">
-                            Match: {matchOvers} ov
-                        </small>
-                    </div>
+                    <small className="form-text text-muted">
+                        Max allowed: {matchOvers} overs ({matchOvers * 6} balls)
+                    </small>
                 </div>
 
                 <div className="col-md-3">
-                    <label className="form-label fw-semibold d-flex justify-content-between align-items-center">
-                        <span>Target Runs</span>
-                        <span className="badge bg-info-subtle text-info border">
-                            Auto (Total + Extras)
-                        </span>
-                    </label>
+                    <label className="form-label fw-semibold">Target Runs</label>
                     <input
                         type="number"
                         name="target_runs"
                         className="form-control"
-                        placeholder="Auto: Total Runs + Extras"
                         min="0"
+                        placeholder="Auto / optional"
                         value={formData.target_runs}
                         onChange={handleChange}
                     />
-                    <small className="text-muted d-block mt-1">
-                        Opponent target: {Number(formData.total_runs || 0) + Number(formData.extras || 0)} runs
+                    <small className="form-text text-muted">
+                        Auto-calculated from Total Runs + Extras
                     </small>
                 </div>
 
-                {/* Extras Details Card */}
+                {/* Extras Breakdown */}
                 <div className="col-12">
-                    <div className="card border-0 bg-light-subtle shadow-sm rounded-4 p-3">
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                            <h6 className="mb-0 fw-semibold">Extras Breakdown</h6>
+                    <div className="p-3 bg-light rounded-3 border">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                            <span className="fw-semibold text-dark">Extras Breakdown</span>
                             <div className="form-check form-switch mb-0">
                                 <input
                                     className="form-check-input"
@@ -546,8 +815,8 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                                     checked={autoSumExtras}
                                     onChange={(e) => setAutoSumExtras(e.target.checked)}
                                 />
-                                <label className="form-check-label small" htmlFor="autoSumSwitch">
-                                    Auto-calculate Total Extras
+                                <label className="form-check-label small text-muted" htmlFor="autoSumSwitch">
+                                    Auto-sum extras
                                 </label>
                             </div>
                         </div>
@@ -628,7 +897,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                     <Link href={returnTo} className="btn btn-outline-secondary px-4">
                         Cancel
                     </Link>
-                    <button type="submit" className="btn btn-primary px-4" disabled={loading || isLockedForCurrentUser}>
+                    <button type="submit" className="btn btn-primary px-4" disabled={loading || isLockedForCurrentUser || isFutureMatch}>
                         {loading ? (
                             <>
                                 <RefreshCw className="spinner-border spinner-border-sm me-2" />

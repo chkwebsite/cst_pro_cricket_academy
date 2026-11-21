@@ -340,18 +340,39 @@ export default function BatchDetailPage() {
                                         <thead className="table-light">
                                             <tr>
                                                 <th style={{ width: "40px" }} className="text-center">#</th>
+                                                <th className="text-end">Actions</th>
                                                 <th>Player Name</th>
                                                 <th>Admission No</th>
                                                 <th>Phone / Contact</th>
                                                 <th>Assigned Period</th>
                                                 <th className="text-center">Status</th>
-                                                <th className="text-end">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {batch.players.map((p, idx) => (
                                                 <tr key={p.assignment_id}>
                                                     <td className="text-center text-muted small">{idx + 1}</td>
+                                                    <td className="text-end">
+                                                        <div className="d-inline-flex gap-1">
+                                                            <Link
+                                                                href={`/next_panel/batch-players/${p.assignment_id}/edit`}
+                                                                className="btn btn-sm btn-outline-primary p-1"
+                                                                title="Edit Assignment / Transfer"
+                                                            >
+                                                                <Edit size={13} />
+                                                            </Link>
+                                                            {p.status === "Active" && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemovePlayer(p.assignment_id, `${p.first_name} ${p.last_name}`)}
+                                                                    className="btn btn-sm btn-outline-danger p-1"
+                                                                    title="Remove from batch"
+                                                                >
+                                                                    <Trash2 size={13} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                     <td>
                                                         <div className="fw-bold text-dark">
                                                             {p.first_name} {p.last_name}
@@ -393,27 +414,6 @@ export default function BatchDetailPage() {
                                                             {p.status}
                                                         </span>
                                                     </td>
-                                                    <td className="text-end">
-                                                        <div className="d-inline-flex gap-1">
-                                                            <Link
-                                                                href={`/next_panel/batch-players/${p.assignment_id}/edit`}
-                                                                className="btn btn-sm btn-outline-primary p-1"
-                                                                title="Edit Assignment / Transfer"
-                                                            >
-                                                                <Edit size={13} />
-                                                            </Link>
-                                                            {p.status === "Active" && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleRemovePlayer(p.assignment_id, `${p.first_name} ${p.last_name}`)}
-                                                                    className="btn btn-sm btn-outline-danger p-1"
-                                                                    title="Remove from batch"
-                                                                >
-                                                                    <Trash2 size={13} />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -446,18 +446,39 @@ export default function BatchDetailPage() {
                                         <thead className="table-light">
                                             <tr>
                                                 <th style={{ width: "40px" }} className="text-center">#</th>
+                                                <th className="text-end">Actions</th>
                                                 <th>Coach Name</th>
                                                 <th>Assigned Role</th>
                                                 <th>Contact Info</th>
                                                 <th>Assigned Period</th>
                                                 <th className="text-center">Status</th>
-                                                <th className="text-end">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {batch.coaches.map((c, idx) => (
                                                 <tr key={c.assignment_id}>
                                                     <td className="text-center text-muted small">{idx + 1}</td>
+                                                    <td className="text-end">
+                                                        <div className="d-inline-flex gap-1">
+                                                            <Link
+                                                                href={`/next_panel/batch-coaches/${c.assignment_id}/edit`}
+                                                                className="btn btn-sm btn-outline-primary p-1"
+                                                                title="Edit Coach Role / Dates"
+                                                            >
+                                                                <Edit size={13} />
+                                                            </Link>
+                                                            {Number(c.status) === 1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveCoach(c.assignment_id, `${c.first_name} ${c.last_name}`)}
+                                                                    className="btn btn-sm btn-outline-danger p-1"
+                                                                    title="Deactivate Coach Assignment"
+                                                                >
+                                                                    <Trash2 size={13} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                     <td>
                                                         <div className="fw-bold text-dark">
                                                             {c.first_name} {c.last_name}
@@ -497,27 +518,6 @@ export default function BatchDetailPage() {
                                                                 Inactive
                                                             </span>
                                                         )}
-                                                    </td>
-                                                    <td className="text-end">
-                                                        <div className="d-inline-flex gap-1">
-                                                            <Link
-                                                                href={`/next_panel/batch-coaches/${c.assignment_id}/edit`}
-                                                                className="btn btn-sm btn-outline-primary p-1"
-                                                                title="Edit Coach Role / Dates"
-                                                            >
-                                                                <Edit size={13} />
-                                                            </Link>
-                                                            {Number(c.status) === 1 && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleRemoveCoach(c.assignment_id, `${c.first_name} ${c.last_name}`)}
-                                                                    className="btn btn-sm btn-outline-danger p-1"
-                                                                    title="Deactivate Coach Assignment"
-                                                                >
-                                                                    <Trash2 size={13} />
-                                                                </button>
-                                                            )}
-                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}

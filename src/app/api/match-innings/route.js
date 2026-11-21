@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
+import { validateMatchDateForScoring } from "@/app/components/lib/match-date-validator";
 
 // GET: Get all match innings
 // Optional filters: ?match_id=1&innings_status=In Progress
@@ -264,7 +265,7 @@ export async function POST(request) {
 
         // Verify match exists
         const [matches] = await connection.execute(
-            "SELECT id, academy_id, branch_id, overs FROM cst_matches WHERE id = ?",
+            "SELECT id, academy_id, branch_id, overs, match_date FROM cst_matches WHERE id = ?",
             [match_id]
         );
 
@@ -272,6 +273,15 @@ export async function POST(request) {
             return NextResponse.json(
                 { success: false, message: "Match not found" },
                 { status: 404 }
+            );
+        }
+
+        // Rule: Innings cannot be created before match date
+        const dateCheck = validateMatchDateForScoring(matches[0].match_date, "Innings");
+        if (!dateCheck.allowed) {
+            return NextResponse.json(
+                { success: false, message: dateCheck.message },
+                { status: 400 }
             );
         }
 

@@ -178,28 +178,50 @@ export default function MatchTypesPage() {
                             <table className="table align-middle mb-0">
                                 <thead>
                                     <tr>
+                                        <th style={{ width: "50px" }}>#</th>
+                                        <th style={{ width: "110px" }}>Actions</th>
                                         <th>Name</th>
                                         <th>Code</th>
                                         <th>Description</th>
                                         <th>Status</th>
                                         <th>Updated</th>
-                                        <th className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan={6} className="text-center text-muted py-5">Loading match types...</td></tr>
+                                        <tr><td colSpan={7} className="text-center text-muted py-5">Loading match types...</td></tr>
                                     ) : rows.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="text-center text-muted py-5">
+                                            <td colSpan={7} className="text-center text-muted py-5">
                                                 {hasFilters
                                                     ? "No match types match these filters."
                                                     : "No match types yet. Add one to get started."}
                                             </td>
                                         </tr>
                                     ) : (
-                                        pagedRows.map((row) => (
+                                        pagedRows.map((row, idx) => (
                                             <tr key={row.id}>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="d-inline-flex gap-2">
+                                                        <Link
+                                                            href={`${BASE}/${row.id}/edit`}
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            aria-label={`Edit ${row.name}`}
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            disabled={busyId === row.id}
+                                                            onClick={() => remove(row)}
+                                                            aria-label={`Delete ${row.name}`}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td className="fw-semibold">{row.name}</td>
                                                 <td><span className="badge bg-light text-dark border">{row.code}</span></td>
                                                 <td className="text-muted" style={{ maxWidth: 280 }}>
@@ -226,26 +248,6 @@ export default function MatchTypesPage() {
                                                 </td>
                                                 <td className="text-muted small">
                                                     {row.updated_at ? new Date(row.updated_at).toLocaleDateString() : "-"}
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="d-inline-flex gap-2">
-                                                        <Link
-                                                            href={`${BASE}/${row.id}/edit`}
-                                                            className="btn btn-sm btn-outline-primary"
-                                                            aria-label={`Edit ${row.name}`}
-                                                        >
-                                                            <Pencil size={14} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            disabled={busyId === row.id}
-                                                            onClick={() => remove(row)}
-                                                            aria-label={`Delete ${row.name}`}
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))

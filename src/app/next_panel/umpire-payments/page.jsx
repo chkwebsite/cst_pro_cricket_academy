@@ -337,6 +337,7 @@ export default function UmpirePaymentsPage() {
                                         <thead className="table-success">
                                             <tr>
                                                 <th>#</th>
+                                                <th className="text-end">Action</th>
                                                 <th>Umpire</th>
                                                 <th>Duty / Event</th>
                                                 <th>Venue</th>
@@ -345,7 +346,6 @@ export default function UmpirePaymentsPage() {
                                                 <th>Paid Amount</th>
                                                 <th>Balance Due</th>
                                                 <th>Status</th>
-                                                <th className="text-end">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -358,6 +358,20 @@ export default function UmpirePaymentsPage() {
                                                 return (
                                                     <tr key={item.duty_key}>
                                                         <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                        <td className="text-end">
+                                                            {!isPaid ? (
+                                                                <Link
+                                                                    href={payHref}
+                                                                    className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1 shadow-sm px-3"
+                                                                >
+                                                                    <IndianRupee size={14} /> Pay Fee
+                                                                </Link>
+                                                            ) : (
+                                                                <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 d-inline-flex align-items-center gap-1">
+                                                                    <CheckCircle2 size={13} /> Fully Paid
+                                                                </span>
+                                                            )}
+                                                        </td>
                                                         <td>
                                                             <div className="fw-bold text-dark d-flex align-items-center gap-1">
                                                                 <UserCheck size={14} className="text-primary" />
@@ -420,20 +434,6 @@ export default function UmpirePaymentsPage() {
                                                                 </small>
                                                             )}
                                                         </td>
-                                                        <td className="text-end">
-                                                            {!isPaid ? (
-                                                                <Link
-                                                                    href={payHref}
-                                                                    className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1 shadow-sm px-3"
-                                                                >
-                                                                    <IndianRupee size={14} /> Pay Fee
-                                                                </Link>
-                                                            ) : (
-                                                                <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 d-inline-flex align-items-center gap-1">
-                                                                    <CheckCircle2 size={13} /> Fully Paid
-                                                                </span>
-                                                            )}
-                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -466,12 +466,12 @@ export default function UmpirePaymentsPage() {
                                         <thead className="table-light">
                                             <tr>
                                                 <th>Receipt #</th>
+                                                <th>Transaction / Ref No</th>
                                                 <th>Payment Date</th>
                                                 <th>Umpire</th>
                                                 <th>Duty Assignment</th>
                                                 <th>Amount Paid</th>
                                                 <th>Payment Mode</th>
-                                                <th>Transaction / Ref No</th>
                                                 <th>Remarks</th>
                                                 <th className="text-end">Actions</th>
                                             </tr>
@@ -481,6 +481,17 @@ export default function UmpirePaymentsPage() {
                                                 <tr key={p.id}>
                                                     <td>
                                                         <span className="fw-bold">RCP-{String(p.id).padStart(5, "0")}</span>
+                                                    </td>
+                                                    <td className="text-end">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => handleDeletePayment(p.id, p.amount)}
+                                                            title="Revert / Delete Payment"
+                                                            aria-label="Delete Payment"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </td>
                                                     <td>{formatDate(p.payment_date)}</td>
                                                     <td>
@@ -517,17 +528,6 @@ export default function UmpirePaymentsPage() {
                                                     </td>
                                                     <td className="text-muted small" style={{ maxWidth: "200px" }}>
                                                         {p.remarks || "—"}
-                                                    </td>
-                                                    <td className="text-end">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() => handleDeletePayment(p.id, p.amount)}
-                                                            title="Revert / Delete Payment"
-                                                            aria-label="Delete Payment"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}

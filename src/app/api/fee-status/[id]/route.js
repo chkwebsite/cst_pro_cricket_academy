@@ -218,18 +218,24 @@ export async function GET(request, context) {
                 COALESCE(u.last_name, ttp_u.last_name, mp_u.last_name) AS last_name,
                 COALESCE(op.player_name, ttp_op.player_name, mp_op.player_name) AS outside_player_name,
                 tt_team.team_name AS tournament_team_name,
+                tt_team.team_code AS tournament_team_code,
+                tt.registration_no AS tournament_team_registration_no,
                 mt_t.team_name AS match_team_name
              FROM cst_fee_status fs
              LEFT JOIN cst_academy a
                 ON a.id = fs.academy_id
              LEFT JOIN cst_branch b
                 ON b.id = fs.branch_id
+             LEFT JOIN cst_tournament_teams tt
+                ON tt.id = fs.tournament_team_id
+             LEFT JOIN cst_teams tt_team
+                ON tt_team.id = tt.team_id
              LEFT JOIN cst_tournament_team_players ttp
                 ON ttp.id = fs.tournament_team_player_id
              LEFT JOIN cst_match_players mp
                 ON mp.id = fs.match_player_id
              LEFT JOIN cst_tournaments t
-                ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
+                ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id, tt.tournament_id)
              LEFT JOIN cst_matches m
                 ON m.id = COALESCE(fs.match_id, mp.match_id)
              LEFT JOIN cst_ground_bookings gb
@@ -240,10 +246,6 @@ export async function GET(request, context) {
                 ON u.id = fs.user_id
              LEFT JOIN cst_outside_players op
                 ON op.id = fs.outside_player_id
-             LEFT JOIN cst_tournament_teams tt
-                ON tt.id = fs.tournament_team_id
-             LEFT JOIN cst_teams tt_team
-                ON tt_team.id = tt.team_id
              LEFT JOIN cst_users ttp_u
                 ON ttp_u.id = ttp.user_id
              LEFT JOIN cst_outside_players ttp_op
@@ -585,6 +587,16 @@ export async function PUT(request, context) {
                 Number(id),
             ]
         );
+
+        if (data.fee_type === "Tournament Team" && data.tournament_team_id) {
+            await connection.execute(
+                `UPDATE cst_tournament_teams
+                 SET payment_status = ?,
+                     team_fee = ?
+                 WHERE id = ?`,
+                [data.status, data.fee_amount, data.tournament_team_id]
+            );
+        }
 
         await connection.commit();
 

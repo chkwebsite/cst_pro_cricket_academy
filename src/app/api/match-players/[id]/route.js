@@ -581,7 +581,7 @@ export async function PUT(request, context) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: `all ready play this match (Player is already playing this match under team "${existingTeam}")`,
+                    message: `Player is already participating in this match under team "${existingTeam}".`,
                 },
                 { status: 409 }
             );

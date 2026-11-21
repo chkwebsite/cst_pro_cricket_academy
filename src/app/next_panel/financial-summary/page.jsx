@@ -636,12 +636,12 @@ export default function FinancialSummaryPage() {
                                             <thead className="table-light">
                                                 <tr>
                                                     <th>Category &amp; Stream</th>
+                                                    <th className="text-center">Action</th>
                                                     <th>Scope / Type</th>
                                                     <th className="text-end">Expected Demand / Payable (₹)</th>
                                                     <th className="text-end">Actual Received / Paid (₹)</th>
                                                     <th className="text-end">Outstanding Balance Due (₹)</th>
                                                     <th>Status / Recovery</th>
-                                                    <th className="text-center">Action</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -660,6 +660,15 @@ export default function FinancialSummaryPage() {
                                                             <span>Player Program Fees</span>
                                                         </div>
                                                         <small className="text-muted">{totals.totalUniquePlayers} students enrolled</small>
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            onClick={() => setActiveTab("player-fees")}
+                                                        >
+                                                            View Details
+                                                        </button>
                                                     </td>
                                                     <td>Monthly Academy Training</td>
                                                     <td className="text-end fw-semibold">{formatPriceExact(totals.playerFeesExpected)}</td>
@@ -686,15 +695,6 @@ export default function FinancialSummaryPage() {
                                                             <span className="badge bg-light text-muted border">No Demand</span>
                                                         )}
                                                     </td>
-                                                    <td className="text-center">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-primary"
-                                                            onClick={() => setActiveTab("player-fees")}
-                                                        >
-                                                            View Details
-                                                        </button>
-                                                    </td>
                                                 </tr>
 
                                                 {/* Stream 2: Match Fees */}
@@ -705,6 +705,15 @@ export default function FinancialSummaryPage() {
                                                             <span>Match Fees (Match-Wise)</span>
                                                         </div>
                                                         <small className="text-muted">{totals.totalMatchesCount} matches scheduled</small>
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            onClick={() => setActiveTab("match-fees")}
+                                                        >
+                                                            View Details
+                                                        </button>
                                                     </td>
                                                     <td>Player/Team Match Fees</td>
                                                     <td className="text-end fw-semibold">{formatPriceExact(totals.matchFeesExpected)}</td>
@@ -731,15 +740,6 @@ export default function FinancialSummaryPage() {
                                                             <span className="badge bg-light text-muted border">No Matches</span>
                                                         )}
                                                     </td>
-                                                    <td className="text-center">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-primary"
-                                                            onClick={() => setActiveTab("match-fees")}
-                                                        >
-                                                            View Details
-                                                        </button>
-                                                    </td>
                                                 </tr>
 
                                                 {/* Stream 3: Ground Rentals */}
@@ -750,6 +750,15 @@ export default function FinancialSummaryPage() {
                                                             <span>Ground Booking Rentals</span>
                                                         </div>
                                                         <small className="text-muted">{totals.totalGroundBookingsCount} bookings in month</small>
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            onClick={() => setActiveTab("ground-rentals")}
+                                                        >
+                                                            View Details
+                                                        </button>
                                                     </td>
                                                     <td>Slot &amp; Ground Lease</td>
                                                     <td className="text-end fw-semibold">{formatPriceExact(totals.groundRentalsExpected)}</td>
@@ -775,15 +784,6 @@ export default function FinancialSummaryPage() {
                                                         ) : (
                                                             <span className="badge bg-light text-muted border">No Bookings</span>
                                                         )}
-                                                    </td>
-                                                    <td className="text-center">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-primary"
-                                                            onClick={() => setActiveTab("ground-rentals")}
-                                                        >
-                                                            View Details
-                                                        </button>
                                                     </td>
                                                 </tr>
 
@@ -816,6 +816,15 @@ export default function FinancialSummaryPage() {
                                                         </div>
                                                         <small className="text-muted">{staffSalaries.salaries.length} staff records</small>
                                                     </td>
+                                                    <td className="text-center">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => setActiveTab("staff-salaries")}
+                                                        >
+                                                            View Details
+                                                        </button>
+                                                    </td>
                                                     <td>Monthly Payroll</td>
                                                     <td className="text-end fw-semibold">{formatPriceExact(totals.staffSalariesPayable)}</td>
                                                     <td className="text-end fw-bold text-danger">{formatPriceExact(totals.staffSalariesPaid)}</td>
@@ -839,15 +848,6 @@ export default function FinancialSummaryPage() {
                                                                 : "Pending"}
                                                         </span>
                                                     </td>
-                                                    <td className="text-center">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() => setActiveTab("staff-salaries")}
-                                                        >
-                                                            View Details
-                                                        </button>
-                                                    </td>
                                                 </tr>
 
                                                 {/* Stream 5: Umpire Fees */}
@@ -858,6 +858,15 @@ export default function FinancialSummaryPage() {
                                                             <span>Umpire Remuneration</span>
                                                         </div>
                                                         <small className="text-muted">{totals.totalUmpireDutiesCount} match/booking duties</small>
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-info"
+                                                            onClick={() => setActiveTab("umpire-fees")}
+                                                        >
+                                                            View Details
+                                                        </button>
                                                     </td>
                                                     <td>Officiating Fees</td>
                                                     <td className="text-end fw-semibold">{formatPriceExact(totals.umpireFeesPayable)}</td>
@@ -881,15 +890,6 @@ export default function FinancialSummaryPage() {
                                                                 ? "Partially Paid"
                                                                 : "Pending Payment"}
                                                         </span>
-                                                    </td>
-                                                    <td className="text-center">
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-info"
-                                                            onClick={() => setActiveTab("umpire-fees")}
-                                                        >
-                                                            View Details
-                                                        </button>
                                                     </td>
                                                 </tr>
 
@@ -1600,6 +1600,8 @@ export default function FinancialSummaryPage() {
                                             <table className="table table-hover align-middle mb-0">
                                                 <thead className="table-light">
                                                     <tr>
+                                                        <th style={{ width: "40px" }}>#</th>
+                                                        <th className="text-center" style={{ width: "95px" }}>Action</th>
                                                         <th>Event Date</th>
                                                         <th>Umpire Name</th>
                                                         <th>Duty Type</th>
@@ -1610,12 +1612,26 @@ export default function FinancialSummaryPage() {
                                                         <th className="text-end">Amount Paid (₹)</th>
                                                         <th className="text-end">Balance Due (₹)</th>
                                                         <th className="text-center">Status</th>
-                                                        <th className="text-center">Action</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {filteredUmpires.map((u, idx) => (
                                                         <tr key={idx}>
+                                                            <th>{idx + 1}</th>
+                                                            <td className="text-center">
+                                                                {Number(u.fee_due) > 0 ? (
+                                                                    <Link
+                                                                        href={`/next_panel/umpire-payments/new?umpire_id=${u.umpire_id}${
+                                                                            u.booking_id ? `&booking_id=${u.booking_id}` : ""
+                                                                        }${u.match_id ? `&match_id=${u.match_id}` : ""}`}
+                                                                        className="btn btn-sm btn-outline-success py-0 px-2"
+                                                                    >
+                                                                        Pay
+                                                                    </Link>
+                                                                ) : (
+                                                                    <span className="text-success small fw-semibold">Settled</span>
+                                                                )}
+                                                            </td>
                                                             <td>{formatDate(u.event_date)}</td>
                                                             <td>
                                                                 <div className="fw-semibold">{u.umpire_name}</div>
@@ -1658,20 +1674,6 @@ export default function FinancialSummaryPage() {
                                                                 >
                                                                     {u.payment_status}
                                                                 </span>
-                                                            </td>
-                                                            <td className="text-center">
-                                                                {Number(u.fee_due) > 0 ? (
-                                                                    <Link
-                                                                        href={`/next_panel/umpire-payments/new?umpire_id=${u.umpire_id}${
-                                                                            u.booking_id ? `&booking_id=${u.booking_id}` : ""
-                                                                        }${u.match_id ? `&match_id=${u.match_id}` : ""}`}
-                                                                        className="btn btn-sm btn-outline-success py-0 px-2"
-                                                                    >
-                                                                        Pay
-                                                                    </Link>
-                                                                ) : (
-                                                                    <span className="text-success small fw-semibold">Settled</span>
-                                                                )}
                                                             </td>
                                                         </tr>
                                                     ))}

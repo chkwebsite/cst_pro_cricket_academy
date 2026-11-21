@@ -14,7 +14,6 @@ import TrialSelectionModal from "./components/trial/TrialSelectionModal";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import BackToTop from "./components/layout/BackToTop";
-import WhatsAppButton from "./components/layout/WhatsAppButton";
 import MobileBar from "./components/layout/MobileBar";
 import ScrollRevealInit from "./components/layout/ScrollRevealInit";
 import ScrollProgressBar from "./components/layout/ScrollProgressBar";
@@ -111,7 +110,6 @@ export default async function WebsiteLayout({ children }) {
               <Header />
               <main id="main-content">{children}</main>
               <Footer />
-              <WhatsAppButton />
               <BackToTop />
               <MobileBar />
               <CartDrawer />

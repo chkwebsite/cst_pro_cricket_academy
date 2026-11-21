@@ -325,11 +325,11 @@ export default function PasswordResetsPage() {
                         <thead className="table-light text-muted small text-uppercase">
                             <tr>
                                 <th style={{ minWidth: "150px" }} className="ps-4">6-Digit Code</th>
+                                <th style={{ minWidth: "110px" }} className="text-end pe-4">Actions</th>
                                 <th style={{ minWidth: "220px" }}>User Details</th>
                                 <th style={{ minWidth: "160px" }}>Contact Info</th>
                                 <th style={{ minWidth: "180px" }}>Academy &amp; Branch</th>
                                 <th style={{ minWidth: "140px" }}>Time Remaining</th>
-                                <th style={{ minWidth: "110px" }} className="text-end pe-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -386,6 +386,17 @@ export default function PasswordResetsPage() {
                                                         <span style={{ fontSize: "0.78rem" }}>{isCopied ? "Copied" : "Copy"}</span>
                                                     </button>
                                                 </div>
+                                            </td>
+                                            <td className="text-end pe-4">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 rounded-3 px-2 py-1"
+                                                    title="Revoke / Delete Code"
+                                                    onClick={() => handleDelete(r.id, fullName)}
+                                                >
+                                                    <Trash2 size={14} />
+                                                    <span style={{ fontSize: "0.78rem" }}>Revoke</span>
+                                                </button>
                                             </td>
 
                                             {/* User Details */}
@@ -463,17 +474,6 @@ export default function PasswordResetsPage() {
                                             </td>
 
                                             {/* Actions */}
-                                            <td className="text-end pe-4">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 rounded-3 px-2 py-1"
-                                                    title="Revoke / Delete Code"
-                                                    onClick={() => handleDelete(r.id, fullName)}
-                                                >
-                                                    <Trash2 size={14} />
-                                                    <span style={{ fontSize: "0.78rem" }}>Revoke</span>
-                                                </button>
-                                            </td>
                                         </tr>
                                     );
                                 })

@@ -346,6 +346,7 @@ export default function PlayerProgramFeesPage() {
                         <thead className="table-light">
                             <tr>
                                 <th style={{ width: "80px" }}>ID</th>
+                                <th className="text-center" style={{ width: "160px" }}>Actions</th>
                                 {!isPlayer && <th>Player Details</th>}
                                 <th>Program</th>
                                 <th>Month</th>
@@ -354,7 +355,6 @@ export default function PlayerProgramFeesPage() {
                                 <th className="text-end">Balance Due</th>
                                 <th className="text-center">Status</th>
                                 <th>Due Date</th>
-                                <th className="text-center" style={{ width: "160px" }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -379,39 +379,6 @@ export default function PlayerProgramFeesPage() {
                                     return (
                                         <tr key={f.id}>
                                             <td className="fw-semibold text-muted">#{f.id}</td>
-                                            {!isPlayer && (
-                                                <td>
-                                                    <div className="fw-semibold text-dark">{f.player_name}</div>
-                                                    <div className="small text-muted">Adm: {f.admission_no}</div>
-                                                </td>
-                                            )}
-                                            <td>
-                                                <span className="badge bg-light text-dark border">
-                                                    {f.program_name}
-                                                </span>
-                                            </td>
-                                            <td className="fw-semibold">
-                                                {f.fee_month_name || f.fee_month?.slice(0, 7)}
-                                            </td>
-                                            <td className="text-end fw-semibold">
-                                                ₹{Number(f.total_amount).toFixed(2)}
-                                            </td>
-                                            <td className="text-end text-success fw-semibold">
-                                                ₹{Number(f.paid_amount).toFixed(2)}
-                                            </td>
-                                            <td className="text-end fw-bold">
-                                                <span className={due > 0 ? "text-danger" : "text-muted"}>
-                                                    ₹{due.toFixed(2)}
-                                                </span>
-                                            </td>
-                                            <td className="text-center">
-                                                <span className={`badge ${STATUS_BADGE[f.payment_status] || "bg-secondary"}`}>
-                                                    {f.payment_status}
-                                                </span>
-                                            </td>
-                                            <td className="small text-muted">
-                                                {f.due_date ? f.due_date.slice(0, 10) : "—"}
-                                            </td>
                                             <td>
                                                 <div className="d-flex justify-content-center align-items-center gap-1">
                                                     <Link
@@ -454,6 +421,39 @@ export default function PlayerProgramFeesPage() {
                                                         </>
                                                     )}
                                                 </div>
+                                            </td>
+                                            {!isPlayer && (
+                                                <td>
+                                                    <div className="fw-semibold text-dark">{f.player_name}</div>
+                                                    <div className="small text-muted">Adm: {f.admission_no}</div>
+                                                </td>
+                                            )}
+                                            <td>
+                                                <span className="badge bg-light text-dark border">
+                                                    {f.program_name}
+                                                </span>
+                                            </td>
+                                            <td className="fw-semibold">
+                                                {f.fee_month_name || f.fee_month?.slice(0, 7)}
+                                            </td>
+                                            <td className="text-end fw-semibold">
+                                                ₹{Number(f.total_amount).toFixed(2)}
+                                            </td>
+                                            <td className="text-end text-success fw-semibold">
+                                                ₹{Number(f.paid_amount).toFixed(2)}
+                                            </td>
+                                            <td className="text-end fw-bold">
+                                                <span className={due > 0 ? "text-danger" : "text-muted"}>
+                                                    ₹{due.toFixed(2)}
+                                                </span>
+                                            </td>
+                                            <td className="text-center">
+                                                <span className={`badge ${STATUS_BADGE[f.payment_status] || "bg-secondary"}`}>
+                                                    {f.payment_status}
+                                                </span>
+                                            </td>
+                                            <td className="small text-muted">
+                                                {f.due_date ? f.due_date.slice(0, 10) : "—"}
                                             </td>
                                         </tr>
                                     );

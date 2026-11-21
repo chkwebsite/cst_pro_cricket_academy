@@ -230,6 +230,7 @@ export default function FeePaymentsPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Date</th>
                                         <th>Fee</th>
                                         <th>Player</th>
@@ -237,13 +238,32 @@ export default function FeePaymentsPage() {
                                         <th className="text-end">Amount</th>
                                         <th>Status</th>
                                         <th>Recorded By</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedItems.map((item, idx) => (
                                         <tr key={item.id}>
                                             <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start gap-2">
+                                                    <Link href={`/next_panel/fee-payments/${item.id}`} className="btn btn-outline-primary" aria-label="View payment details">
+                                                        <Eye size={16} />
+                                                    </Link>
+                                                    <Link href={`/next_panel/fee-payments/${item.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit payment">
+                                                        <Edit size={16} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-danger"
+                                                        onClick={() => handleDelete(item)}
+                                                        disabled={item.status === "Paid"}
+                                                        title={item.status === "Paid" ? "Paid payments can't be deleted. Edit and mark as Refunded or Cancelled." : "Delete payment"}
+                                                        aria-label="Delete payment"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>{formatDateTime(item.payment_date)}</td>
                                             <td>
                                                 <Link href={`/next_panel/fee-status/${item.fee_status_id}`} className="text-decoration-none">
@@ -284,26 +304,6 @@ export default function FeePaymentsPage() {
                                                         </div>
                                                     );
                                                 })()}
-                                            </td>
-                                            <td>
-                                                <div className="d-flex justify-content-start gap-2">
-                                                    <Link href={`/next_panel/fee-payments/${item.id}`} className="btn btn-outline-primary" aria-label="View payment details">
-                                                        <Eye size={16} />
-                                                    </Link>
-                                                    <Link href={`/next_panel/fee-payments/${item.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit payment">
-                                                        <Edit size={16} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-outline-danger"
-                                                        onClick={() => handleDelete(item)}
-                                                        disabled={item.status === "Paid"}
-                                                        title={item.status === "Paid" ? "Paid payments can't be deleted. Edit and mark as Refunded or Cancelled." : "Delete payment"}
-                                                        aria-label="Delete payment"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}

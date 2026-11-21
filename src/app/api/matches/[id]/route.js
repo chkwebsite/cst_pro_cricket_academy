@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthUser } from "@/app/components/lib/rbac";
 import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
+import { validateMatchDateForScoring, autoUpdateTodayLiveMatches } from "@/app/components/lib/match-date-validator";
 
 
 const validMatchTypes = [
@@ -65,20 +66,12 @@ export async function GET(request, { params }) {
         connection = await pool.getConnection();
 
         // Auto-update match status:
-        // 1) Match Date matches today's date -> Status 'Live' (if not Completed or Cancelled)
+        // 1) Match Date matches today's date -> Status 'Live' (cst_matches & cst_tournament_matches)
         // 2) Match Date is back date (< today's date) -> Status 'Completed' (if not Completed or Cancelled)
         try {
-            const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+            await autoUpdateTodayLiveMatches(connection);
 
-            // Today's match -> Live
-            await connection.execute(
-                `UPDATE cst_matches
-                 SET status = 'Live', updated_at = NOW()
-                 WHERE id = ?
-                   AND (match_date = CURDATE() OR match_date = DATE(DATE_ADD(NOW(), INTERVAL 330 MINUTE)) OR match_date = ?)
-                   AND status NOT IN ('Completed', 'Cancelled', 'Live')`,
-                [matchId, todayIST]
-            );
+            const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 
             // Back date match -> Completed
             await connection.execute(
@@ -171,7 +164,7 @@ export async function GET(request, { params }) {
             innings_count: inningsCount,
             scorecard_count: scorecardCount,
             has_scoreboard: hasScoreboard,
-            scoreboard_message: !hasScoreboard ? "Wait to update records" : null,
+            scoreboard_message: !hasScoreboard ? "Awaiting Scorecard" : null,
         };
 
         return NextResponse.json({
@@ -385,6 +378,18 @@ export async function PUT(request, { params }) {
                 { success: false, message: "Invalid match status" },
                 { status: 400 }
             );
+        }
+
+        if (status === "Completed") {
+            const dateCheck = validateMatchDateForScoring(match_date, "Match completion");
+            if (!dateCheck.allowed) {
+                await connection.rollback();
+                transactionStarted = false;
+                return NextResponse.json(
+                    { success: false, message: dateCheck.message },
+                    { status: 400 }
+                );
+            }
         }
 
         if (!isValidDate(String(match_date).slice(0, 10))) {

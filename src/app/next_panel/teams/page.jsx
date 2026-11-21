@@ -286,6 +286,7 @@ export default function TeamsPage() {
                                         <thead className="table-success">
                                             <tr>
                                                 <th>#</th>
+                                                <th>Actions</th>
                                                 <th>Team</th>
                                                 <th>Academy</th>
                                                 <th>Branch</th>
@@ -293,36 +294,12 @@ export default function TeamsPage() {
                                                 <th>Category</th>
                                                 <th>Age Group</th>
                                                 <th>Status</th>
-                                                <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {pagedTeams.map((item, idx) => (
                                                 <tr key={item.id}>
                                                     <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                                    <td>
-                                                        <div className="fw-semibold">{item.team_name}</div>
-                                                        <small className="text-muted">{item.team_code || "—"}</small>
-                                                        {item.created_by_name && (
-                                                            <small className="text-muted d-block" style={{ fontSize: "11px" }}>
-                                                                By: {item.created_by_name}
-                                                            </small>
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        <div className="fw-medium text-dark">{item.academy_name || "—"}</div>
-                                                    </td>
-                                                    <td>
-                                                        <div>{item.branch_name || "All / Main Branch"}</div>
-                                                    </td>
-                                                    <td>{item.team_type || "—"}</td>
-                                                    <td>{item.category || "—"}</td>
-                                                    <td>{item.age_group || "—"}</td>
-                                                    <td>
-                                                        <span className={`badge ${Number(item.status) === 1 ? "bg-success" : "bg-secondary"}`}>
-                                                            {Number(item.status) === 1 ? "Active" : "Inactive"}
-                                                        </span>
-                                                    </td>
                                                     <td>
                                                         <div className="d-flex justify-content-start gap-2">
                                                             {canManage(item) ? (
@@ -354,6 +331,29 @@ export default function TeamsPage() {
                                                                 </button>
                                                             )}
                                                         </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="fw-semibold">{item.team_name}</div>
+                                                        <small className="text-muted">{item.team_code || "—"}</small>
+                                                        {item.created_by_name && (
+                                                            <small className="text-muted d-block" style={{ fontSize: "11px" }}>
+                                                                By: {item.created_by_name}
+                                                            </small>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        <div className="fw-medium text-dark">{item.academy_name || "—"}</div>
+                                                    </td>
+                                                    <td>
+                                                        <div>{item.branch_name || "All / Main Branch"}</div>
+                                                    </td>
+                                                    <td>{item.team_type || "—"}</td>
+                                                    <td>{item.category || "—"}</td>
+                                                    <td>{item.age_group || "—"}</td>
+                                                    <td>
+                                                        <span className={`badge ${Number(item.status) === 1 ? "bg-success" : "bg-secondary"}`}>
+                                                            {Number(item.status) === 1 ? "Active" : "Inactive"}
+                                                        </span>
                                                     </td>
                                                 </tr>
                                             ))}

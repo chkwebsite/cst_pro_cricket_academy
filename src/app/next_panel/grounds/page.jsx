@@ -237,19 +237,45 @@ export default function GroundsPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Academy</th>
                                         <th>Ground</th>
                                         <th>Contact</th>
                                         <th>Address</th>
                                         <th>Facilities</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedGrounds.map((item, idx) => (
                                         <tr key={item.id}>
                                             <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start gap-2">
+                                                    <Link
+                                                        href={`/next_panel/grounds/${item.id}`}
+                                                        className="btn btn-outline-primary"
+                                                        aria-label="View ground details"
+                                                    >
+                                                        <Eye size={16} />
+                                                    </Link>
+                                                    <Link
+                                                        href={`/next_panel/grounds/${item.id}/edit`}
+                                                        className="btn btn-outline-secondary"
+                                                        aria-label="Edit ground"
+                                                    >
+                                                        <Edit size={16} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-danger"
+                                                        onClick={() => handleDelete(item.id, item.ground_name)}
+                                                        aria-label="Delete ground"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>{item.academy_name || "—"}</td>
                                             <td>
                                                 <div>{item.ground_name}</div>
@@ -285,32 +311,6 @@ export default function GroundsPage() {
                                                 <span className={`badge ${Number(item.status) === 1 ? "bg-success" : "bg-secondary"}`}>
                                                     {Number(item.status) === 1 ? "Active" : "Inactive"}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                <div className="d-flex justify-content-start gap-2">
-                                                    <Link
-                                                        href={`/next_panel/grounds/${item.id}`}
-                                                        className="btn btn-outline-primary"
-                                                        aria-label="View ground details"
-                                                    >
-                                                        <Eye size={16} />
-                                                    </Link>
-                                                    <Link
-                                                        href={`/next_panel/grounds/${item.id}/edit`}
-                                                        className="btn btn-outline-secondary"
-                                                        aria-label="Edit ground"
-                                                    >
-                                                        <Edit size={16} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-outline-danger"
-                                                        onClick={() => handleDelete(item.id, item.ground_name)}
-                                                        aria-label="Delete ground"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}

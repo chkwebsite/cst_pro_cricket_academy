@@ -245,6 +245,8 @@ export default function UmpireDashboard({ user }) {
                                             <table className="table table-hover align-middle mb-0">
                                                 <thead className="table-light">
                                                     <tr>
+                                                        <th style={{ width: "40px" }}>#</th>
+                                                        <th style={{ width: "160px" }}>Actions</th>
                                                         <th>Match</th>
                                                         <th>Teams</th>
                                                         <th>Venue / Ground</th>
@@ -252,12 +254,30 @@ export default function UmpireDashboard({ user }) {
                                                         <th>Your Role</th>
                                                         <th>Fee</th>
                                                         <th>Payment</th>
-                                                        <th className="text-end">Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {matches.map((m) => (
+                                                    {matches.map((m, idx) => (
                                                         <tr key={m.match_id}>
+                                                            <th>{idx + 1}</th>
+                                                            <td>
+                                                                <div className="d-inline-flex gap-1">
+                                                                    <Link
+                                                                        href={`/next_panel/match-scorecard/${m.match_id}/edit`}
+                                                                        className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1"
+                                                                        title="Scorecard Scoring"
+                                                                    >
+                                                                        <Edit3 size={14} /> Scorecard
+                                                                    </Link>
+                                                                    <Link
+                                                                        href={`/next_panel/matches/${m.match_id}/scorecard`}
+                                                                        className="btn btn-sm btn-outline-secondary"
+                                                                        title="View Match"
+                                                                    >
+                                                                        <Eye size={14} />
+                                                                    </Link>
+                                                                </div>
+                                                            </td>
                                                             <td>
                                                                 <div className="fw-bold">{m.match_no}</div>
                                                                 <span className="badge bg-light text-dark border">
@@ -297,24 +317,6 @@ export default function UmpireDashboard({ user }) {
                                                                     {m.payment_status || "Pending"}
                                                                 </span>
                                                             </td>
-                                                            <td className="text-end">
-                                                                <div className="d-inline-flex gap-1">
-                                                                    <Link
-                                                                        href={`/next_panel/match-scorecard/${m.match_id}/edit`}
-                                                                        className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1"
-                                                                        title="Scorecard Scoring"
-                                                                    >
-                                                                        <Edit3 size={14} /> Scorecard
-                                                                    </Link>
-                                                                    <Link
-                                                                        href={`/next_panel/matches/${m.match_id}/scorecard`}
-                                                                        className="btn btn-sm btn-outline-secondary"
-                                                                        title="View Match"
-                                                                    >
-                                                                        <Eye size={14} />
-                                                                    </Link>
-                                                                </div>
-                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -339,13 +341,13 @@ export default function UmpireDashboard({ user }) {
                                                 <thead className="table-light">
                                                     <tr>
                                                         <th>Booking #</th>
+                                                        <th className="text-end">Actions</th>
                                                         <th>Date</th>
                                                         <th>Ground & Slot</th>
                                                         <th>Purpose</th>
                                                         <th>Customer</th>
                                                         <th>Format Rate</th>
                                                         <th>Status</th>
-                                                        <th className="text-end">Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -358,6 +360,14 @@ export default function UmpireDashboard({ user }) {
                                                                         Match: {b.linked_match_no}
                                                                     </span>
                                                                 )}
+                                                            </td>
+                                                            <td className="text-end">
+                                                                <Link
+                                                                    href={`/next_panel/ground-bookings/${b.booking_id}`}
+                                                                    className="btn btn-sm btn-outline-primary"
+                                                                >
+                                                                    <Eye size={14} className="me-1" /> View Booking
+                                                                </Link>
                                                             </td>
                                                             <td>{formatDate(b.booking_date)}</td>
                                                             <td>
@@ -381,14 +391,6 @@ export default function UmpireDashboard({ user }) {
                                                                 <span className="badge bg-info-subtle text-info border">
                                                                     {b.booking_status}
                                                                 </span>
-                                                            </td>
-                                                            <td className="text-end">
-                                                                <Link
-                                                                    href={`/next_panel/ground-bookings/${b.booking_id}`}
-                                                                    className="btn btn-sm btn-outline-primary"
-                                                                >
-                                                                    <Eye size={14} className="me-1" /> View Booking
-                                                                </Link>
                                                             </td>
                                                         </tr>
                                                     ))}

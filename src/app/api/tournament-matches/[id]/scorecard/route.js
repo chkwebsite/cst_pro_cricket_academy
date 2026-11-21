@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
+import { validateMatchDateForScoring } from "@/app/components/lib/match-date-validator";
 
 /*
 |--------------------------------------------------------------------------
@@ -60,6 +61,18 @@ export async function POST(request, { params }) {
                 {
                     success: false,
                     message: "Please assign both Team A and Team B to this fixture before recording player scorecards.",
+                },
+                { status: 400 }
+            );
+        }
+
+        // Rule: Match scorecard and innings cannot be created before match date
+        const dateCheck = validateMatchDateForScoring(tm.scheduled_date, "Tournament scorecard and innings");
+        if (!dateCheck.allowed) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: dateCheck.message,
                 },
                 { status: 400 }
             );

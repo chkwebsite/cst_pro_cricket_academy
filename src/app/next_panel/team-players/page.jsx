@@ -325,6 +325,7 @@ export default function TeamPlayersPage() {
                                         <thead className="table-success">
                                             <tr>
                                                 <th>#</th>
+                                                <th>Actions</th>
                                                 <th>Player</th>
                                                 <th>Team</th>
                                                 {isSuper && <th>Academy</th>}
@@ -334,7 +335,6 @@ export default function TeamPlayersPage() {
                                                 <th>Joined</th>
                                                 <th>Left</th>
                                                 <th>Status</th>
-                                                <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -343,6 +343,38 @@ export default function TeamPlayersPage() {
                                                 return (
                                                     <tr key={r.id} className={isMine(r) ? "table-warning" : ""}>
                                                         <th>{firstVisibleIndex + idx + 1}</th>
+                                                        <td>
+                                                            <div className="d-flex justify-content-start gap-2">
+                                                                {canManage(r) ? (
+                                                                    <>
+                                                                        <Link
+                                                                            href={`/next_panel/team-players/${r.id}/edit`}
+                                                                            className="btn btn-outline-secondary"
+                                                                            aria-label="Edit team player"
+                                                                        >
+                                                                            <Edit size={16} />
+                                                                        </Link>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-outline-danger"
+                                                                            onClick={() => handleDelete(r.id, p.name)}
+                                                                            aria-label="Remove player from team"
+                                                                        >
+                                                                            <Trash2 size={16} />
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-outline-secondary"
+                                                                        disabled
+                                                                        title="Only players of your own branch can be changed"
+                                                                    >
+                                                                        <Lock size={16} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
                                                         <td>
                                                             <div className="d-flex align-items-center gap-2">
                                                                 {p.image ? (
@@ -393,38 +425,6 @@ export default function TeamPlayersPage() {
                                                             <span className={`badge ${Number(r.status) === 1 ? "bg-success" : "bg-secondary"}`}>
                                                                 {Number(r.status) === 1 ? "Active" : "Inactive"}
                                                             </span>
-                                                        </td>
-                                                        <td>
-                                                            <div className="d-flex justify-content-start gap-2">
-                                                                {canManage(r) ? (
-                                                                    <>
-                                                                        <Link
-                                                                            href={`/next_panel/team-players/${r.id}/edit`}
-                                                                            className="btn btn-outline-secondary"
-                                                                            aria-label="Edit team player"
-                                                                        >
-                                                                            <Edit size={16} />
-                                                                        </Link>
-                                                                        <button
-                                                                            type="button"
-                                                                            className="btn btn-outline-danger"
-                                                                            onClick={() => handleDelete(r.id, p.name)}
-                                                                            aria-label="Remove player from team"
-                                                                        >
-                                                                            <Trash2 size={16} />
-                                                                        </button>
-                                                                    </>
-                                                                ) : (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn btn-outline-secondary"
-                                                                        disabled
-                                                                        title="Only players of your own branch can be changed"
-                                                                    >
-                                                                        <Lock size={16} />
-                                                                    </button>
-                                                                )}
-                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );

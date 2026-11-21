@@ -146,17 +146,38 @@ export default function AcademiesPage() {
                                 <table className="table align-middle mb-0">
                                     <thead className="table-light">
                                         <tr>
+                                            <th scope="col" style={{ width: "50px" }}>#</th>
+                                            <th scope="col" style={{ width: "120px" }}>Actions</th>
                                             <th scope="col">Academy</th>
                                             <th scope="col">Code</th>
                                             <th scope="col">Contact</th>
                                             <th scope="col">Location</th>
                                             <th scope="col">Status</th>
-                                            <th scope="col" className="text-end">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {pagedAcademies.map((academy) => (
+                                        {pagedAcademies.map((academy, idx) => (
                                             <tr key={academy.id}>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="btn-group btn-group-sm" role="group">
+                                                        <Link href={`/next_panel/academies/${academy.id}`} className="btn btn-outline-primary" aria-label="View academy">
+                                                            <ArrowUpRight size={16} />
+                                                        </Link>
+                                                        <Link href={`/next_panel/academies/${academy.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit academy">
+                                                            <Edit size={16} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-danger"
+                                                            onClick={() => handleDelete(academy)}
+                                                            disabled={deletingId === academy.id}
+                                                            aria-label="Delete academy"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <div className="d-flex align-items-center gap-2">
                                                         <div
@@ -189,29 +210,6 @@ export default function AcademiesPage() {
                                                     <span className={`badge ${academy.status === 1 ? "bg-success" : "bg-secondary"}`}>
                                                         {academy.status === 1 ? "Active" : "Inactive"}
                                                     </span>
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="btn-group btn-group-sm" role="group">
-                                                        <Link href={`/next_panel/academies/${academy.id}`} className="btn btn-outline-primary" aria-label="View academy">
-                                                            <ArrowUpRight size={16} />
-                                                        </Link>
-                                                        {/* {userInfo.permissions.includes("academies.edit") && ( */}
-                                                        <Link href={`/next_panel/academies/${academy.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit academy">
-                                                            <Edit size={16} />
-                                                        </Link>
-                                                        {/* )}
-                                                        {userInfo.permissions.includes("academies.delete") && ( */}
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleDelete(academy)}
-                                                            disabled={deletingId === academy.id}
-                                                            aria-label="Delete academy"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                        {/* )} */}
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

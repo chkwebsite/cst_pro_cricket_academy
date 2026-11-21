@@ -30,6 +30,43 @@ export function formatDate(value) {
     return `${d}/${m}/${y}`;
 }
 
+export function getTodayDateString() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+}
+
+export function normalizeDateString(val) {
+    if (!val) return null;
+    if (val instanceof Date) {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(val);
+    }
+    const s = String(val).trim();
+    if (s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s)) {
+        return s.slice(0, 10);
+    }
+    return s.slice(0, 10);
+}
+
+export function isMatchDateInFuture(matchDate) {
+    const dStr = normalizeDateString(matchDate);
+    if (!dStr) return false;
+    const todayStr = getTodayDateString();
+    return dStr > todayStr;
+}
+
+export function validateMatchDateForScoring(matchDate, actionName = "Scores and innings") {
+    if (!matchDate) return { allowed: true };
+    const future = isMatchDateInFuture(matchDate);
+    const dateFormatted = formatDate(matchDate);
+    if (future) {
+        return {
+            allowed: false,
+            matchDateStr: dateFormatted,
+            message: `${actionName} cannot be created or updated before the scheduled match date (${dateFormatted}).`,
+        };
+    }
+    return { allowed: true, matchDateStr: dateFormatted };
+}
+
 export function isValidCricketOvers(value) {
     if (value === "" || value === null || value === undefined) return false;
     const num = Number(value);

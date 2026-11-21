@@ -253,33 +253,18 @@ function GroundSlotsList() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Ground</th>
                                         <th>Slot</th>
                                         <th>Time</th>
                                         <th>Price</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedSlots.map((item, idx) => (
                                         <tr key={item.id}>
                                             <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                            <td>
-                                                <div>{item.ground_name}</div>
-                                                <small className="text-muted">{item.ground_code}</small>
-                                            </td>
-                                            <td>{item.slot_name}</td>
-                                            <td>
-                                                <Clock size={14} className="me-1 text-muted" />
-                                                {formatTime(item.start_time)} – {formatTime(item.end_time)}
-                                            </td>
-                                            <td>{formatPrice(item.price)}</td>
-                                            <td>
-                                                <span className={`badge ${Number(item.status) === 1 ? "bg-success" : "bg-secondary"}`}>
-                                                    {Number(item.status) === 1 ? "Active" : "Inactive"}
-                                                </span>
-                                            </td>
                                             <td>
                                                 <div className="d-flex justify-content-start gap-2">
                                                     <Link
@@ -299,6 +284,21 @@ function GroundSlotsList() {
                                                         <Trash2 size={16} />
                                                     </button>
                                                 </div>
+                                            </td>
+                                            <td>
+                                                <div>{item.ground_name}</div>
+                                                <small className="text-muted">{item.ground_code}</small>
+                                            </td>
+                                            <td>{item.slot_name}</td>
+                                            <td>
+                                                <Clock size={14} className="me-1 text-muted" />
+                                                {formatTime(item.start_time)} – {formatTime(item.end_time)}
+                                            </td>
+                                            <td>{formatPrice(item.price)}</td>
+                                            <td>
+                                                <span className={`badge ${Number(item.status) === 1 ? "bg-success" : "bg-secondary"}`}>
+                                                    {Number(item.status) === 1 ? "Active" : "Inactive"}
+                                                </span>
                                             </td>
                                         </tr>
                                     ))}

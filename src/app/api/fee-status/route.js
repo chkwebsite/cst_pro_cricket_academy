@@ -455,6 +455,8 @@ export async function GET(request) {
                     COALESCE(u.last_name, ttp_u.last_name, mp_u.last_name) AS last_name,
                     COALESCE(op.player_name, ttp_op.player_name, mp_op.player_name) AS outside_player_name,
                     tt_team.team_name AS tournament_team_name,
+                    tt_team.team_code AS tournament_team_code,
+                    tt.registration_no AS tournament_team_registration_no,
                     mt_t.team_name AS match_team_name,
                     op.player_name,
                     op.id AS outside_player_record_id,
@@ -467,12 +469,16 @@ export async function GET(request) {
                     ON a.id = fs.academy_id
                  LEFT JOIN cst_branch b
                     ON b.id = fs.branch_id
+                 LEFT JOIN cst_tournament_teams tt
+                    ON tt.id = fs.tournament_team_id
+                 LEFT JOIN cst_teams tt_team
+                    ON tt_team.id = tt.team_id
                  LEFT JOIN cst_tournament_team_players ttp
                     ON ttp.id = fs.tournament_team_player_id
                  LEFT JOIN cst_match_players mp
                     ON mp.id = fs.match_player_id
                  LEFT JOIN cst_tournaments t
-                    ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id)
+                    ON t.id = COALESCE(fs.tournament_id, ttp.tournament_id, tt.tournament_id)
                  LEFT JOIN cst_matches mt
                     ON mt.id = COALESCE(fs.match_id, mp.match_id)
                  LEFT JOIN cst_ground_bookings gb
@@ -483,10 +489,6 @@ export async function GET(request) {
                     ON u.id = fs.user_id
                  LEFT JOIN cst_outside_players op
                     ON op.id = fs.outside_player_id
-                 LEFT JOIN cst_tournament_teams tt
-                    ON tt.id = fs.tournament_team_id
-                 LEFT JOIN cst_teams tt_team
-                    ON tt_team.id = tt.team_id
                  LEFT JOIN cst_users ttp_u
                     ON ttp_u.id = ttp.user_id
                  LEFT JOIN cst_outside_players ttp_op

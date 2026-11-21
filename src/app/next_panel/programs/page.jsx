@@ -212,6 +212,7 @@ export default function ProgramsPage() {
                                     <thead className="table-success">
                                         <tr>
                                             <th>#</th>
+                                            <th>Actions</th>
                                             <th>Program</th>
                                             <th>Academy</th>
                                             <th>Branch</th>
@@ -220,13 +221,31 @@ export default function ProgramsPage() {
                                             <th>Daily Fee</th>
                                             <th>Kit Fee</th>
                                             <th>Status</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pagedPrograms.map((item, idx) => (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="d-flex justify-content-start gap-2">
+                                                        <Link
+                                                            href={`/next_panel/programs/${item.id}/edit`}
+                                                            className="btn btn-outline-secondary"
+                                                            aria-label="Edit program"
+                                                        >
+                                                            <Edit size={16} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-danger"
+                                                            onClick={() => handleDelete(item.id, item.program_name)}
+                                                            aria-label="Delete program"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <div className="d-flex align-items-center gap-2">
                                                         <div
@@ -268,25 +287,6 @@ export default function ProgramsPage() {
                                                     <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
                                                         {item.status === 1 ? "Active" : "Inactive"}
                                                     </span>
-                                                </td>
-                                                <td>
-                                                    <div className="d-flex justify-content-start gap-2">
-                                                        <Link
-                                                            href={`/next_panel/programs/${item.id}/edit`}
-                                                            className="btn btn-outline-secondary"
-                                                            aria-label="Edit program"
-                                                        >
-                                                            <Edit size={16} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleDelete(item.id, item.program_name)}
-                                                            aria-label="Delete program"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

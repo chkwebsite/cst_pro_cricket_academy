@@ -265,6 +265,12 @@ export default function FeeStatusPage() {
                   dateInfo.date,
                   f.match_date,
                   f.tournament_start_date,
+                  f.tournament_end_date,
+                  f.tournament_name,
+                  f.tournament_team_name,
+                  f.tournament_team_registration_no,
+                  f.tournament_team_code,
+                  f.match_team_name,
                   f.academy_name,
                   f.branch_name,
                   f.batch_name,
@@ -404,15 +410,15 @@ export default function FeeStatusPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Academy</th>
                                         <th>Fee For</th>
-                                        <th>Match Date</th>
+                                        <th>Schedule / Event Date</th>
                                         <th>Payer</th>
                                         <th className="text-end">Fee</th>
                                         <th className="text-end">Paid</th>
                                         <th className="text-end">Due</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -426,47 +432,6 @@ export default function FeeStatusPage() {
                                         return (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                                <td>
-                                                    <div>{item.academy_name || "—"}</div>
-                                                    {item.branch_name && <small className="text-muted">{item.branch_name}</small>}
-                                                </td>
-                                                <td>
-                                                    <span className="badge text-bg-light border">{item.fee_type}</span>
-                                                    <small className="text-muted d-block mt-1">{reference(item)}</small>
-                                                </td>
-                                                <td>
-                                                    <div className="d-flex align-items-center gap-1 text-nowrap">
-                                                        <Calendar size={14} className={dateInfo.isMatch ? "text-primary" : "text-secondary"} />
-                                                        <span className="fw-medium">{dateInfo.date}</span>
-                                                        {dateInfo.time && <small className="text-muted ms-1">({dateInfo.time})</small>}
-                                                    </div>
-                                                    {dateInfo.label && (
-                                                        <small
-                                                            className={`badge ${
-                                                                dateInfo.isMatch
-                                                                    ? "bg-primary-subtle text-primary border border-primary-subtle"
-                                                                    : "bg-light text-secondary border"
-                                                            } mt-1`}
-                                                            style={{ fontSize: "10.5px" }}
-                                                        >
-                                                            {dateInfo.label}
-                                                        </small>
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    <div className="fw-semibold text-dark">{payer(item)}</div>
-                                                    {item.batch_name && (
-                                                        <span className="badge bg-primary-subtle text-primary border border-primary-subtle mt-1" style={{ fontSize: "10.5px" }}>
-                                                            {item.batch_name}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="text-end">₹{money(item.fee_amount)}</td>
-                                                <td className="text-end">₹{money(item.paid_amount)}</td>
-                                                <td className="text-end">{item.status === "Cancelled" ? "—" : `₹${money(due)}`}</td>
-                                                <td>
-                                                    <span className={`badge ${STATUS_BADGE[item.status] || "bg-secondary"}`}>{item.status}</span>
-                                                </td>
                                                 <td>
                                                     <div className="d-flex justify-content-start align-items-center gap-2">
                                                         <Link
@@ -522,17 +487,63 @@ export default function FeeStatusPage() {
                                                         )}
                                                     </div>
                                                 </td>
+                                                <td>
+                                                    <div>{item.academy_name || "—"}</div>
+                                                    {item.branch_name && <small className="text-muted">{item.branch_name}</small>}
+                                                </td>
+                                                <td>
+                                                    <span className="badge text-bg-light border">{item.fee_type}</span>
+                                                    <small className="text-muted d-block mt-1">{reference(item)}</small>
+                                                </td>
+                                                <td>
+                                                    <div className="d-flex align-items-center gap-1 text-nowrap">
+                                                        <Calendar size={14} className={dateInfo.isMatch ? "text-primary" : "text-secondary"} />
+                                                        <span className="fw-medium">{dateInfo.date}</span>
+                                                        {dateInfo.time && <small className="text-muted ms-1">({dateInfo.time})</small>}
+                                                    </div>
+                                                    {dateInfo.label && (
+                                                        <small
+                                                            className={`badge ${
+                                                                dateInfo.isMatch
+                                                                    ? "bg-primary-subtle text-primary border border-primary-subtle"
+                                                                    : "bg-light text-secondary border"
+                                                            } mt-1`}
+                                                            style={{ fontSize: "10.5px" }}
+                                                        >
+                                                            {dateInfo.label}
+                                                        </small>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <div className="fw-semibold text-dark">{payer(item)}</div>
+                                                    {item.tournament_team_registration_no && item.fee_type === "Tournament Team" && (
+                                                        <span className="badge bg-light text-secondary border mt-1" style={{ fontSize: "10.5px" }}>
+                                                            {item.tournament_team_registration_no}
+                                                        </span>
+                                                    )}
+                                                    {item.batch_name && (
+                                                        <span className="badge bg-primary-subtle text-primary border border-primary-subtle mt-1" style={{ fontSize: "10.5px" }}>
+                                                            {item.batch_name}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="text-end">₹{money(item.fee_amount)}</td>
+                                                <td className="text-end">₹{money(item.paid_amount)}</td>
+                                                <td className="text-end">{item.status === "Cancelled" ? "—" : `₹${money(due)}`}</td>
+                                                <td>
+                                                    <span className={`badge ${STATUS_BADGE[item.status] || "bg-secondary"}`}>{item.status}</span>
+                                                </td>
                                             </tr>
                                         );
                                     })}
                                 </tbody>
                                 <tfoot>
                                     <tr className="fw-semibold">
-                                        <td colSpan={5} className="text-end">Total (excluding cancelled)</td>
+                                        <td colSpan={6} className="text-end">Total (excluding cancelled)</td>
                                         <td className="text-end">₹{money(totals.fee)}</td>
                                         <td className="text-end">₹{money(totals.paid)}</td>
                                         <td className="text-end">₹{money(totals.fee - totals.paid)}</td>
-                                        <td colSpan={2}></td>
+                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>

@@ -246,6 +246,8 @@ export default function StudentEnquiriesFlowupPage() {
                             <table className="table align-middle table-hover mb-0">
                                 <thead className="table-success">
                                     <tr>
+                                        <th style={{ width: "50px" }}>#</th>
+                                        <th style={{ width: "95px" }}>Actions</th>
                                         <th>Enquiry &amp; Student</th>
                                         <th>Attempt</th>
                                         <th>Status Updated To</th>
@@ -253,12 +255,31 @@ export default function StudentEnquiriesFlowupPage() {
                                         <th>Logged Date</th>
                                         <th>Next Call Date</th>
                                         <th>Staff</th>
-                                        <th className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pagedFollowups.map((item) => (
+                                    {pagedFollowups.map((item, idx) => (
                                         <tr key={item.id}>
+                                            <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start gap-1">
+                                                    <Link
+                                                        href={`/next_panel/student-enquiries/${item.enquiry_id}/followup`}
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        title="Open Timeline"
+                                                    >
+                                                        <ExternalLink size={14} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => handleDelete(item)}
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div className="fw-bold text-dark">{item.student_name}</div>
                                                 <small className="text-muted d-block">
@@ -296,25 +317,6 @@ export default function StudentEnquiriesFlowupPage() {
                                             </td>
                                             <td>
                                                 <span className="small text-muted">{item.created_by_name || "—"}</span>
-                                            </td>
-                                            <td className="text-end">
-                                                <div className="d-flex justify-content-end gap-1">
-                                                    <Link
-                                                        href={`/next_panel/student-enquiries/${item.enquiry_id}/followup`}
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        title="Open Timeline"
-                                                    >
-                                                        <ExternalLink size={14} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => handleDelete(item)}
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}

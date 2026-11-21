@@ -492,13 +492,13 @@ export default function IndividualTrainingPage() {
                             <thead className="table-light border-bottom text-muted small text-uppercase">
                                 <tr>
                                     <th style={{ width: "60px" }} className="ps-3">ID</th>
+                                    <th style={{ width: "130px" }} className="text-end pe-3">Actions</th>
                                     <th>Player Info</th>
                                     <th>Dedicated Coach</th>
                                     <th>Branch / Academy</th>
                                     <th>Weekly Days & Timing</th>
                                     <th>Schedule Duration</th>
                                     <th style={{ width: "110px" }}>Status</th>
-                                    <th style={{ width: "130px" }} className="text-end pe-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -534,6 +534,33 @@ export default function IndividualTrainingPage() {
                                         return (
                                             <tr key={item.id}>
                                                 <td className="ps-3 fw-bold text-muted small">#{item.id}</td>
+                                                <td className="text-end pe-3">
+                                                    <div className="d-flex align-items-center justify-content-end gap-1">
+                                                        <Link
+                                                            href={`/next_panel/individual-training/${item.id}`}
+                                                            className="btn btn-sm btn-outline-info p-1 px-2"
+                                                            title="View Session Details"
+                                                        >
+                                                            <Eye size={15} />
+                                                        </Link>
+                                                        <Link
+                                                            href={`/next_panel/individual-training/${item.id}/edit`}
+                                                            className="btn btn-sm btn-outline-primary p-1 px-2"
+                                                            title="Edit Session"
+                                                        >
+                                                            <Edit size={15} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger p-1 px-2"
+                                                            onClick={() => handleDelete(item)}
+                                                            disabled={deletingId === item.id}
+                                                            title="Delete Session"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+                                                </td>
 
                                                 {/* Player */}
                                                 <td>
@@ -626,33 +653,6 @@ export default function IndividualTrainingPage() {
                                                 </td>
 
                                                 {/* Actions */}
-                                                <td className="text-end pe-3">
-                                                    <div className="d-flex align-items-center justify-content-end gap-1">
-                                                        <Link
-                                                            href={`/next_panel/individual-training/${item.id}`}
-                                                            className="btn btn-sm btn-outline-info p-1 px-2"
-                                                            title="View Session Details"
-                                                        >
-                                                            <Eye size={15} />
-                                                        </Link>
-                                                        <Link
-                                                            href={`/next_panel/individual-training/${item.id}/edit`}
-                                                            className="btn btn-sm btn-outline-primary p-1 px-2"
-                                                            title="Edit Session"
-                                                        >
-                                                            <Edit size={15} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger p-1 px-2"
-                                                            onClick={() => handleDelete(item)}
-                                                            disabled={deletingId === item.id}
-                                                            title="Delete Session"
-                                                        >
-                                                            <Trash2 size={15} />
-                                                        </button>
-                                                    </div>
-                                                </td>
                                             </tr>
                                         );
                                     })

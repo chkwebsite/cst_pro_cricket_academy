@@ -534,6 +534,7 @@ export default function OrdersPage() {
                             <thead className="table-light text-secondary small text-uppercase">
                                 <tr>
                                     <th style={{ width: "40px" }} className="text-center">#</th>
+                                    <th style={{ width: "160px" }} className="text-end pe-3">Actions</th>
                                     <th>Order No</th>
                                     <th>Saler Name</th>
                                     <th>Buyer Name</th>
@@ -543,7 +544,6 @@ export default function OrdersPage() {
                                     <th className="text-center">Order Status</th>
                                     <th>Order Date</th>
                                     <th>Delivery Date</th>
-                                    <th style={{ width: "160px" }} className="text-end pe-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -563,6 +563,56 @@ export default function OrdersPage() {
                                     return (
                                         <tr key={item.id} style={rowStyle} className={isDelivered ? "border-success-subtle" : isCancelled ? "border-danger-subtle" : ""}>
                                             <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                            <td className="text-end pe-3">
+                                                <div className="btn-group btn-group-sm">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-info"
+                                                        onClick={() => handleOpenView(item)}
+                                                        title="View Full Details"
+                                                    >
+                                                        <Eye size={15} />
+                                                    </button>
+                                                    {!isPlayer && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-primary"
+                                                                onClick={() => handleOpenStatusModal(item)}
+                                                                disabled={isDelivered || isCancelled}
+                                                                title={
+                                                                    isDelivered
+                                                                        ? "Order Delivered — all modifications disabled"
+                                                                        : isCancelled
+                                                                        ? "Order Cancelled — modification disabled"
+                                                                        : "Update Order Status"
+                                                                }
+                                                                style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                                                            >
+                                                                <Truck size={15} />
+                                                            </button>
+                                                            {item.payment_status !== "Paid" && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-outline-success"
+                                                                    onClick={() => handleOpenPaymentModal(item)}
+                                                                    disabled={isDelivered || isCancelled}
+                                                                    title={
+                                                                        isDelivered
+                                                                            ? "Order Delivered — all buttons disabled"
+                                                                            : isCancelled
+                                                                            ? "Order Cancelled — disabled"
+                                                                            : "Record Payment"
+                                                                    }
+                                                                    style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                                                                >
+                                                                    <CreditCard size={15} />
+                                                                </button>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
                                             {/* Order No */}
                                             <td>
                                                 <div className="fw-bold text-dark font-monospace" style={{ fontSize: "0.88rem" }}>
@@ -663,56 +713,6 @@ export default function OrdersPage() {
                                                 </span>
                                             </td>
                                             {/* Actions */}
-                                            <td className="text-end pe-3">
-                                                <div className="btn-group btn-group-sm">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-outline-info"
-                                                        onClick={() => handleOpenView(item)}
-                                                        title="View Full Details"
-                                                    >
-                                                        <Eye size={15} />
-                                                    </button>
-                                                    {!isPlayer && (
-                                                        <>
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-outline-primary"
-                                                                onClick={() => handleOpenStatusModal(item)}
-                                                                disabled={isDelivered || isCancelled}
-                                                                title={
-                                                                    isDelivered
-                                                                        ? "Order Delivered — all modifications disabled"
-                                                                        : isCancelled
-                                                                        ? "Order Cancelled — modification disabled"
-                                                                        : "Update Order Status"
-                                                                }
-                                                                style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-                                                            >
-                                                                <Truck size={15} />
-                                                            </button>
-                                                            {item.payment_status !== "Paid" && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-outline-success"
-                                                                    onClick={() => handleOpenPaymentModal(item)}
-                                                                    disabled={isDelivered || isCancelled}
-                                                                    title={
-                                                                        isDelivered
-                                                                            ? "Order Delivered — all buttons disabled"
-                                                                            : isCancelled
-                                                                            ? "Order Cancelled — disabled"
-                                                                            : "Record Payment"
-                                                                    }
-                                                                    style={isDelivered || isCancelled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-                                                                >
-                                                                    <CreditCard size={15} />
-                                                                </button>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
                                         </tr>
                                     );
                                 })}

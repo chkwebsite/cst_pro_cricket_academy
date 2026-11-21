@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
+import { validateMatchDateForScoring } from "@/app/components/lib/match-date-validator";
 
 // GET: All scorecard records
 // Filters: ?match_id=1&innings_id=1
@@ -249,12 +250,21 @@ export async function POST(request) {
 
         // Verify match exists and check tenant access
         const [matchRows] = await connection.execute(
-            "SELECT id, academy_id, branch_id, overs FROM cst_matches WHERE id = ? LIMIT 1",
+            "SELECT id, academy_id, branch_id, overs, match_date FROM cst_matches WHERE id = ? LIMIT 1",
             [match_id]
         );
 
         if (matchRows.length === 0) {
             return NextResponse.json({ success: false, message: "Match not found" }, { status: 404 });
+        }
+
+        // Rule: Scores cannot be added before match date
+        const dateCheck = validateMatchDateForScoring(matchRows[0].match_date, "Batting score");
+        if (!dateCheck.allowed) {
+            return NextResponse.json(
+                { success: false, message: dateCheck.message },
+                { status: 400 }
+            );
         }
 
         if (!verifyRecordAccess(authUser, { academy_id: matchRows[0].academy_id, branch_id: matchRows[0].branch_id })) {

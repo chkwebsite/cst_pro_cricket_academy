@@ -346,15 +346,15 @@ export default function UmpiresPage() {
                                 <thead className="table-light">
                                     <tr>
                                         <th style={{ width: "4%" }}>#</th>
+                                        <th style={{ width: "6%" }} className="text-end pe-3">
+                                            Actions
+                                        </th>
                                         <th style={{ width: "20%" }}>Umpire</th>
                                         <th style={{ width: "16%" }}>Contact</th>
                                         <th style={{ width: "16%" }}>Branch / Academy</th>
                                         <th style={{ width: "14%" }}>Experience</th>
                                         <th style={{ width: "18%" }}>Standard Fees</th>
                                         <th style={{ width: "6%" }}>Status</th>
-                                        <th style={{ width: "6%" }} className="text-end pe-3">
-                                            Actions
-                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -362,6 +362,35 @@ export default function UmpiresPage() {
                                         <tr key={umpire.id}>
                                             <td className="text-muted small">
                                                 {(page - 1) * PAGE_SIZE + idx + 1}
+                                            </td>
+                                            <td className="text-end pe-3">
+                                                <div className="d-inline-flex gap-1">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-info"
+                                                        title="Quick View"
+                                                        onClick={() => setSelectedUmpire(umpire)}
+                                                    >
+                                                        <Eye size={14} />
+                                                    </button>
+
+                                                    <Link
+                                                        href={`/next_panel/umpires/${umpire.id}/edit`}
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        title="Edit Umpire"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </Link>
+
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        title="Delete Umpire"
+                                                        onClick={() => setDeleteConfirmUmpire(umpire)}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </td>
 
                                             {/* Umpire Name & Qualification */}
@@ -455,35 +484,6 @@ export default function UmpiresPage() {
                                             </td>
 
                                             {/* Actions */}
-                                            <td className="text-end pe-3">
-                                                <div className="d-inline-flex gap-1">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-info"
-                                                        title="Quick View"
-                                                        onClick={() => setSelectedUmpire(umpire)}
-                                                    >
-                                                        <Eye size={14} />
-                                                    </button>
-
-                                                    <Link
-                                                        href={`/next_panel/umpires/${umpire.id}/edit`}
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        title="Edit Umpire"
-                                                    >
-                                                        <Edit size={14} />
-                                                    </Link>
-
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        title="Delete Umpire"
-                                                        onClick={() => setDeleteConfirmUmpire(umpire)}
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

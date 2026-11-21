@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 import { checkAndUpdateInningsAndMatchCompletion } from "@/app/components/lib/match-completion-helper";
+import { validateMatchDateForScoring } from "@/app/components/lib/match-date-validator";
 
 
 // GET: Single scorecard record
@@ -132,7 +133,7 @@ export async function PUT(request, { params }) {
         connection = await pool.getConnection();
 
         const [existingRows] = await connection.execute(
-            `SELECT sc.*, m.academy_id, m.branch_id, m.overs AS match_overs, mi.innings_status
+            `SELECT sc.*, m.academy_id, m.branch_id, m.overs AS match_overs, m.match_date, mi.innings_status
              FROM cst_match_scorecard sc
              INNER JOIN cst_matches m ON m.id = sc.match_id
              INNER JOIN cst_match_innings mi ON mi.id = sc.innings_id
@@ -151,6 +152,15 @@ export async function PUT(request, { params }) {
         }
 
         const existing = existingRows[0];
+
+        // Rule: Batting score cannot be updated before match date
+        const dateCheck = validateMatchDateForScoring(existing.match_date, "Batting score");
+        if (!dateCheck.allowed) {
+            return NextResponse.json(
+                { success: false, message: dateCheck.message },
+                { status: 400 }
+            );
+        }
 
         if (!verifyRecordAccess(authUser, { academy_id: existing.academy_id, branch_id: existing.branch_id })) {
             return NextResponse.json(

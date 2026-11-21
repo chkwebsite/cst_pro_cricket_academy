@@ -339,6 +339,7 @@ export default function OutsidePlayersPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Player</th>
                                         <th>Academy / Branch</th>
                                         <th>Contact</th>
@@ -347,13 +348,31 @@ export default function OutsidePlayersPage() {
                                         <th>Batting</th>
                                         <th>Bowling</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedPlayers.map((item, idx) => (
                                         <tr key={item.id}>
                                             <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start gap-2">
+                                                    <Link
+                                                        href={`/next_panel/outside-players/${item.id}/edit`}
+                                                        className="btn btn-outline-secondary"
+                                                        aria-label="Edit player"
+                                                    >
+                                                        <Edit size={16} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-danger"
+                                                        onClick={() => handleDelete(item.id, item.player_name)}
+                                                        aria-label="Delete player"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div className="d-flex align-items-center gap-2">
                                                     {item.profile_image ? (
@@ -398,25 +417,6 @@ export default function OutsidePlayersPage() {
                                                 <span className={`badge ${Number(item.status) === 1 ? "bg-success" : "bg-secondary"}`}>
                                                     {Number(item.status) === 1 ? "Active" : "Inactive"}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                <div className="d-flex justify-content-start gap-2">
-                                                    <Link
-                                                        href={`/next_panel/outside-players/${item.id}/edit`}
-                                                        className="btn btn-outline-secondary"
-                                                        aria-label="Edit player"
-                                                    >
-                                                        <Edit size={16} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-outline-danger"
-                                                        onClick={() => handleDelete(item.id, item.player_name)}
-                                                        aria-label="Delete player"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}

@@ -141,17 +141,38 @@ export default function BranchesPage() {
                                 <table className="table align-middle mb-0">
                                     <thead className="table-light">
                                         <tr>
+                                            <th scope="col" style={{ width: "50px" }}>#</th>
+                                            <th scope="col" style={{ width: "120px" }}>Actions</th>
                                             <th scope="col">Branch</th>
                                             <th scope="col">Academy</th>
                                             <th scope="col">Contact</th>
                                             <th scope="col">Location &amp; Directions</th>
                                             <th scope="col">Status</th>
-                                            <th scope="col" className="text-end">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {pagedBranches.map((branch) => (
+                                        {pagedBranches.map((branch, idx) => (
                                             <tr key={branch.id}>
+                                                <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="btn-group btn-group-sm" role="group">
+                                                        <Link href={`/next_panel/branches/${branch.id}`} className="btn btn-outline-primary" aria-label="View branch">
+                                                            <ArrowUpRight size={16} />
+                                                        </Link>
+                                                        <Link href={`/next_panel/branches/${branch.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit branch">
+                                                            <Edit size={16} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-danger"
+                                                            onClick={() => handleDelete(branch)}
+                                                            disabled={deletingId === branch.id}
+                                                            aria-label="Delete branch"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <div className="fw-semibold">{branch.branch_name}</div>
                                                     <small className="text-muted">{branch.branch_code}</small>
@@ -176,25 +197,6 @@ export default function BranchesPage() {
                                                     <span className={`badge ${branch.status === 1 ? "bg-success" : "bg-secondary"}`}>
                                                         {branch.status === 1 ? "Active" : "Inactive"}
                                                     </span>
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="btn-group btn-group-sm" role="group">
-                                                        <Link href={`/next_panel/branches/${branch.id}`} className="btn btn-outline-primary" aria-label="View branch">
-                                                            <ArrowUpRight size={16} />
-                                                        </Link>
-                                                        <Link href={`/next_panel/branches/${branch.id}/edit`} className="btn btn-outline-secondary" aria-label="Edit branch">
-                                                            <Edit size={16} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleDelete(branch)}
-                                                            disabled={deletingId === branch.id}
-                                                            aria-label="Delete branch"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

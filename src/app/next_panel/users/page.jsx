@@ -255,6 +255,7 @@ export default function UsersPage() {
                                     <thead className="table-success">
                                         <tr>
                                             <th>#</th>
+                                            <th>Actions</th>
                                             <th>Photo</th>
                                             <th>Appointment No</th>
                                             <th>Name</th>
@@ -263,13 +264,31 @@ export default function UsersPage() {
                                             <th>Type</th>
                                             <th>Branch</th>
                                             <th>Status</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pagedUsers.map((item, idx) => (
                                             <tr key={item.id}>
                                                 <th>{(currentPage - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="d-flex justify-content-start gap-2">
+                                                        <Link
+                                                            href={`/next_panel/users/${item.id}/edit`}
+                                                            className="btn btn-outline-secondary"
+                                                            aria-label="Edit user"
+                                                        >
+                                                            <Edit size={16} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-danger"
+                                                            onClick={() => handleDelete(item.id, `${item.first_name} ${item.last_name || ""}`.trim())}
+                                                            aria-label="Delete user"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     {item.profile_image ? (
                                                         // eslint-disable-next-line @next/next/no-img-element
@@ -294,25 +313,6 @@ export default function UsersPage() {
                                                     <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
                                                         {item.status === 1 ? "Active" : "Inactive"}
                                                     </span>
-                                                </td>
-                                                <td>
-                                                    <div className="d-flex justify-content-start gap-2">
-                                                        <Link
-                                                            href={`/next_panel/users/${item.id}/edit`}
-                                                            className="btn btn-outline-secondary"
-                                                            aria-label="Edit user"
-                                                        >
-                                                            <Edit size={16} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleDelete(item.id, `${item.first_name} ${item.last_name || ""}`.trim())}
-                                                            aria-label="Delete user"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

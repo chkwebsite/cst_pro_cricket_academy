@@ -342,6 +342,7 @@ export default function MatchScorecardPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th style={{ width: "60px" }}>Pos</th>
+                                        <th style={{ width: "110px" }}>Actions</th>
                                         <th>Batter</th>
                                         <th>Dismissal</th>
                                         <th className="text-center">R</th>
@@ -349,7 +350,6 @@ export default function MatchScorecardPage() {
                                         <th className="text-center">4s</th>
                                         <th className="text-center">6s</th>
                                         <th className="text-center">SR</th>
-                                        <th className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -384,6 +384,25 @@ export default function MatchScorecardPage() {
                                                     </span>
                                                 </td>
                                                 <td>
+                                                    <div className="d-flex justify-content-start gap-2">
+                                                        <Link
+                                                            href={`/next_panel/match-scorecard/${item.id}/edit`}
+                                                            className="btn btn-sm btn-outline-secondary"
+                                                            title="Edit Batting Record"
+                                                        >
+                                                            <Edit size={14} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => handleDelete(item)}
+                                                            title="Delete Batting Record"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td>
                                                     <div className="fw-bold text-dark">
                                                         {item.player_name || `Player #${item.match_player_id}`}
                                                     </div>
@@ -414,25 +433,6 @@ export default function MatchScorecardPage() {
                                                 <td className="text-center">{item.sixes}</td>
                                                 <td className="text-center fw-medium">
                                                     {Number(item.strike_rate || 0).toFixed(2)}
-                                                </td>
-                                                <td className="text-end">
-                                                    <div className="d-flex justify-content-end gap-2">
-                                                        <Link
-                                                            href={`/next_panel/match-scorecard/${item.id}/edit`}
-                                                            className="btn btn-sm btn-outline-secondary"
-                                                            title="Edit Batting Record"
-                                                        >
-                                                            <Edit size={14} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() => handleDelete(item)}
-                                                            title="Delete Batting Record"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         );

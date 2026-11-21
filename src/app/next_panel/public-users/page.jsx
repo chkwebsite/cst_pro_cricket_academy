@@ -411,19 +411,47 @@ export default function PublicUsersPage() {
                             <thead className="table-light text-secondary small text-uppercase">
                                 <tr>
                                     <th style={{ width: "50px" }} className="text-center">#</th>
+                                    <th style={{ width: "140px" }} className="text-end pe-3">Actions</th>
                                     <th>User Info</th>
                                     <th>Email</th>
                                     <th>Phone</th>
                                     <th>Role / Type</th>
                                     <th className="text-center">Status</th>
                                     <th>Registered On</th>
-                                    <th style={{ width: "140px" }} className="text-end pe-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pagedUsers.map((item, idx) => (
                                     <tr key={item.id}>
                                         <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                        <td className="text-end pe-3">
+                                            <div className="btn-group btn-group-sm" role="group">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-info"
+                                                    onClick={() => setViewUser(item)}
+                                                    title="View Details"
+                                                >
+                                                    <Eye size={15} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary"
+                                                    onClick={() => handleOpenEdit(item)}
+                                                    title="Edit User"
+                                                >
+                                                    <Edit size={15} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-danger"
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Delete User"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td>
                                             <div className="d-flex align-items-center gap-2">
                                                 {item.profile_image ? (
@@ -521,34 +549,6 @@ export default function PublicUsersPage() {
                                                       minute: "2-digit",
                                                   })
                                                 : "—"}
-                                        </td>
-                                        <td className="text-end pe-3">
-                                            <div className="btn-group btn-group-sm" role="group">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-info"
-                                                    onClick={() => setViewUser(item)}
-                                                    title="View Details"
-                                                >
-                                                    <Eye size={15} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-secondary"
-                                                    onClick={() => handleOpenEdit(item)}
-                                                    title="Edit User"
-                                                >
-                                                    <Edit size={15} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-danger"
-                                                    onClick={() => handleDelete(item)}
-                                                    title="Delete User"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            </div>
                                         </td>
                                     </tr>
                                 ))}

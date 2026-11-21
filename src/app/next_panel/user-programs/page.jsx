@@ -361,6 +361,9 @@ export default function UserProgramsPage() {
                                     <thead className="table-light">
                                         <tr>
                                             <th>ID</th>
+                                            <th className="text-end">
+                                                Actions
+                                            </th>
                                             <th>User</th>
                                             <th>Program</th>
                                             <th>Branch</th>
@@ -369,9 +372,6 @@ export default function UserProgramsPage() {
                                             </th>
                                             <th>Dates</th>
                                             <th>Status</th>
-                                            <th className="text-end">
-                                                Actions
-                                            </th>
                                         </tr>
                                     </thead>
 
@@ -381,6 +381,44 @@ export default function UserProgramsPage() {
 
                                                 <td>
                                                     {r.id}
+                                                </td>
+
+                                                <td className="text-end">
+                                                    <div className="btn-group btn-group-sm">
+
+                                                        <Link
+                                                            href={`/next_panel/user-programs/${r.id}`}
+                                                            className="btn btn-outline-primary"
+                                                        >
+                                                            <ArrowUpRight
+                                                                size={16}
+                                                            />
+                                                        </Link>
+
+                                                        <Link
+                                                            href={`/next_panel/user-programs/${r.id}/edit`}
+                                                            className="btn btn-outline-secondary"
+                                                        >
+                                                            <Edit
+                                                                size={16}
+                                                            />
+                                                        </Link>
+
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-danger"
+                                                            onClick={() =>
+                                                                remove(
+                                                                    r.id
+                                                                )
+                                                            }
+                                                        >
+                                                            <Trash2
+                                                                size={16}
+                                                            />
+                                                        </button>
+
+                                                    </div>
                                                 </td>
 
                                                 <td>
@@ -431,44 +469,6 @@ export default function UserProgramsPage() {
                                                             ? "Active"
                                                             : "Inactive"}
                                                     </span>
-                                                </td>
-
-                                                <td className="text-end">
-                                                    <div className="btn-group btn-group-sm">
-
-                                                        <Link
-                                                            href={`/next_panel/user-programs/${r.id}`}
-                                                            className="btn btn-outline-primary"
-                                                        >
-                                                            <ArrowUpRight
-                                                                size={16}
-                                                            />
-                                                        </Link>
-
-                                                        <Link
-                                                            href={`/next_panel/user-programs/${r.id}/edit`}
-                                                            className="btn btn-outline-secondary"
-                                                        >
-                                                            <Edit
-                                                                size={16}
-                                                            />
-                                                        </Link>
-
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() =>
-                                                                remove(
-                                                                    r.id
-                                                                )
-                                                            }
-                                                        >
-                                                            <Trash2
-                                                                size={16}
-                                                            />
-                                                        </button>
-
-                                                    </div>
                                                 </td>
 
                                             </tr>

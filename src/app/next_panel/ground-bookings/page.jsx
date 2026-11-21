@@ -372,13 +372,13 @@ function GroundBookingsList() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Booking</th>
                                         <th>Customer</th>
                                         <th>Ground / Slot</th>
                                         <th>Amount</th>
                                         <th>Payment</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -387,6 +387,44 @@ function GroundBookingsList() {
                                         return (
                                         <tr key={item.id}>
                                             <th>{(pagination.page - 1) * LIMIT + idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex justify-content-start align-items-center gap-2">
+                                                    <Link
+                                                        href={`/next_panel/ground-bookings/${item.id}`}
+                                                        className="btn btn-outline-primary"
+                                                        aria-label="View booking"
+                                                        title="View Booking"
+                                                    >
+                                                        <Eye size={16} />
+                                                    </Link>
+                                                    {!isPlayer && !isUmpire && (
+                                                        <>
+                                                            {closed ? (
+                                                                <button type="button" className="btn btn-outline-secondary" aria-label="Edit booking" disabled>
+                                                                    <Edit size={16} />
+                                                                </button>
+                                                            ) : (
+                                                                <Link
+                                                                    href={`/next_panel/ground-bookings/${item.id}/edit?academy_id=${item.academy_id}&branch_id=${item.branch_id}`}
+                                                                    className="btn btn-outline-secondary"
+                                                                    aria-label="Edit booking"
+                                                                >
+                                                                    <Edit size={16} />
+                                                                </Link>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-danger"
+                                                                onClick={() => handleDelete(item)}
+                                                                aria-label="Delete booking"
+                                                                disabled={closed}
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div>{item.booking_no}</div>
                                                 <small className="text-muted d-block">{formatDate(item.booking_date)}</small>
@@ -440,44 +478,6 @@ function GroundBookingsList() {
                                                 <span className={`badge ${bookingBadge(item.booking_status)}`}>
                                                     {item.booking_status}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                <div className="d-flex justify-content-start align-items-center gap-2">
-                                                    <Link
-                                                        href={`/next_panel/ground-bookings/${item.id}`}
-                                                        className="btn btn-outline-primary"
-                                                        aria-label="View booking"
-                                                        title="View Booking"
-                                                    >
-                                                        <Eye size={16} />
-                                                    </Link>
-                                                    {!isPlayer && !isUmpire && (
-                                                        <>
-                                                            {closed ? (
-                                                                <button type="button" className="btn btn-outline-secondary" aria-label="Edit booking" disabled>
-                                                                    <Edit size={16} />
-                                                                </button>
-                                                            ) : (
-                                                                <Link
-                                                                    href={`/next_panel/ground-bookings/${item.id}/edit?academy_id=${item.academy_id}&branch_id=${item.branch_id}`}
-                                                                    className="btn btn-outline-secondary"
-                                                                    aria-label="Edit booking"
-                                                                >
-                                                                    <Edit size={16} />
-                                                                </Link>
-                                                            )}
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-outline-danger"
-                                                                onClick={() => handleDelete(item)}
-                                                                aria-label="Delete booking"
-                                                                disabled={closed}
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
                                             </td>
                                         </tr>
                                     )})

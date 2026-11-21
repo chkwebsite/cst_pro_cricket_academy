@@ -284,13 +284,13 @@ export default function MatchesPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Match</th>
                                         <th>Teams</th>
                                         <th>Date &amp; Time</th>
                                         <th>Venue</th>
                                         {isUmpire ? <th>Umpire Fee &amp; Status</th> : <th>Toss</th>}
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -305,6 +305,51 @@ export default function MatchesPage() {
                                         return (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="d-flex justify-content-start gap-2">
+                                                        <Link
+                                                            href={`/next_panel/matches/${item.id}/scorecard`}
+                                                            className={`btn ${showWaitNotice ? "btn-warning text-dark" : "btn-outline-primary"}`}
+                                                            title={showWaitNotice ? "Scorecard pending - Awaiting Scorecard Records" : "Match Scorecard Center"}
+                                                            aria-label="Scorecard"
+                                                        >
+                                                            <Trophy size={16} />
+                                                        </Link>
+                                                        {!isUmpire && (
+                                                            <>
+                                                                {effStatus === "Cancelled" ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-outline-secondary"
+                                                                        disabled
+                                                                        title="Cancelled matches cannot be edited"
+                                                                        aria-label="Edit match disabled"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </button>
+                                                                ) : (
+                                                                    <Link
+                                                                        href={`/next_panel/matches/${item.id}/edit`}
+                                                                        className="btn btn-outline-secondary"
+                                                                        aria-label="Edit match"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </Link>
+                                                                )}
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-outline-danger"
+                                                                    onClick={() => handleCancel(item)}
+                                                                    disabled={closed}
+                                                                    title={closed ? `A ${effStatus.toLowerCase()} match cannot be cancelled` : "Cancel match"}
+                                                                    aria-label="Cancel match"
+                                                                >
+                                                                    <Ban size={16} />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <div>{item.match_no || `Match #${item.id}`}</div>
                                                     <span className="badge text-bg-light border">{item.match_type}</span>
@@ -335,7 +380,7 @@ export default function MatchesPage() {
                                                     ) : showWaitNotice ? (
                                                         <div className="mt-1">
                                                             <span className="badge bg-warning text-dark border border-warning-subtle">
-                                                                Wait to update records
+                                                                Awaiting Scorecard
                                                             </span>
                                                         </div>
                                                     ) : null}
@@ -413,55 +458,10 @@ export default function MatchesPage() {
                                                     {showWaitNotice && (
                                                         <div className="mt-1">
                                                             <span className="badge bg-warning text-dark border border-warning-subtle">
-                                                                Wait to update records
+                                                                Awaiting Scorecard
                                                             </span>
                                                         </div>
                                                     )}
-                                                </td>
-                                                <td>
-                                                    <div className="d-flex justify-content-start gap-2">
-                                                        <Link
-                                                            href={`/next_panel/matches/${item.id}/scorecard`}
-                                                            className={`btn ${showWaitNotice ? "btn-warning text-dark" : "btn-outline-primary"}`}
-                                                            title={showWaitNotice ? "Scorecard pending - Wait to update records" : "Match Scorecard Center"}
-                                                            aria-label="Scorecard"
-                                                        >
-                                                            <Trophy size={16} />
-                                                        </Link>
-                                                        {!isUmpire && (
-                                                            <>
-                                                                {effStatus === "Cancelled" ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn btn-outline-secondary"
-                                                                        disabled
-                                                                        title="Cancelled matches cannot be edited"
-                                                                        aria-label="Edit match disabled"
-                                                                    >
-                                                                        <Edit size={16} />
-                                                                    </button>
-                                                                ) : (
-                                                                    <Link
-                                                                        href={`/next_panel/matches/${item.id}/edit`}
-                                                                        className="btn btn-outline-secondary"
-                                                                        aria-label="Edit match"
-                                                                    >
-                                                                        <Edit size={16} />
-                                                                    </Link>
-                                                                )}
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-outline-danger"
-                                                                    onClick={() => handleCancel(item)}
-                                                                    disabled={closed}
-                                                                    title={closed ? `A ${effStatus.toLowerCase()} match cannot be cancelled` : "Cancel match"}
-                                                                    aria-label="Cancel match"
-                                                                >
-                                                                    <Ban size={16} />
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
                                                 </td>
                                             </tr>
                                         );

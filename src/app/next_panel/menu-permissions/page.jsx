@@ -276,13 +276,13 @@ export default function MenuPermissionsPage() {
                                     <thead className="table-light">
                                         <tr>
                                             <th>ID</th>
+                                            <th className="text-end">
+                                                Actions
+                                            </th>
                                             <th>Menu</th>
                                             <th>Menu Key</th>
                                             <th>Permission</th>
                                             <th>Assigned</th>
-                                            <th className="text-end">
-                                                Actions
-                                            </th>
                                         </tr>
                                     </thead>
 
@@ -292,35 +292,6 @@ export default function MenuPermissionsPage() {
 
                                                 <td>
                                                     {r.id}
-                                                </td>
-
-                                                <td>
-                                                    <div className="fw-semibold">
-                                                        {r.menu_title ||
-                                                            r.menu_name ||
-                                                            `Menu #${r.menu_id}`}
-                                                    </div>
-                                                </td>
-
-                                                <td>
-                                                    <code>
-                                                        {r.menu_key}
-                                                    </code>
-                                                </td>
-
-                                                <td>
-                                                    <span className="badge bg-info-subtle text-info-emphasis">
-                                                        {r.permission_name ??
-                                                            `Permission #${r.permission_id}`}
-                                                    </span>
-                                                </td>
-
-                                                <td>
-                                                    {r.created_at
-                                                        ? new Date(
-                                                            r.created_at
-                                                        ).toLocaleDateString()
-                                                        : "—"}
                                                 </td>
 
                                                 <td className="text-end">
@@ -359,6 +330,35 @@ export default function MenuPermissionsPage() {
                                                         </button>
 
                                                     </div>
+                                                </td>
+
+                                                <td>
+                                                    <div className="fw-semibold">
+                                                        {r.menu_title ||
+                                                            r.menu_name ||
+                                                            `Menu #${r.menu_id}`}
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    <code>
+                                                        {r.menu_key}
+                                                    </code>
+                                                </td>
+
+                                                <td>
+                                                    <span className="badge bg-info-subtle text-info-emphasis">
+                                                        {r.permission_name ??
+                                                            `Permission #${r.permission_id}`}
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    {r.created_at
+                                                        ? new Date(
+                                                            r.created_at
+                                                        ).toLocaleDateString()
+                                                        : "—"}
                                                 </td>
 
                                             </tr>

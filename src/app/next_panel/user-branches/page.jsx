@@ -335,14 +335,14 @@ export default function UserBranchesPage() {
                                     <thead className="table-light">
                                         <tr>
                                             <th>ID</th>
+                                            <th className="text-end">
+                                                Actions
+                                            </th>
                                             <th>User</th>
                                             <th>Email</th>
                                             <th>Branch</th>
                                             <th>Primary</th>
                                             <th>Status</th>
-                                            <th className="text-end">
-                                                Actions
-                                            </th>
                                         </tr>
                                     </thead>
 
@@ -352,43 +352,6 @@ export default function UserBranchesPage() {
 
                                                 <td>
                                                     {r.id}
-                                                </td>
-
-                                                <td>
-                                                    {r.first_name ?? "—"} {r.last_name ?? ""}
-                                                </td>
-
-                                                <td>
-                                                    {r.email ?? "—"}
-                                                </td>
-
-                                                <td>
-                                                    {r.branch_name}
-                                                </td>
-
-                                                <td>
-                                                    {r.is_primary === 0 ? (
-                                                        <span className="badge bg-primary text-white">
-                                                            Primary
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-muted">
-                                                            —
-                                                        </span>
-                                                    )}
-                                                </td>
-
-                                                <td>
-                                                    <span
-                                                        className={`badge ${r.status === 1
-                                                            ? "bg-success"
-                                                            : "bg-secondary"
-                                                            }`}
-                                                    >
-                                                        {r.status === 1
-                                                            ? "Active"
-                                                            : "Inactive"}
-                                                    </span>
                                                 </td>
 
                                                 <td className="text-end">
@@ -427,6 +390,43 @@ export default function UserBranchesPage() {
                                                         </button>
 
                                                     </div>
+                                                </td>
+
+                                                <td>
+                                                    {r.first_name ?? "—"} {r.last_name ?? ""}
+                                                </td>
+
+                                                <td>
+                                                    {r.email ?? "—"}
+                                                </td>
+
+                                                <td>
+                                                    {r.branch_name}
+                                                </td>
+
+                                                <td>
+                                                    {r.is_primary === 0 ? (
+                                                        <span className="badge bg-primary text-white">
+                                                            Primary
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-muted">
+                                                            —
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                <td>
+                                                    <span
+                                                        className={`badge ${r.status === 1
+                                                            ? "bg-success"
+                                                            : "bg-secondary"
+                                                            }`}
+                                                    >
+                                                        {r.status === 1
+                                                            ? "Active"
+                                                            : "Inactive"}
+                                                    </span>
                                                 </td>
 
                                             </tr>

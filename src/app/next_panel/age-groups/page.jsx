@@ -143,23 +143,16 @@ export default function AgeGroupsPage() {
                                     <thead className="table-success">
                                         <tr>
                                             <th>#</th>
+                                            <th>Actions</th>
                                             <th>Age Group</th>
                                             <th>Age Range</th>
                                             <th>Status</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pagedAgeGroups.map((item, idx) => (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                                <td>{item.age_group}</td>
-                                                <td>{formatAgeRange(item)}</td>
-                                                <td>
-                                                    <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
-                                                        {item.status === 1 ? "Active" : "Inactive"}
-                                                    </span>
-                                                </td>
                                                 <td>
                                                     <div className="d-flex justify-content-start gap-2">
                                                         <Link
@@ -178,6 +171,13 @@ export default function AgeGroupsPage() {
                                                             <Trash2 size={16} />
                                                         </button>
                                                     </div>
+                                                </td>
+                                                <td>{item.age_group}</td>
+                                                <td>{formatAgeRange(item)}</td>
+                                                <td>
+                                                    <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
+                                                        {item.status === 1 ? "Active" : "Inactive"}
+                                                    </span>
                                                 </td>
                                             </tr>
                                         ))}

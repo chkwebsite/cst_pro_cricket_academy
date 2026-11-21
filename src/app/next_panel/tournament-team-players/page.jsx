@@ -301,6 +301,7 @@ export default function TournamentTeamPlayersPage() {
                                 <thead className="table-success">
                                     <tr>
                                         <th>#</th>
+                                        <th>Actions</th>
                                         <th>Player</th>
                                         <th>Tournament</th>
                                         <th>Team</th>
@@ -309,7 +310,6 @@ export default function TournamentTeamPlayersPage() {
                                         <th className="text-end">Fee</th>
                                         <th>Payment</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -318,6 +318,25 @@ export default function TournamentTeamPlayersPage() {
                                         return (
                                             <tr key={item.id}>
                                                 <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
+                                                <td>
+                                                    <div className="d-flex justify-content-start gap-2">
+                                                        <Link
+                                                            href={`/next_panel/tournament-team-players/${item.id}/edit`}
+                                                            className="btn btn-outline-secondary"
+                                                            aria-label="Edit player"
+                                                        >
+                                                            <Edit size={16} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-danger"
+                                                            onClick={() => handleDelete(item.id, player.name)}
+                                                            aria-label="Delete player"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <div>
                                                         {player.name}{" "}
@@ -358,25 +377,6 @@ export default function TournamentTeamPlayersPage() {
                                                     <span className={`badge ${Number(item.status) === 1 ? "bg-success" : "bg-secondary"}`}>
                                                         {Number(item.status) === 1 ? "Active" : "Inactive"}
                                                     </span>
-                                                </td>
-                                                <td>
-                                                    <div className="d-flex justify-content-start gap-2">
-                                                        <Link
-                                                            href={`/next_panel/tournament-team-players/${item.id}/edit`}
-                                                            className="btn btn-outline-secondary"
-                                                            aria-label="Edit player"
-                                                        >
-                                                            <Edit size={16} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleDelete(item.id, player.name)}
-                                                            aria-label="Delete player"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         );

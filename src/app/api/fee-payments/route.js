@@ -64,7 +64,7 @@ function getPaymentStatus(paidAmount) {
 */
 async function recalculateFeeStatus(connection, feeStatusId) {
     const [feeRows] = await connection.execute(
-        `SELECT id, fee_amount, status, fee_type, match_player_id
+        `SELECT id, fee_amount, status, fee_type, match_player_id, tournament_team_player_id, tournament_team_id
          FROM cst_fee_status
          WHERE id = ?
          FOR UPDATE`,
@@ -163,6 +163,22 @@ async function recalculateFeeStatus(connection, feeStatusId) {
              SET payment_status = ?
              WHERE id = ?`,
             [ttpPaymentStatus, fee.tournament_team_player_id]
+        );
+    }
+
+    if (fee.fee_type === "Tournament Team" && fee.tournament_team_id) {
+        const teamPaymentStatus = feeAmount <= 0
+            ? "Pending"
+            : paidAmount <= 0
+                ? "Pending"
+                : paidAmount >= feeAmount
+                    ? "Paid"
+                    : "Partial";
+        await connection.execute(
+            `UPDATE cst_tournament_teams
+             SET payment_status = ?
+             WHERE id = ?`,
+            [teamPaymentStatus, fee.tournament_team_id]
         );
     }
 }

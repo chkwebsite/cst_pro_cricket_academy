@@ -125,10 +125,10 @@ export default function PermissionsPage() {
                                     <thead className="table-success">
                                         <tr>
                                             <th>#</th>
+                                            <th>Actions</th>
                                             <th>Module name</th>
                                             <th>Permission name</th>
                                             <th>Status</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -136,13 +136,6 @@ export default function PermissionsPage() {
                                             return (
                                                 <tr key={item.id ?? idx}>
                                                     <th>{(page - 1) * PAGE_SIZE + idx + 1}</th>
-                                                    <td>{item.module_name}</td>
-                                                    <td>{item.permission_name}</td>
-                                                    <td>
-                                                        <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
-                                                             {item.status === 1 ? "Active" : "Inactive"}
-                                                        </span>
-                                                    </td>
                                                     <td>
                                                         <div className="d-flex justify-content-start gap-2">
                                                             {/* <Link href={`/next_panel/permissions/${item.id}`} className="btn btn-outline-primary" aria-label="View permission">
@@ -160,6 +153,13 @@ export default function PermissionsPage() {
                                                                 <Trash2 size={16} />
                                                             </button>
                                                         </div>
+                                                    </td>
+                                                    <td>{item.module_name}</td>
+                                                    <td>{item.permission_name}</td>
+                                                    <td>
+                                                        <span className={`badge ${item.status === 1 ? "bg-success" : "bg-secondary"}`}>
+                                                             {item.status === 1 ? "Active" : "Inactive"}
+                                                        </span>
                                                     </td>
                                                 </tr>
                                             );

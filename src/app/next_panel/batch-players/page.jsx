@@ -377,18 +377,40 @@ export default function BatchPlayersPage() {
                                 <thead className="table-light">
                                     <tr>
                                         <th style={{ width: "40px" }} className="text-center">#</th>
+                                        <th style={{ width: "100px" }} className="text-end">Actions</th>
                                         <th>Player Details</th>
                                         <th>Training Batch</th>
                                         <th>Program & Branch</th>
                                         <th>Period</th>
                                         <th style={{ width: "100px" }} className="text-center">Status</th>
-                                        <th style={{ width: "100px" }} className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedAssignments.map((item, index) => (
                                         <tr key={item.id}>
                                             <td className="text-center text-muted small">{(page - 1) * PAGE_SIZE + index + 1}</td>
+
+                                            <td className="text-end">
+                                                <div className="d-inline-flex gap-1">
+                                                    <Link
+                                                        href={`/next_panel/batch-players/${item.id}/edit`}
+                                                        className="btn btn-sm btn-outline-primary p-1"
+                                                        title="Edit Assignment / Transfer"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </Link>
+                                                    {item.status === "Active" && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDelete(item)}
+                                                            className="btn btn-sm btn-outline-danger p-1"
+                                                            title="Mark as Left"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div className="fw-bold text-dark">
                                                     {item.first_name} {item.last_name}
@@ -437,28 +459,6 @@ export default function BatchPlayersPage() {
                                                 <span className={`badge ${STATUS_BADGE[item.status] || "bg-secondary text-white"}`}>
                                                     {item.status}
                                                 </span>
-                                            </td>
-
-                                            <td className="text-end">
-                                                <div className="d-inline-flex gap-1">
-                                                    <Link
-                                                        href={`/next_panel/batch-players/${item.id}/edit`}
-                                                        className="btn btn-sm btn-outline-primary p-1"
-                                                        title="Edit Assignment / Transfer"
-                                                    >
-                                                        <Edit size={14} />
-                                                    </Link>
-                                                    {item.status === "Active" && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDelete(item)}
-                                                            className="btn btn-sm btn-outline-danger p-1"
-                                                            title="Mark as Left"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    )}
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}

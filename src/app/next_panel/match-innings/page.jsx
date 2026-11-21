@@ -523,7 +523,7 @@ export default function MatchInningsPage() {
                             style={{
                                 display: "grid",
                                 gridTemplateColumns:
-                                    "85px minmax(160px, 1.8fr) 85px 85px 125px 85px 170px",
+                                    "85px 170px minmax(160px, 1.8fr) 85px 85px 125px 85px",
                                 gap: "12px",
                                 padding: "0 20px",
                                 marginBottom: "10px",
@@ -535,12 +535,12 @@ export default function MatchInningsPage() {
                             }}
                         >
                             <div>INNINGS</div>
+                            <div>ACTIONS</div>
                             <div>BATTING VS BOWLING</div>
                             <div>SCORE</div>
                             <div>OVERS</div>
                             <div>EXTRAS</div>
                             <div>TARGET</div>
-                            <div className="text-end">ACTIONS</div>
                         </div>
 
                         {/* Match Cards */}
@@ -642,7 +642,7 @@ export default function MatchInningsPage() {
                                             style={{
                                                 display: "grid",
                                                 gridTemplateColumns:
-                                                    "85px minmax(160px, 1.8fr) 85px 85px 125px 85px 170px",
+                                                    "85px 170px minmax(160px, 1.8fr) 85px 85px 125px 85px",
                                                 gap: "12px",
                                                 alignItems: "center",
                                                 padding: "16px 20px",
@@ -666,7 +666,73 @@ export default function MatchInningsPage() {
                                                 </span>
                                             </div>
 
-                                            {/* Col 2: Batting vs Bowling */}
+                                            {/* Col 2: Actions */}
+                                            <div
+                                                className="d-flex align-items-center justify-content-start gap-1.5"
+                                                style={{ flexShrink: 0, whiteSpace: "nowrap" }}
+                                            >
+                                                <Link
+                                                    href={`/next_panel/matches/${item.match_id}/scorecard?innings_id=${item.id}`}
+                                                    className="btn btn-sm d-inline-flex align-items-center gap-1.5"
+                                                    style={{
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #cbd5e1",
+                                                        borderRadius: "8px",
+                                                        padding: "5px 12px",
+                                                        color: "#334155",
+                                                        fontWeight: 600,
+                                                        fontSize: "0.8rem",
+                                                        whiteSpace: "nowrap",
+                                                        flexShrink: 0,
+                                                        transition: "all 0.15s ease",
+                                                    }}
+                                                    title="Full Match Scorecard"
+                                                >
+                                                    <FileText size={14} style={{ color: "#475569" }} />
+                                                    <span>Scorecard</span>
+                                                </Link>
+                                                <Link
+                                                    href={`/next_panel/match-innings/${item.id}/edit`}
+                                                    className="btn btn-sm d-inline-flex align-items-center justify-content-center"
+                                                    style={{
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #cbd5e1",
+                                                        borderRadius: "8px",
+                                                        width: "32px",
+                                                        height: "32px",
+                                                        minWidth: "32px",
+                                                        flexShrink: 0,
+                                                        padding: 0,
+                                                        color: "#475569",
+                                                        transition: "all 0.15s ease",
+                                                    }}
+                                                    title="Edit Innings"
+                                                >
+                                                    <Pencil size={13} />
+                                                </Link>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm d-inline-flex align-items-center justify-content-center"
+                                                    style={{
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #fecdd3",
+                                                        borderRadius: "8px",
+                                                        width: "32px",
+                                                        height: "32px",
+                                                        minWidth: "32px",
+                                                        flexShrink: 0,
+                                                        padding: 0,
+                                                        color: "#e11d48",
+                                                        transition: "all 0.15s ease",
+                                                    }}
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Delete Innings"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </div>
+
+                                            {/* Col 3: Batting vs Bowling */}
                                             <div>
                                                 <div
                                                     style={{
@@ -791,72 +857,6 @@ export default function MatchInningsPage() {
                                                         —
                                                     </span>
                                                 )}
-                                            </div>
-
-                                            {/* Col 7: Actions */}
-                                            <div
-                                                className="d-flex align-items-center justify-content-end gap-1.5"
-                                                style={{ flexShrink: 0, whiteSpace: "nowrap" }}
-                                            >
-                                                <Link
-                                                    href={`/next_panel/matches/${item.match_id}/scorecard?innings_id=${item.id}`}
-                                                    className="btn btn-sm d-inline-flex align-items-center gap-1.5"
-                                                    style={{
-                                                        backgroundColor: "#ffffff",
-                                                        border: "1px solid #cbd5e1",
-                                                        borderRadius: "8px",
-                                                        padding: "5px 12px",
-                                                        color: "#334155",
-                                                        fontWeight: 600,
-                                                        fontSize: "0.8rem",
-                                                        whiteSpace: "nowrap",
-                                                        flexShrink: 0,
-                                                        transition: "all 0.15s ease",
-                                                    }}
-                                                    title="Full Match Scorecard"
-                                                >
-                                                    <FileText size={14} style={{ color: "#475569" }} />
-                                                    <span>Scorecard</span>
-                                                </Link>
-                                                <Link
-                                                    href={`/next_panel/match-innings/${item.id}/edit`}
-                                                    className="btn btn-sm d-inline-flex align-items-center justify-content-center"
-                                                    style={{
-                                                        backgroundColor: "#ffffff",
-                                                        border: "1px solid #cbd5e1",
-                                                        borderRadius: "8px",
-                                                        width: "32px",
-                                                        height: "32px",
-                                                        minWidth: "32px",
-                                                        flexShrink: 0,
-                                                        padding: 0,
-                                                        color: "#475569",
-                                                        transition: "all 0.15s ease",
-                                                    }}
-                                                    title="Edit Innings"
-                                                >
-                                                    <Pencil size={13} />
-                                                </Link>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm d-inline-flex align-items-center justify-content-center"
-                                                    style={{
-                                                        backgroundColor: "#ffffff",
-                                                        border: "1px solid #fecdd3",
-                                                        borderRadius: "8px",
-                                                        width: "32px",
-                                                        height: "32px",
-                                                        minWidth: "32px",
-                                                        flexShrink: 0,
-                                                        padding: 0,
-                                                        color: "#e11d48",
-                                                        transition: "all 0.15s ease",
-                                                    }}
-                                                    onClick={() => handleDelete(item)}
-                                                    title="Delete Innings"
-                                                >
-                                                    <Trash2 size={13} />
-                                                </button>
                                             </div>
                                         </div>
                                     ))}

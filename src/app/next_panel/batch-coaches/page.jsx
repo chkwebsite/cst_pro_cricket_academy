@@ -355,18 +355,38 @@ export default function BatchCoachesPage() {
                                 <thead className="table-light">
                                     <tr>
                                         <th style={{ width: "40px" }} className="text-center">#</th>
+                                        <th style={{ width: "100px" }} className="text-end">Actions</th>
                                         <th>Coach Details</th>
                                         <th>Training Batch</th>
                                         <th>Role</th>
                                         <th>Period</th>
                                         <th style={{ width: "90px" }} className="text-center">Status</th>
-                                        <th style={{ width: "100px" }} className="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedAssignments.map((item, index) => (
                                         <tr key={item.id}>
                                             <td className="text-center text-muted small">{(page - 1) * PAGE_SIZE + index + 1}</td>
+
+                                            <td className="text-end">
+                                                <div className="d-inline-flex gap-1">
+                                                    <Link
+                                                        href={`/next_panel/batch-coaches/${item.id}/edit`}
+                                                        className="btn btn-sm btn-outline-primary p-1"
+                                                        title="Edit Role / Dates"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDelete(item)}
+                                                        className="btn btn-sm btn-outline-danger p-1"
+                                                        title="Remove Coach"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div className="fw-bold text-dark">
                                                     {item.coach_first_name} {item.coach_last_name}
@@ -418,26 +438,6 @@ export default function BatchCoachesPage() {
                                                         Inactive
                                                     </span>
                                                 )}
-                                            </td>
-
-                                            <td className="text-end">
-                                                <div className="d-inline-flex gap-1">
-                                                    <Link
-                                                        href={`/next_panel/batch-coaches/${item.id}/edit`}
-                                                        className="btn btn-sm btn-outline-primary p-1"
-                                                        title="Edit Role / Dates"
-                                                    >
-                                                        <Edit size={14} />
-                                                    </Link>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDelete(item)}
-                                                        className="btn btn-sm btn-outline-danger p-1"
-                                                        title="Remove Coach"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}

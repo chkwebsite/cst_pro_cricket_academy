@@ -267,7 +267,7 @@ export async function POST(request) {
 
         // Validate target team
         const [teamRows] = await connection.query(
-            `SELECT id, academy_id, branch_id FROM cst_teams WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+            `SELECT id, team_name, academy_id, branch_id FROM cst_teams WHERE id = ? AND is_deleted = 0 LIMIT 1`,
             [teamId]
         );
 
@@ -372,6 +372,81 @@ export async function POST(request) {
                 authUser.id
             ]
         );
+
+        const tournamentTeamId = result.insertId;
+
+        // Synchronize with cst_fee_status ledger
+        let paidAmount = 0.00;
+        let feeStatus = "Pending";
+        const finalPayStatus = payment_status || "Pending";
+
+        if (finalPayStatus === "Paid") {
+            paidAmount = finalTeamFee;
+            feeStatus = "Paid";
+        } else if (finalPayStatus === "Partial") {
+            paidAmount = Math.round((finalTeamFee / 2) * 100) / 100;
+            feeStatus = "Partial";
+        } else if (finalPayStatus === "Cancelled") {
+            paidAmount = 0.00;
+            feeStatus = "Cancelled";
+        }
+
+        const teamName = teamRows[0]?.team_name || `Team #${teamId}`;
+        const feeRemarks = `Team registration fee for ${teamName} (${finalRegNo})`;
+
+        const [feeResult] = await connection.query(
+            `
+            INSERT INTO cst_fee_status (
+                academy_id,
+                branch_id,
+                fee_type,
+                tournament_id,
+                tournament_team_id,
+                fee_amount,
+                paid_amount,
+                status,
+                remarks,
+                created_by
+            )
+            VALUES (?, ?, 'Tournament Team', ?, ?, ?, ?, ?, ?, ?)
+            `,
+            [
+                tournament.academy_id,
+                tournament.branch_id,
+                tournamentId,
+                tournamentTeamId,
+                finalTeamFee,
+                paidAmount,
+                feeStatus,
+                feeRemarks,
+                authUser.id
+            ]
+        );
+
+        if (paidAmount > 0) {
+            await connection.query(
+                `
+                INSERT INTO cst_fee_payments (
+                    fee_status_id,
+                    amount,
+                    payment_mode,
+                    transaction_no,
+                    payment_date,
+                    status,
+                    remarks,
+                    created_by
+                )
+                VALUES (?, ?, 'Cash', ?, CURRENT_TIMESTAMP, 'Paid', ?, ?)
+                `,
+                [
+                    feeResult.insertId,
+                    paidAmount,
+                    finalRegNo,
+                    `Initial payment for team registration ${finalRegNo}`,
+                    authUser.id
+                ]
+            );
+        }
 
         await connection.commit();
         transactionStarted = false;

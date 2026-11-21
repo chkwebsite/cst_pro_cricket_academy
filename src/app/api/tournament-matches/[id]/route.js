@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/components/lib/db";
 import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation.js";
+import { validateMatchDateForScoring, autoUpdateTodayLiveMatches } from "@/app/components/lib/match-date-validator";
 
 
 const ROUND_TYPES = [
@@ -97,6 +98,13 @@ export async function GET(request, { params }) {
 
         connection = await pool.getConnection();
 
+        // Auto-update matches to Live on match date
+        try {
+            await autoUpdateTodayLiveMatches(connection);
+        } catch (autoLiveErr) {
+            console.error("Auto-update live tournament match error:", autoLiveErr);
+        }
+
         const [rows] = await connection.query(
             `${MATCH_SELECT} WHERE tm.id = ? LIMIT 1`,
             [Number(id)]
@@ -171,6 +179,13 @@ export async function PUT(request, { params }) {
         const body = await request.json();
 
         connection = await pool.getConnection();
+
+        // Auto-update matches to Live on match date
+        try {
+            await autoUpdateTodayLiveMatches(connection);
+        } catch (autoLiveErr) {
+            console.error("Auto-update live tournament match error:", autoLiveErr);
+        }
 
         await connection.beginTransaction();
 
@@ -379,6 +394,26 @@ export async function PUT(request, { params }) {
                 { success: false, message: "Invalid match status" },
                 { status: 400 }
             );
+        }
+
+        // Rule: Tournament match scores and results cannot be recorded before match date
+        const hasScoreUpdate = Boolean(
+            (body.team_a_runs !== undefined && body.team_a_runs !== null && body.team_a_runs !== "") ||
+            (body.team_b_runs !== undefined && body.team_b_runs !== null && body.team_b_runs !== "") ||
+            (body.winner_team_id !== undefined && body.winner_team_id !== null && body.winner_team_id !== "") ||
+            (status === "Completed")
+        );
+
+        if (hasScoreUpdate) {
+            const effectiveDate = scheduledDate || old.scheduled_date;
+            const dateCheck = validateMatchDateForScoring(effectiveDate, "Tournament match score and result");
+            if (!dateCheck.allowed) {
+                await connection.rollback();
+                return NextResponse.json(
+                    { success: false, message: dateCheck.message },
+                    { status: 400 }
+                );
+            }
         }
 
         for (const [label, value] of [

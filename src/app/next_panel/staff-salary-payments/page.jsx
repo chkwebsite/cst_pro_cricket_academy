@@ -556,6 +556,8 @@ export default function StaffSalaryPaymentsPage() {
                         <table className={styles.table}>
                             <thead>
                                 <tr>
+                                    <th style={{ width: "50px" }}>#</th>
+                                    <th style={{ width: "140px" }}>Actions</th>
                                     <th>Staff Member</th>
                                     <th>Base Monthly</th>
                                     <th>Working Days vs Attendance</th>
@@ -565,11 +567,10 @@ export default function StaffSalaryPaymentsPage() {
                                     <th>Paid Amount</th>
                                     <th>Due Balance</th>
                                     <th>Status</th>
-                                    <th className="text-end">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredList.map((p) => {
+                                {filteredList.map((p, idx) => {
                                     const monthDaysCount = Number(p.total_month_days) || new Date(Number(p.salary_year || selectedYear), Number(p.salary_month || selectedMonth), 0).getDate();
                                     const workingDays = Number(p.working_days) || monthDaysCount;
                                     const presentDays = Number(p.present_days) || 0;
@@ -596,6 +597,42 @@ export default function StaffSalaryPaymentsPage() {
 
                                     return (
                                         <tr key={p.id}>
+                                            <th>{idx + 1}</th>
+                                            <td>
+                                                <div className="d-flex align-items-center justify-content-start gap-1">
+                                                    {/* Pay Salary Button */}
+                                                    {p.payment_status !== "Paid" && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-success d-inline-flex align-items-center gap-1"
+                                                            onClick={() => handleOpenPay(p)}
+                                                        >
+                                                            <CreditCard size={13} />
+                                                            Pay
+                                                        </button>
+                                                    )}
+
+                                                    {/* Recalculate Button */}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                                                        onClick={() => handleRecalculateStaff(p.staff_id)}
+                                                        title="Recalculate based on latest attendance records"
+                                                    >
+                                                        <RefreshCw size={13} />
+                                                    </button>
+
+                                                    {/* View Payslip Button */}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+                                                        onClick={() => setPayslipItem(p)}
+                                                        title="View & Print Salary Slip"
+                                                    >
+                                                        <FileText size={13} />
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td>
                                                 <div className="fw-bold text-dark">{p.first_name} {p.last_name}</div>
                                                 <div className="text-muted small">
@@ -700,41 +737,6 @@ export default function StaffSalaryPaymentsPage() {
                                                 >
                                                     {p.payment_status}
                                                 </span>
-                                            </td>
-                                            <td className="text-end">
-                                                <div className="d-flex align-items-center justify-content-end gap-1">
-                                                    {/* Pay Salary Button */}
-                                                    {p.payment_status !== "Paid" && (
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-sm btn-success d-inline-flex align-items-center gap-1"
-                                                            onClick={() => handleOpenPay(p)}
-                                                        >
-                                                            <CreditCard size={13} />
-                                                            Pay
-                                                        </button>
-                                                    )}
-
-                                                    {/* Recalculate Button */}
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
-                                                        onClick={() => handleRecalculateStaff(p.staff_id)}
-                                                        title="Recalculate based on latest attendance records"
-                                                    >
-                                                        <RefreshCw size={13} />
-                                                    </button>
-
-                                                    {/* View Payslip Button */}
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
-                                                        onClick={() => setPayslipItem(p)}
-                                                        title="View & Print Salary Slip"
-                                                    >
-                                                        <FileText size={13} />
-                                                    </button>
-                                                </div>
                                             </td>
                                         </tr>
                                     );

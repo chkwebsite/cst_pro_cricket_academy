@@ -523,12 +523,12 @@ function GroundBookingRequestsList() {
                                     <thead className="table-light">
                                         <tr className="small text-uppercase text-secondary">
                                             <th style={{ minWidth: "150px" }}>Reference</th>
+                                            <th style={{ minWidth: "160px" }} className="text-end">Actions</th>
                                             <th style={{ minWidth: "190px" }}>Customer</th>
                                             <th style={{ minWidth: "170px" }}>Ground</th>
                                             <th style={{ minWidth: "160px" }}>Date &amp; Slot</th>
                                             <th style={{ minWidth: "150px" }}>Purpose</th>
                                             <th style={{ minWidth: "110px" }}>Status</th>
-                                            <th style={{ minWidth: "160px" }} className="text-end">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -574,6 +574,73 @@ function GroundBookingRequestsList() {
                                                         <span className="text-muted" style={{ fontSize: "0.75rem" }}>
                                                             {formatDate(req.created_at)}
                                                         </span>
+                                                    </td>
+                                                    <td className="text-end" onClick={(e) => e.stopPropagation()}>
+                                                        <div className="btn-group btn-group-sm">
+                                                            {/* View Modal */}
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-secondary"
+                                                                onClick={() => handleOpenModal(req)}
+                                                                title="Quick Review"
+                                                            >
+                                                                <Eye size={14} />
+                                                            </button>
+
+                                                            {/* Convert to Confirmed Booking */}
+                                                            {isBooked ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-light text-muted border"
+                                                                    disabled
+                                                                    title="Already Confirmed &amp; Approved"
+                                                                    style={{ cursor: "not-allowed" }}
+                                                                >
+                                                                    <CalendarCheck size={14} className="text-success opacity-75" />
+                                                                </button>
+                                                            ) : (
+                                                                <Link
+                                                                    href={convertHref}
+                                                                    className="btn btn-outline-success"
+                                                                    title="Convert to Confirmed Booking"
+                                                                >
+                                                                    <CalendarCheck size={14} />
+                                                                </Link>
+                                                            )}
+
+                                                            {/* Edit */}
+                                                            {isBooked ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-light text-muted border"
+                                                                    disabled
+                                                                    title="Cannot edit approved request"
+                                                                    style={{ cursor: "not-allowed" }}
+                                                                >
+                                                                    <Edit size={14} className="opacity-50" />
+                                                                </button>
+                                                            ) : (
+                                                                <Link
+                                                                    href={`/next_panel/ground-booking-requests/${req.id}/edit`}
+                                                                    className="btn btn-outline-primary"
+                                                                    title="Edit Request"
+                                                                >
+                                                                    <Edit size={14} />
+                                                                </Link>
+                                                            )}
+
+                                                            {/* Delete */}
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-danger"
+                                                                onClick={(e) => handleDelete(req, e)}
+                                                                disabled={isBooked}
+                                                                title={isBooked ? "Cannot delete approved request" : "Delete Request"}
+                                                                style={isBooked ? { cursor: "not-allowed", opacity: 0.5 } : {}}
+                                                            >
+                                                                <Trash2 size={14} className={isBooked ? "text-muted" : ""} />
+                                                            </button>
+                                                        </div>
                                                     </td>
 
                                                     {/* Customer Name & Phone */}
@@ -654,73 +721,6 @@ function GroundBookingRequestsList() {
                                                     </td>
 
                                                     {/* Action Buttons */}
-                                                    <td className="text-end" onClick={(e) => e.stopPropagation()}>
-                                                        <div className="btn-group btn-group-sm">
-                                                            {/* View Modal */}
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-outline-secondary"
-                                                                onClick={() => handleOpenModal(req)}
-                                                                title="Quick Review"
-                                                            >
-                                                                <Eye size={14} />
-                                                            </button>
-
-                                                            {/* Convert to Confirmed Booking */}
-                                                            {isBooked ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-light text-muted border"
-                                                                    disabled
-                                                                    title="Already Confirmed &amp; Approved"
-                                                                    style={{ cursor: "not-allowed" }}
-                                                                >
-                                                                    <CalendarCheck size={14} className="text-success opacity-75" />
-                                                                </button>
-                                                            ) : (
-                                                                <Link
-                                                                    href={convertHref}
-                                                                    className="btn btn-outline-success"
-                                                                    title="Convert to Confirmed Booking"
-                                                                >
-                                                                    <CalendarCheck size={14} />
-                                                                </Link>
-                                                            )}
-
-                                                            {/* Edit */}
-                                                            {isBooked ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-light text-muted border"
-                                                                    disabled
-                                                                    title="Cannot edit approved request"
-                                                                    style={{ cursor: "not-allowed" }}
-                                                                >
-                                                                    <Edit size={14} className="opacity-50" />
-                                                                </button>
-                                                            ) : (
-                                                                <Link
-                                                                    href={`/next_panel/ground-booking-requests/${req.id}/edit`}
-                                                                    className="btn btn-outline-primary"
-                                                                    title="Edit Request"
-                                                                >
-                                                                    <Edit size={14} />
-                                                                </Link>
-                                                            )}
-
-                                                            {/* Delete */}
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-outline-danger"
-                                                                onClick={(e) => handleDelete(req, e)}
-                                                                disabled={isBooked}
-                                                                title={isBooked ? "Cannot delete approved request" : "Delete Request"}
-                                                                style={isBooked ? { cursor: "not-allowed", opacity: 0.5 } : {}}
-                                                            >
-                                                                <Trash2 size={14} className={isBooked ? "text-muted" : ""} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
                                                 </tr>
                                             );
                                         })}

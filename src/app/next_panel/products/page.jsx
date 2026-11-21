@@ -555,6 +555,7 @@ export default function ProductsPage() {
                             <thead className="table-light text-secondary small text-uppercase">
                                 <tr>
                                     <th style={{ width: "50px" }} className="text-center">#</th>
+                                    <th style={{ width: "190px" }} className="text-end pe-3">Actions</th>
                                     <th>Product Details</th>
                                     <th>Academy</th>
                                     <th>Category</th>
@@ -562,13 +563,48 @@ export default function ProductsPage() {
                                     <th>Tax Rate</th>
                                     <th>Stock</th>
                                     <th className="text-center">Status</th>
-                                    <th style={{ width: "190px" }} className="text-end pe-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pagedProducts.map((item, idx) => (
                                     <tr key={item.id}>
                                         <td className="text-center text-muted small fw-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                        <td className="text-end pe-3">
+                                            <div className="btn-group btn-group-sm">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-info"
+                                                    onClick={() => handleOpenImages(item)}
+                                                    title="Manage Product Images"
+                                                >
+                                                    <ImageIcon size={15} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-primary"
+                                                    onClick={() => handleOpenStock(item)}
+                                                    title="Manage Branch Stock"
+                                                >
+                                                    <Layers size={15} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary"
+                                                    onClick={() => handleOpenEdit(item)}
+                                                    title="Edit Product"
+                                                >
+                                                    <Edit size={15} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-danger"
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Delete Product"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td>
                                             <div className="d-flex align-items-center gap-2">
                                                 <div
@@ -656,42 +692,6 @@ export default function ProductsPage() {
                                             >
                                                 {Number(item.status) === 1 ? "Active" : "Inactive"}
                                             </button>
-                                        </td>
-                                        <td className="text-end pe-3">
-                                            <div className="btn-group btn-group-sm">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-info"
-                                                    onClick={() => handleOpenImages(item)}
-                                                    title="Manage Product Images"
-                                                >
-                                                    <ImageIcon size={15} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-primary"
-                                                    onClick={() => handleOpenStock(item)}
-                                                    title="Manage Branch Stock"
-                                                >
-                                                    <Layers size={15} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-secondary"
-                                                    onClick={() => handleOpenEdit(item)}
-                                                    title="Edit Product"
-                                                >
-                                                    <Edit size={15} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-danger"
-                                                    onClick={() => handleDelete(item)}
-                                                    title="Delete Product"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            </div>
                                         </td>
                                     </tr>
                                 ))}

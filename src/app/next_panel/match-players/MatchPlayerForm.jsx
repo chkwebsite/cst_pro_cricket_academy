@@ -252,8 +252,8 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
 
             if (alreadyPlaying) {
                 const teamName = alreadyPlaying.team_name || "another team";
-                alert("all ready play this match");
-                setError(`all ready play this match (Player is already playing this match under team "${teamName}")`);
+                alert(`Player is already participating in this match under team "${teamName}".`);
+                setError(`Player is already participating in this match under team "${teamName}".`);
                 setFormData((prev) => ({
                     ...prev,
                     player_ref: "",
@@ -350,8 +350,8 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
 
         if (alreadyPlaying) {
             const teamName = alreadyPlaying.team_name || "another team";
-            alert("all ready play this match");
-            return setError(`all ready play this match (Player is already playing this match under team "${teamName}")`);
+            alert(`Player is already participating in this match under team "${teamName}".`);
+            return setError(`Player is already participating in this match under team "${teamName}".`);
         }
 
         try {
@@ -555,7 +555,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                                                         disabled={Boolean(alreadyPlaying)}
                                                     >
                                                         {player.player_name || `User #${player.user_id}`}{player.player_email ? ` (${player.player_email})` : ""}
-                                                        {alreadyPlaying ? ` — [all ready play this match (${alreadyPlaying.team_name || "Match Team"})]` : ""}
+                                                        {alreadyPlaying ? ` — [Already playing in this match (${alreadyPlaying.team_name || "Match Team"})]` : ""}
                                                     </option>
                                                 );
                                             })}
@@ -577,7 +577,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                                                         disabled={Boolean(alreadyPlaying)}
                                                     >
                                                         {player.player_name}{player.phone ? ` (${player.phone})` : ""}
-                                                        {alreadyPlaying ? ` — [all ready play this match (${alreadyPlaying.team_name || "Match Team"})]` : ""}
+                                                        {alreadyPlaying ? ` — [Already playing in this match (${alreadyPlaying.team_name || "Match Team"})]` : ""}
                                                     </option>
                                                 );
                                             })}

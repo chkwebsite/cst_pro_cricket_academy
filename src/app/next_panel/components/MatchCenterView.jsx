@@ -3,6 +3,7 @@
 import {
     Activity,
     ArrowLeft,
+    Calendar,
     CheckCircle2,
     Clock,
     Edit,
@@ -31,6 +32,7 @@ import {
     calculateStrikeRate,
     formatDate,
     getPlayerDisplayName,
+    isMatchDateInFuture,
     isValidCricketOvers,
     oversToBalls,
 } from "./cricketHelpers";
@@ -231,6 +233,12 @@ export default function MatchCenterView({ initialMatchId = null }) {
             return;
         }
 
+        // If fixture is scheduled in future and not yet linked, warn user
+        if (isMatchDateInFuture(fixture.scheduled_date) && !fixture.match_id) {
+            setError(`Tournament fixture Match ${fixture.match_no} (${fixture.team_a_name || "Team A"} vs ${fixture.team_b_name || "Team B"}) is scheduled for ${formatDate(fixture.scheduled_date)}. Scores and innings cannot be recorded or initialized before the scheduled match date.`);
+            return;
+        }
+
         // If fixture already has match_id in cst_matches, just load it
         if (fixture.match_id) {
             setSelectedMatchId(String(fixture.match_id));
@@ -361,6 +369,11 @@ export default function MatchCenterView({ initialMatchId = null }) {
     const activeInnings = inningsList.find((i) => String(i.id) === String(activeInningsId));
     const isInningsCompleted = activeInnings?.innings_status === "Completed";
     const isLockedForCurrentUser = isInningsCompleted && !canEditCompletedInnings;
+    const isFutureMatch = Boolean(matchDetails?.match_date && isMatchDateInFuture(matchDetails.match_date));
+    const isScoringLocked = isLockedForCurrentUser || isFutureMatch;
+    const lockTooltip = isFutureMatch
+        ? `Match scheduled for ${formatDate(matchDetails?.match_date)}. Scores and innings cannot be added or updated before the match date.`
+        : "Innings completed. Only Super Admin and Academy Admin can add or edit scores.";
 
     // Match Result Calculation when both innings are completed
     const matchResult = useMemo(() => {
@@ -768,7 +781,7 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                         {isCompleted && (!inningsList || inningsList.length === 0) && (
                                             <div className="mt-2">
                                                 <span className="badge bg-warning text-dark px-2 py-1">
-                                                    Wait to update records
+                                                    Awaiting Scorecard Records
                                                 </span>
                                             </div>
                                         )}
@@ -778,6 +791,21 @@ export default function MatchCenterView({ initialMatchId = null }) {
                         </div>
                     );
                 })()}
+
+                {/* Upcoming Match Locked Notice */}
+                {isFutureMatch && (
+                    <div className="col-12">
+                        <div className="alert alert-warning border border-warning-subtle d-flex align-items-center gap-3 py-3 rounded-3 mb-0 shadow-sm">
+                            <Calendar size={24} className="text-warning flex-shrink-0" />
+                            <div>
+                                <strong className="fs-6 d-block">Upcoming Match ({formatDate(matchDetails?.match_date)})</strong>
+                                <span className="small">
+                                    Scores and innings cannot be added or updated before the scheduled match date.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Winner & Match Result Banner (When both innings are completed) */}
                 {matchResult && (
@@ -874,12 +902,23 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                     <span>Sync Tournament Squad</span>
                                 </button>
                             )}
-                            <Link
-                                href={`/next_panel/match-innings/new${selectedMatchId ? `?match_id=${selectedMatchId}` : ""}`}
-                                className="btn btn-sm btn-outline-primary"
-                            >
-                                <PlusCircle size={15} className="me-1" /> Add Innings
-                            </Link>
+                            {isFutureMatch ? (
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-secondary opacity-75"
+                                    disabled
+                                    title={`Innings cannot be added before match date (${formatDate(matchDetails?.match_date)})`}
+                                >
+                                    <Lock size={14} className="me-1" /> Add Innings (Locked)
+                                </button>
+                            ) : (
+                                <Link
+                                    href={`/next_panel/match-innings/new${selectedMatchId ? `?match_id=${selectedMatchId}` : ""}`}
+                                    className="btn btn-sm btn-outline-primary"
+                                >
+                                    <PlusCircle size={15} className="me-1" /> Add Innings
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -895,16 +934,27 @@ export default function MatchCenterView({ initialMatchId = null }) {
                             <h5>No Innings Found For This Match</h5>
                             <div className="my-2">
                                 <span className="badge bg-warning text-dark border border-warning-subtle py-1 px-3">
-                                    Wait to update records
+                                    Awaiting Scorecard Records
                                 </span>
                             </div>
                             <p>To begin scoring, start by creating the first innings for this match.</p>
-                            <Link
-                                href={`/next_panel/match-innings/new${selectedMatchId ? `?match_id=${selectedMatchId}` : ""}`}
-                                className="btn btn-primary"
-                            >
-                                <PlusCircle size={16} className="me-1" /> Create 1st Innings
-                            </Link>
+                            {isFutureMatch ? (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    disabled
+                                    title={`Innings cannot be created before match date (${formatDate(matchDetails?.match_date)})`}
+                                >
+                                    <Lock size={16} className="me-1" /> Create 1st Innings (Locked until {formatDate(matchDetails?.match_date)})
+                                </button>
+                            ) : (
+                                <Link
+                                    href={`/next_panel/match-innings/new${selectedMatchId ? `?match_id=${selectedMatchId}` : ""}`}
+                                    className="btn btn-primary"
+                                >
+                                    <PlusCircle size={16} className="me-1" /> Create 1st Innings
+                                </Link>
+                            )}
                         </div>
                     </div>
                 ) : (
@@ -975,8 +1025,8 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                             type="button"
                                             className="btn btn-sm btn-outline-success"
                                             onClick={handleSyncTotals}
-                                            disabled={syncing || isLockedForCurrentUser}
-                                            title={isLockedForCurrentUser ? "Innings completed. Only Super Admin and Academy Admin can sync totals." : "Tally batting runs, wickets and bowler overs automatically"}
+                                            disabled={syncing || isScoringLocked}
+                                            title={isScoringLocked ? lockTooltip : "Tally batting runs, wickets and bowler overs automatically"}
                                         >
                                             {syncing ? (
                                                 <>
@@ -988,7 +1038,7 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                                 </>
                                             )}
                                         </button>
-                                        {!isLockedForCurrentUser && (
+                                        {!isScoringLocked && (
                                             <Link
                                                 href={`/next_panel/match-innings/${activeInnings.id}/edit`}
                                                 className="btn btn-sm btn-outline-secondary"
@@ -1008,12 +1058,12 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                     <h5 className="mb-0 fw-bold d-flex align-items-center gap-2">
                                         <Trophy size={18} className="text-primary" /> Batting - {activeInnings.batting_team_name}
                                     </h5>
-                                    {isLockedForCurrentUser ? (
+                                    {isScoringLocked ? (
                                         <button
                                             type="button"
                                             className="btn btn-sm btn-secondary opacity-75"
                                             disabled
-                                            title="Innings completed. Only Super Admin and Academy Admin can add batters."
+                                            title={lockTooltip}
                                         >
                                             <Lock size={14} className="me-1" /> Add Batter (Locked)
                                         </button>
@@ -1037,6 +1087,7 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                             <thead className="table-light">
                                                 <tr>
                                                     <th style={{ width: "50px" }}>Pos</th>
+                                                    <th style={{ width: "95px" }}>Actions</th>
                                                     <th>Batter</th>
                                                     <th>Dismissal</th>
                                                     <th className="text-center">R</th>
@@ -1044,7 +1095,6 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                                     <th className="text-center">4s</th>
                                                     <th className="text-center">6s</th>
                                                     <th className="text-center">SR</th>
-                                                    <th className="text-end">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1072,25 +1122,12 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                                                 </span>
                                                             </td>
                                                             <td>
-                                                                <span className="fw-bold">{b.player_name || `Player #${b.match_player_id}`}</span>
-                                                            </td>
-                                                            <td>
-                                                                <span className={b.dismissal_type === "Not Out" ? "text-success fw-medium" : "text-muted small"}>
-                                                                    {dismissalStr}
-                                                                </span>
-                                                            </td>
-                                                            <td className="text-center fw-bold">{b.runs}</td>
-                                                            <td className="text-center text-muted">{b.balls}</td>
-                                                            <td className="text-center">{b.fours}</td>
-                                                            <td className="text-center">{b.sixes}</td>
-                                                            <td className="text-center">{Number(b.strike_rate || 0).toFixed(2)}</td>
-                                                            <td className="text-end">
-                                                                {isLockedForCurrentUser ? (
-                                                                    <span className="badge bg-light text-muted border py-1 px-2" title="Scores locked. Only Super Admin and Academy Admin can edit.">
+                                                                {isScoringLocked ? (
+                                                                    <span className="badge bg-light text-muted border py-1 px-2" title={lockTooltip}>
                                                                         <Lock size={12} className="me-1" /> Locked
                                                                     </span>
                                                                 ) : (
-                                                                    <div className="d-flex justify-content-end gap-1">
+                                                                    <div className="d-flex justify-content-start gap-1">
                                                                         <Link
                                                                             href={`/next_panel/match-scorecard/${b.id}/edit`}
                                                                             className="btn btn-sm btn-outline-secondary py-0 px-2"
@@ -1107,6 +1144,19 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                                                     </div>
                                                                 )}
                                                             </td>
+                                                            <td>
+                                                                <span className="fw-bold">{b.player_name || `Player #${b.match_player_id}`}</span>
+                                                            </td>
+                                                            <td>
+                                                                <span className={b.dismissal_type === "Not Out" ? "text-success fw-medium" : "text-muted small"}>
+                                                                    {dismissalStr}
+                                                                </span>
+                                                            </td>
+                                                            <td className="text-center fw-bold">{b.runs}</td>
+                                                            <td className="text-center text-muted">{b.balls}</td>
+                                                            <td className="text-center">{b.fours}</td>
+                                                            <td className="text-center">{b.sixes}</td>
+                                                            <td className="text-center">{Number(b.strike_rate || 0).toFixed(2)}</td>
                                                         </tr>
                                                     );
                                                 })}
@@ -1141,12 +1191,12 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                     <h5 className="mb-0 fw-bold d-flex align-items-center gap-2">
                                         <Activity size={18} className="text-primary" /> Bowling - {activeInnings.bowling_team_name}
                                     </h5>
-                                    {isLockedForCurrentUser ? (
+                                    {isScoringLocked ? (
                                         <button
                                             type="button"
                                             className="btn btn-sm btn-secondary opacity-75"
                                             disabled
-                                            title="Innings completed. Only Super Admin and Academy Admin can add bowlers."
+                                            title={lockTooltip}
                                         >
                                             <Lock size={14} className="me-1" /> Add Bowler (Locked)
                                         </button>
@@ -1169,6 +1219,8 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                         <table className="table align-middle table-hover mb-0">
                                             <thead className="table-light">
                                                 <tr>
+                                                    <th style={{ width: "50px" }}>#</th>
+                                                    <th style={{ width: "95px" }}>Actions</th>
                                                     <th>Bowler</th>
                                                     <th className="text-center">O</th>
                                                     <th className="text-center">Balls</th>
@@ -1178,30 +1230,23 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                                     <th className="text-center">Econ</th>
                                                     <th className="text-center">WD</th>
                                                     <th className="text-center">NB</th>
-                                                    <th className="text-end">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {bowlingScores.map((bw) => (
+                                                {bowlingScores.map((bw, bwIdx) => (
                                                     <tr key={bw.id}>
                                                         <td>
-                                                            <span className="fw-bold">{bw.player_name || `Bowler #${bw.match_player_id}`}</span>
+                                                            <span className="badge bg-light text-dark border">
+                                                                #{bwIdx + 1}
+                                                            </span>
                                                         </td>
-                                                        <td className="text-center fw-semibold">{bw.overs}</td>
-                                                        <td className="text-center text-muted">{bw.balls_bowled}</td>
-                                                        <td className="text-center">{bw.maidens}</td>
-                                                        <td className="text-center">{bw.runs_conceded}</td>
-                                                        <td className="text-center fw-bold text-danger">{bw.wickets}</td>
-                                                        <td className="text-center fw-semibold">{Number(bw.economy || 0).toFixed(2)}</td>
-                                                        <td className="text-center text-muted">{bw.wides}</td>
-                                                        <td className="text-center text-muted">{bw.no_balls}</td>
-                                                        <td className="text-end">
-                                                            {isLockedForCurrentUser ? (
-                                                                <span className="badge bg-light text-muted border py-1 px-2" title="Scores locked. Only Super Admin and Academy Admin can edit.">
+                                                        <td>
+                                                            {isScoringLocked ? (
+                                                                <span className="badge bg-light text-muted border py-1 px-2" title={lockTooltip}>
                                                                     <Lock size={12} className="me-1" /> Locked
                                                                 </span>
                                                             ) : (
-                                                                <div className="d-flex justify-content-end gap-1">
+                                                                <div className="d-flex justify-content-start gap-1">
                                                                     <Link
                                                                         href={`/next_panel/match-bowling-scorecard/${bw.id}/edit`}
                                                                         className="btn btn-sm btn-outline-secondary py-0 px-2"
@@ -1218,6 +1263,17 @@ export default function MatchCenterView({ initialMatchId = null }) {
                                                                 </div>
                                                             )}
                                                         </td>
+                                                        <td>
+                                                            <span className="fw-bold">{bw.player_name || `Bowler #${bw.match_player_id}`}</span>
+                                                        </td>
+                                                        <td className="text-center fw-semibold">{bw.overs}</td>
+                                                        <td className="text-center text-muted">{bw.balls_bowled}</td>
+                                                        <td className="text-center">{bw.maidens}</td>
+                                                        <td className="text-center">{bw.runs_conceded}</td>
+                                                        <td className="text-center fw-bold text-danger">{bw.wickets}</td>
+                                                        <td className="text-center fw-semibold">{Number(bw.economy || 0).toFixed(2)}</td>
+                                                        <td className="text-center text-muted">{bw.wides}</td>
+                                                        <td className="text-center text-muted">{bw.no_balls}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
