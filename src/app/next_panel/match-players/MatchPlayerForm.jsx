@@ -411,7 +411,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Match</label>
+                            <label className="form-label">Match <span className="text-danger ms-1">*</span></label>
                             <select name="match_id" className="form-select" value={formData.match_id} onChange={handleChange} required>
                                 <option value="">Choose Match</option>
                                 {matches.map((m) => (
@@ -423,7 +423,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team</label>
+                            <label className="form-label">Team <span className="text-danger ms-1">*</span></label>
                             <select name="team_id" className="form-select" value={formData.team_id} onChange={handleChange} required disabled={!selectedMatch}>
                                 <option value="">Choose Team</option>
                                 {selectedMatch && (
@@ -496,7 +496,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                                             </select>
                                         </div>
                                         <div className="col-md-4 mb-3">
-                                            <label className="form-label">Transaction No. (optional)</label>
+                                            <label className="form-label">Transaction No.</label>
                                             <input type="text" name="transaction_no" className="form-control" value={formData.transaction_no} onChange={handleChange} />
                                         </div>
                                     </>
@@ -519,7 +519,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                             )}
                         </div>
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">{source.label}</label>
+                            <label className="form-label">{source.label} <span className="text-danger ms-1">*</span></label>
                             {formData.player_source === "tournament_team_player_id" ? (
                                 <input type="number" min="1" name="player_ref" className="form-control" value={formData.player_ref} onChange={handleChange} required />
                             ) : (
@@ -599,7 +599,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                             )}
                         </div>
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Jersey No. (optional)</label>
+                            <label className="form-label">Jersey No.</label>
                             <input type="text" name="jersey_no" className="form-control" value={formData.jersey_no} onChange={handleChange} />
                         </div>
                     </div>

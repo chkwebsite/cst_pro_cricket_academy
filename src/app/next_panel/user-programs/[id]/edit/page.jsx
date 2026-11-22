@@ -33,6 +33,30 @@ export default function EditUserProgramPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const handleValuesChange = (newValues) => {
+        setFieldErrors((prev) => {
+            const next = { ...prev };
+            if (newValues.admission_players_id && next.admission_players_id) delete next.admission_players_id;
+            if (newValues.program_id && next.program_id) delete next.program_id;
+            if (newValues.branch_id && next.branch_id) delete next.branch_id;
+            return next;
+        });
+        setValues(newValues);
+    };
+
+    const handleBlur = (field) => () => {
+        if (field === "admission_players_id" && !values?.admission_players_id) {
+            setFieldErrors((prev) => ({ ...prev, admission_players_id: "Please select an admission player." }));
+        }
+        if (field === "program_id" && !values?.program_id) {
+            setFieldErrors((prev) => ({ ...prev, program_id: "Please select a program." }));
+        }
+        if (field === "branch_id" && !values?.branch_id) {
+            setFieldErrors((prev) => ({ ...prev, branch_id: "Please select a branch." }));
+        }
+    };
 
     // =====================================================
     // LOAD USER PROGRAM
@@ -88,8 +112,25 @@ export default function EditUserProgramPage() {
     const submit = async (e) => {
         e.preventDefault();
 
+        const errs = {};
+        if (!values?.admission_players_id) errs.admission_players_id = "Please select an admission player.";
+        if (!values?.program_id) errs.program_id = "Please select a program.";
+        if (!values?.branch_id) errs.branch_id = "Please select a branch.";
+
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
+        }
+
         setSaving(true);
         setError(null);
+        setFieldErrors({});
 
         try {
             const res = await fetch(
@@ -110,6 +151,15 @@ export default function EditUserProgramPage() {
             const json = await readJson(res);
 
             if (!res.ok) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(
                     json.message ||
                     "Unable to update user program."
@@ -192,9 +242,11 @@ export default function EditUserProgramPage() {
                             <UserProgramForm
                                 formId="userProgramEditForm"
                                 values={values}
-                                onChange={setValues}
+                                onChange={handleValuesChange}
                                 onSubmit={submit}
                                 error={error}
+                                fieldErrors={fieldErrors}
+                                onBlur={handleBlur}
                                 loading={saving}
                             />
                         ) : (

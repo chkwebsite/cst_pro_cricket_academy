@@ -1,0 +1,868 @@
+[
+  {
+    "name": "Academies",
+    "formFile": "src/app/next_panel/academies/AcademyForm.jsx",
+    "apiRoute": "src/app/api/academies/route.js",
+    "table": "cst_academy",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_name",
+      "academy_code"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 2
+  },
+  {
+    "name": "Admission Players",
+    "formFile": "src/app/next_panel/admission-players/AdmissionPlayerForm.jsx",
+    "apiRoute": "src/app/api/admission-players/route.js",
+    "table": "cst_admission_players",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "admission_no",
+      "first_name",
+      "branch_id",
+      "role_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 5
+  },
+  {
+    "name": "Age Groups",
+    "formFile": "src/app/next_panel/age-groups/AgeGroupForm.jsx",
+    "apiRoute": "src/app/api/age-groups/route.js",
+    "table": "cst_age_groups",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "age_group"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 5
+  },
+  {
+    "name": "Batch Coaches",
+    "formFile": "src/app/next_panel/batch-coaches/BatchCoachForm.jsx",
+    "apiRoute": "src/app/api/batch-coaches/route.js",
+    "table": "cst_batch_coaches",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "batch_id",
+      "coach_user_id",
+      "start_date"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 9
+  },
+  {
+    "name": "Batch Players",
+    "formFile": "src/app/next_panel/batch-players/BatchPlayerForm.jsx",
+    "apiRoute": "src/app/api/batch-players/route.js",
+    "table": "cst_batch_players",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "batch_id",
+      "user_program_id",
+      "start_date"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 8
+  },
+  {
+    "name": "Batches",
+    "formFile": "src/app/next_panel/batches/BatchForm.jsx",
+    "apiRoute": "src/app/api/batches/route.js",
+    "table": "cst_batches",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_id",
+      "program_id",
+      "age_group_id",
+      "batch_name",
+      "batch_code",
+      "start_time",
+      "end_time",
+      "training_days"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 18
+  },
+  {
+    "name": "Branches",
+    "formFile": "src/app/next_panel/branches/BranchForm.jsx",
+    "apiRoute": "src/app/api/branch/route.js",
+    "table": "cst_branch",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_name",
+      "branch_code"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Coaches",
+    "formFile": "src/app/next_panel/coaches/CoachForm.jsx",
+    "apiRoute": "src/app/api/coaches/route.js",
+    "table": "cst_coaches",
+    "hasTable": true,
+    "requiredDbColumns": [],
+    "hasOptional": true,
+    "asteriskCount": 5
+  },
+  {
+    "name": "Fee Payments",
+    "formFile": "src/app/next_panel/fee-payments/FeePaymentForm.jsx",
+    "apiRoute": "src/app/api/fee-payments/route.js",
+    "table": "cst_fee_payments",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "fee_status_id",
+      "amount",
+      "payment_mode"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Fee Status",
+    "formFile": "src/app/next_panel/fee-status/FeeStatusForm.jsx",
+    "apiRoute": "src/app/api/fee-status/route.js",
+    "table": "cst_fee_status",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "fee_type"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 2
+  },
+  {
+    "name": "Gallery Albums",
+    "formFile": "src/app/next_panel/gallery-albums/GalleryAlbumForm.jsx",
+    "apiRoute": "src/app/api/gallery-albums/route.js",
+    "table": "cst_gallery_albums",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "album_title",
+      "slug"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 7
+  },
+  {
+    "name": "Gallery Categories",
+    "formFile": "src/app/next_panel/gallery-categories/GalleryCategoryForm.jsx",
+    "apiRoute": "src/app/api/gallery-categories/route.js",
+    "table": "cst_gallery_categories",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "category_name",
+      "slug"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 7
+  },
+  {
+    "name": "Gallery Images",
+    "formFile": "src/app/next_panel/gallery-images/GalleryImageForm.jsx",
+    "apiRoute": "src/app/api/gallery-images/route.js",
+    "table": "cst_gallery_images",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "album_id",
+      "image_path"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 7
+  },
+  {
+    "name": "Gallery Videos",
+    "formFile": "src/app/next_panel/gallery-videos/GalleryVideoForm.jsx",
+    "apiRoute": "src/app/api/gallery-videos/route.js",
+    "table": "cst_gallery_videos",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "video_title",
+      "video_url"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 10
+  },
+  {
+    "name": "Ground Booking Requests",
+    "formFile": "src/app/next_panel/ground-booking-requests/GroundBookingRequestForm.jsx",
+    "apiRoute": "src/app/api/ground-booking-requests/route.js",
+    "table": "cst_ground_booking_requests",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "request_number",
+      "customer_name",
+      "mobile",
+      "ground_id",
+      "booking_date",
+      "start_time",
+      "end_time"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 11
+  },
+  {
+    "name": "Ground Bookings",
+    "formFile": "src/app/next_panel/ground-bookings/GroundBookingForm.jsx",
+    "apiRoute": "src/app/api/ground-bookings/route.js",
+    "table": "cst_ground_bookings",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "booking_no",
+      "ground_id",
+      "slot_id",
+      "customer_name",
+      "booking_date"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 8
+  },
+  {
+    "name": "Ground Images",
+    "formFile": "src/app/next_panel/ground-images/GroundImageForm.jsx",
+    "apiRoute": "src/app/api/ground-images/route.js",
+    "table": "cst_ground_images",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "ground_id",
+      "ground_image"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 7
+  },
+  {
+    "name": "Ground Payments",
+    "formFile": "src/app/next_panel/ground-payments/GroundPaymentForm.jsx",
+    "apiRoute": "src/app/api/ground-payments/route.js",
+    "table": "cst_ground_payments",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "booking_id",
+      "payment_date",
+      "payment_mode"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Ground Slots",
+    "formFile": "src/app/next_panel/ground-slots/GroundSlotForm.jsx",
+    "apiRoute": "src/app/api/ground-slots/route.js",
+    "table": "cst_ground_slots",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "ground_id",
+      "slot_name",
+      "start_time",
+      "end_time"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Grounds",
+    "formFile": "src/app/next_panel/grounds/GroundForm.jsx",
+    "apiRoute": "src/app/api/ground/route.js",
+    "table": "cst_ground",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "ground_name",
+      "ground_code",
+      "address"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Individual Training",
+    "formFile": "src/app/next_panel/individual-training/IndividualTrainingForm.jsx",
+    "apiRoute": "src/app/api/individual-training/route.js",
+    "table": "cst_individual_training",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_id",
+      "user_program_id",
+      "coach_user_id",
+      "training_days",
+      "start_time",
+      "end_time",
+      "start_date"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 18
+  },
+  {
+    "name": "Match Bowling Scorecard",
+    "formFile": "src/app/next_panel/match-bowling-scorecard/MatchBowlingScorecardForm.jsx",
+    "apiRoute": "src/app/api/match-bowling-scorecard/route.js",
+    "table": "cst_match_bowling_scorecard",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "match_id",
+      "innings_id",
+      "match_player_id"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 17
+  },
+  {
+    "name": "Match Innings",
+    "formFile": "src/app/next_panel/match-innings/MatchInningsForm.jsx",
+    "apiRoute": "src/app/api/match-innings/route.js",
+    "table": "cst_match_innings",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "match_id",
+      "innings_no",
+      "batting_team_id",
+      "bowling_team_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 23
+  },
+  {
+    "name": "Match Players",
+    "formFile": "src/app/next_panel/match-players/MatchPlayerForm.jsx",
+    "apiRoute": "src/app/api/match-players/route.js",
+    "table": "cst_match_players",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "match_id",
+      "team_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Match Scorecard",
+    "formFile": "src/app/next_panel/match-scorecard/MatchScorecardForm.jsx",
+    "apiRoute": "src/app/api/match-scorecard/route.js",
+    "table": "cst_match_scorecard",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "match_id",
+      "innings_id",
+      "match_player_id"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 27
+  },
+  {
+    "name": "Match Types",
+    "formFile": "src/app/next_panel/match-types/MatchTypeForm.jsx",
+    "apiRoute": "src/app/api/match-types/route.js",
+    "table": "cst_match_types",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "name",
+      "code"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 2
+  },
+  {
+    "name": "Matches",
+    "formFile": "src/app/next_panel/matches/MatchForm.jsx",
+    "apiRoute": "src/app/api/matches/route.js",
+    "table": "cst_matches",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "team_a_id",
+      "team_b_id",
+      "match_type",
+      "match_date"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 1
+  },
+  {
+    "name": "Menu",
+    "formFile": "src/app/next_panel/menu/MenuForm.jsx",
+    "apiRoute": "src/app/api/menu/route.js",
+    "table": "cst_menu",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "menu_key",
+      "menu_name",
+      "menu_title"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 4
+  },
+  {
+    "name": "Menu Permissions",
+    "formFile": "src/app/next_panel/menu-permissions/MenuPermissionForm.jsx",
+    "apiRoute": "src/app/api/menu-permissions/route.js",
+    "table": "cst_menu_permissions",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "menu_id",
+      "permission_id"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 5
+  },
+  {
+    "name": "Outside Players",
+    "formFile": "src/app/next_panel/outside-players/OutsidePlayerForm.jsx",
+    "apiRoute": "src/app/api/outside-players/route.js",
+    "table": "cst_outside_players",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "player_name",
+      "age_group_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 7
+  },
+  {
+    "name": "Permissions",
+    "formFile": "src/app/next_panel/permissions/PermissionsForm.jsx",
+    "apiRoute": "src/app/api/permissions/route.js",
+    "table": "cst_permissions",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "module_name",
+      "permission_name"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 3
+  },
+  {
+    "name": "Player Attendance",
+    "formFile": "src/app/next_panel/player-attendance/PlayerAttendanceForm.jsx",
+    "apiRoute": "src/app/api/player-attendance/route.js",
+    "table": "cst_player_attendance",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_id",
+      "user_program_id",
+      "admission_players_id",
+      "program_id",
+      "attendance_date"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 6
+  },
+  {
+    "name": "Player Payments",
+    "formFile": "src/app/next_panel/player-payments/PlayerPaymentForm.jsx",
+    "apiRoute": "src/app/api/player-payments/route.js",
+    "table": "cst_player_payments",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "player_program_fee_id",
+      "receipt_no"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 12
+  },
+  {
+    "name": "Player Program Fees",
+    "formFile": "src/app/next_panel/player-program-fees/PlayerProgramFeeForm.jsx",
+    "apiRoute": "src/app/api/player-program-fees/route.js",
+    "table": "cst_player_program_fees",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_id",
+      "user_program_id",
+      "admission_players_id",
+      "program_id",
+      "fee_month"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 6
+  },
+  {
+    "name": "Programs",
+    "formFile": "src/app/next_panel/programs/ProgramForm.jsx",
+    "apiRoute": "src/app/api/programs/route.js",
+    "table": "cst_program",
+    "hasTable": false,
+    "requiredDbColumns": [],
+    "hasOptional": true,
+    "asteriskCount": 15
+  },
+  {
+    "name": "Role Permissions",
+    "formFile": "src/app/next_panel/role-permissions/RolePermissionForm.jsx",
+    "apiRoute": "src/app/api/role-permissions/route.js",
+    "table": "cst_role_permissions",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "role_id",
+      "permission_id"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 4
+  },
+  {
+    "name": "Roles",
+    "formFile": "src/app/next_panel/roles/RoleForm.jsx",
+    "apiRoute": "src/app/api/roles/route.js",
+    "table": "cst_roles",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "role_name"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Staff",
+    "formFile": "src/app/next_panel/staff/StaffForm.jsx",
+    "apiRoute": "src/app/api/staff/route.js",
+    "table": "cst_staff",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "appointment_no",
+      "role_id",
+      "first_name"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Student Enquiries",
+    "formFile": "src/app/next_panel/student-enquiries/StudentEnquiryForm.jsx",
+    "apiRoute": "src/app/api/student-enquiries/route.js",
+    "table": "cst_student_enquiries",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "student_name",
+      "phone"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 13
+  },
+  {
+    "name": "Team Players",
+    "formFile": "src/app/next_panel/team-players/TeamPlayerForm.jsx",
+    "apiRoute": "src/app/api/team-players/route.js",
+    "table": "cst_team_players",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "team_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 1
+  },
+  {
+    "name": "Teams",
+    "formFile": "src/app/next_panel/teams/TeamForm.jsx",
+    "apiRoute": "src/app/api/teams/route.js",
+    "table": "cst_teams",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "team_name"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 5
+  },
+  {
+    "name": "Tournament Matches",
+    "formFile": "src/app/next_panel/tournament-matches/TournamentMatchForm.jsx",
+    "apiRoute": "src/app/api/tournament-matches/route.js",
+    "table": "cst_tournament_matches",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "tournament_id",
+      "match_no"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 3
+  },
+  {
+    "name": "Tournament Team Players",
+    "formFile": "src/app/next_panel/tournament-team-players/TournamentTeamPlayerForm.jsx",
+    "apiRoute": "src/app/api/tournament-team-players/route.js",
+    "table": "cst_tournament_team_players",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "tournament_id",
+      "tournament_team_id",
+      "team_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 0
+  },
+  {
+    "name": "Tournament Teams",
+    "formFile": "src/app/next_panel/tournament-teams/TournamentTeamForm.jsx",
+    "apiRoute": "src/app/api/tournament-teams/route.js",
+    "table": "cst_tournament_teams",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "tournament_id",
+      "team_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 2
+  },
+  {
+    "name": "Tournaments",
+    "formFile": "src/app/next_panel/tournaments/TournamentForm.jsx",
+    "apiRoute": "src/app/api/tournaments/route.js",
+    "table": "cst_tournaments",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "branch_id",
+      "tournament_name",
+      "tournament_code",
+      "tournament_type",
+      "start_date"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 6
+  },
+  {
+    "name": "Umpire Payments",
+    "formFile": "src/app/next_panel/umpire-payments/UmpirePaymentForm.jsx",
+    "apiRoute": "src/app/api/umpire-payments/route.js",
+    "table": "cst_umpire_payments",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "umpire_id",
+      "payment_date"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 8
+  },
+  {
+    "name": "Umpires",
+    "formFile": "src/app/next_panel/umpires/UmpireForm.jsx",
+    "apiRoute": "src/app/api/umpires/route.js",
+    "table": "cst_umpires",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "umpire_name",
+      "mobile"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 17
+  },
+  {
+    "name": "User Branches",
+    "formFile": "src/app/next_panel/user-branches/UserBranchForm.jsx",
+    "apiRoute": "src/app/api/user-branches/route.js",
+    "table": "cst_user_branches",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "branch_id",
+      "appointment_no"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 1
+  },
+  {
+    "name": "User Programs",
+    "formFile": "src/app/next_panel/user-programs/UserProgramForm.jsx",
+    "apiRoute": "src/app/api/user-programs/route.js",
+    "table": "cst_user_programs",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "program_id",
+      "branch_id",
+      "admission_players_id"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 4
+  },
+  {
+    "name": "User Roles",
+    "formFile": "src/app/next_panel/user-roles/UserRoleForm.jsx",
+    "apiRoute": "src/app/api/user-roles/route.js",
+    "table": "cst_user_roles",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "user_id",
+      "role_id"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 2
+  },
+  {
+    "name": "Users",
+    "formFile": "src/app/next_panel/users/UserForm.jsx",
+    "apiRoute": "src/app/api/users/route.js",
+    "table": "cst_users",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "appointment_no",
+      "first_name",
+      "password",
+      "user_type"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 2
+  },
+  {
+    "name": "Menu Management Modal",
+    "formFile": "src/app/next_panel/menu-management/components/MenuFormModal.jsx",
+    "apiRoute": "src/app/api/menu/route.js",
+    "table": "cst_menu",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "menu_key",
+      "menu_name",
+      "menu_title"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 3
+  },
+  {
+    "name": "Product Categories Modal",
+    "formFile": "src/app/next_panel/product-categories/page.jsx",
+    "apiRoute": "src/app/api/product-categories/route.js",
+    "table": "cst_product_categories",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "category_name",
+      "slug"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 15
+  },
+  {
+    "name": "Product Stock Modal",
+    "formFile": "src/app/next_panel/product-stock/page.jsx",
+    "apiRoute": "src/app/api/product-stock/route.js",
+    "table": "cst_product_stock",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "product_id",
+      "branch_id"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 17
+  },
+  {
+    "name": "Product Images Modal",
+    "formFile": "src/app/next_panel/product-images/page.jsx",
+    "apiRoute": "src/app/api/product-images/route.js",
+    "table": "cst_product_images",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "product_id",
+      "image_path"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 33
+  },
+  {
+    "name": "Products Page Form",
+    "formFile": "src/app/next_panel/products/page.jsx",
+    "apiRoute": "src/app/api/products/route.js",
+    "table": "cst_products",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "product_name",
+      "slug"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 21
+  },
+  {
+    "name": "Staff Salary Page Modal",
+    "formFile": "src/app/next_panel/staff-salary/page.jsx",
+    "apiRoute": "src/app/api/staff-salary/route.js",
+    "table": "cst_staff_salary",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_id",
+      "staff_id",
+      "effective_from"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 59
+  },
+  {
+    "name": "Staff Salary Payments Modal",
+    "formFile": "src/app/next_panel/staff-salary-payments/page.jsx",
+    "apiRoute": "src/app/api/staff-salary-payments/route.js",
+    "table": "cst_staff_salary_payments",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_id",
+      "staff_id",
+      "salary_structure_id",
+      "salary_month",
+      "salary_year"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 32
+  },
+  {
+    "name": "Student Enquiry Followup Modal",
+    "formFile": "src/app/next_panel/student-enquiries/[id]/followup/page.jsx",
+    "apiRoute": "src/app/api/student-enquiries-flowup/route.js",
+    "table": "cst_student_enquiries_flowup",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "enquiry_id",
+      "follow_up_no",
+      "enquiry_status"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 8
+  },
+  {
+    "name": "Orders Page Modal",
+    "formFile": "src/app/next_panel/orders/page.jsx",
+    "apiRoute": "src/app/api/orders/route.js",
+    "table": "cst_orders",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "order_no",
+      "fulfillment_branch_id",
+      "customer_name",
+      "customer_phone"
+    ],
+    "hasOptional": true,
+    "asteriskCount": 28
+  },
+  {
+    "name": "Order Payments Modal",
+    "formFile": "src/app/next_panel/order-payments/page.jsx",
+    "apiRoute": "src/app/api/order-payments/route.js",
+    "table": "cst_order_payments",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "order_id",
+      "amount",
+      "payment_method"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 18
+  },
+  {
+    "name": "User Weekly Off Page Form",
+    "formFile": "src/app/next_panel/user-weekly-off/page.jsx",
+    "apiRoute": "src/app/api/user-weekly-off/route.js",
+    "table": "cst_user_weekly_off",
+    "hasTable": true,
+    "requiredDbColumns": [
+      "academy_id",
+      "branch_id",
+      "user_id",
+      "day_of_week"
+    ],
+    "hasOptional": false,
+    "asteriskCount": 16
+  }
+]

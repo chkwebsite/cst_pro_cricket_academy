@@ -582,7 +582,7 @@ export default function CoachForm({ id = null }) {
                                     step="100"
                                     name="salary"
                                     className="form-control"
-                                    placeholder="Optional"
+                                    placeholder="e.g. 25000"
                                     value={formData.salary}
                                     onChange={handleInputChange}
                                 />

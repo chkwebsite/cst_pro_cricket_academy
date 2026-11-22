@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Save } from "lucide-react";
+import { FormError } from "@/app/components/form";
 import { useUser } from "../components/UserContext";
 import {
     BASE,
@@ -66,9 +67,31 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
     const [optionsLoading, setOptionsLoading] = useState(true);
     const [optionsError, setOptionsError] = useState(null);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
-    const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+    const setField = (key, value) => {
+        if (fieldErrors[key]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
+        setForm((f) => ({ ...f, [key]: value }));
+    };
+
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "branch_id" && !form.branch_id) err = "Please select a branch.";
+        if (field === "tournament_name" && !form.tournament_name?.trim()) err = "Tournament name is required.";
+        if (field === "tournament_code" && !form.tournament_code?.trim()) err = "Tournament code is required.";
+        if (field === "overs" && (!form.overs || Number(form.overs) < 1 || Number(form.overs) > 100)) {
+            err = "Overs must be between 1 and 100.";
+        }
+        if (field === "start_date" && !form.start_date) err = "Start date is required.";
+        if (err) setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    };
 
     useEffect(() => {
         if (!userInfo || (!isEdit && !canCreate)) return;
@@ -149,24 +172,43 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
 
     // Mirrors the API's validation so mistakes are caught on the step they happen.
     const validate = (index) => {
+        const stepErrs = {};
         if (index === 0) {
-            if (!form.branch_id) return "Select a branch";
-            if (!form.tournament_name.trim()) return "Tournament name is required";
-            if (!form.tournament_code.trim()) return "Tournament code is required";
+            if (!form.branch_id) stepErrs.branch_id = "Please select a branch.";
+            if (!form.tournament_name.trim()) stepErrs.tournament_name = "Tournament name is required.";
+            if (!form.tournament_code.trim()) stepErrs.tournament_code = "Tournament code is required.";
+            if (!form.overs || Number(form.overs) < 1 || Number(form.overs) > 100) {
+                stepErrs.overs = "Overs must be between 1 and 100.";
+            }
         }
         if (index === 1) {
-            if (!form.start_date) return "Start date is required";
-            if (form.end_date && form.end_date < form.start_date) return "End date cannot be before start date";
+            if (!form.start_date) stepErrs.start_date = "Start date is required.";
+            if (form.end_date && form.end_date < form.start_date) {
+                stepErrs.end_date = "End date cannot be before start date.";
+            }
             if (form.registration_start && form.registration_end && form.registration_end < form.registration_start) {
-                return "Registration end date cannot be before registration start date";
+                stepErrs.registration_end = "Registration end date cannot be before registration start date.";
             }
         }
         if (index === 2) {
-            if (form.team_fee !== "" && Number(form.team_fee) < 0) return "Team fee cannot be negative";
-            if (form.max_teams !== "" && Number(form.max_teams) < 1) return "Maximum teams must be at least 1";
+            if (form.team_fee !== "" && Number(form.team_fee) < 0) stepErrs.team_fee = "Team fee cannot be negative.";
+            if (form.max_teams !== "" && Number(form.max_teams) < 1) stepErrs.max_teams = "Maximum teams must be at least 1.";
             if (form.max_players_per_team !== "" && Number(form.max_players_per_team) < 1) {
-                return "Maximum players per team must be at least 1";
+                stepErrs.max_players_per_team = "Maximum players per team must be at least 1.";
             }
+        }
+
+        if (Object.keys(stepErrs).length > 0) {
+            setFieldErrors((prev) => ({ ...prev, ...stepErrs }));
+            const firstKey = Object.keys(stepErrs)[0];
+            setTimeout(() => {
+                const el = document.querySelector(`[name="${firstKey}"], #${firstKey}, #t-${firstKey.replace('_', '')}`);
+                if (el) {
+                    el.focus();
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+            }, 50);
+            return Object.values(stepErrs)[0];
         }
         return null;
     };
@@ -176,7 +218,6 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
             for (let i = step; i < target; i++) {
                 const problem = validate(i);
                 if (problem) {
-                    setError(problem);
                     setStep(i);
                     return;
                 }
@@ -196,7 +237,6 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
         for (let i = 0; i < STEPS.length - 1; i++) {
             const problem = validate(i);
             if (problem) {
-                setError(problem);
                 setStep(i);
                 return;
             }
@@ -233,6 +273,24 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    if (["branch_id", "tournament_name", "tournament_code", "overs"].includes(firstKey)) {
+                        setStep(0);
+                    } else if (["start_date", "end_date", "registration_start", "registration_end"].includes(firstKey)) {
+                        setStep(1);
+                    } else if (["team_fee", "max_teams", "max_players_per_team"].includes(firstKey)) {
+                        setStep(2);
+                    }
+                    setTimeout(() => {
+                        const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                        if (el) {
+                            el.focus();
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                    }, 100);
+                }
                 const message = json.message || "Failed to save tournament";
                 const detail = process.env.NODE_ENV === "development" ? json.error : null;
                 throw new Error(detail ? `${message}: ${detail}` : message);
@@ -336,9 +394,11 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-branch" className="form-label">Branch <span className="text-danger">*</span></label>
                                 <select
                                     id="t-branch"
-                                    className="form-select"
+                                    name="branch_id"
+                                    className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                     value={form.branch_id}
                                     onChange={(e) => setField("branch_id", e.target.value)}
+                                    onBlur={handleBlur("branch_id")}
                                     disabled={optionsLoading || branchesFailed}
                                 >
                                     <option value="">{optionsLoading ? "Loading branches..." : "Select branch"}</option>
@@ -346,12 +406,14 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                         <option key={branch.id} value={branch.id}>{branch.branch_name}</option>
                                     ))}
                                 </select>
+                                <FormError error={fieldErrors.branch_id} />
                             </div>
 
                             <div className="col-12 col-md-6">
                                 <label htmlFor="t-type" className="form-label">Format</label>
                                 <select
                                     id="t-type"
+                                    name="tournament_type"
                                     className="form-select"
                                     value={form.tournament_type}
                                     onChange={(e) => setField("tournament_type", e.target.value)}
@@ -371,14 +433,17 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-overs" className="form-label">Overs per Match <span className="text-danger">*</span></label>
                                 <input
                                     id="t-overs"
+                                    name="overs"
                                     type="number"
                                     min="1"
                                     max="100"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.overs ? "is-invalid border-danger" : ""}`}
                                     value={form.overs}
                                     onChange={(e) => setField("overs", e.target.value)}
+                                    onBlur={handleBlur("overs")}
                                     placeholder="e.g. 20 (T20), 50 (ODI), 10 (T10)"
                                 />
+                                <FormError error={fieldErrors.overs} />
                                 <div className="form-text">Default overs for matches in this tournament.</div>
                             </div>
 
@@ -386,23 +451,29 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-name" className="form-label">Name <span className="text-danger">*</span></label>
                                 <input
                                     id="t-name"
-                                    className="form-control"
+                                    name="tournament_name"
+                                    className={`form-control ${fieldErrors.tournament_name ? "is-invalid border-danger" : ""}`}
                                     value={form.tournament_name}
                                     onChange={(e) => setField("tournament_name", e.target.value)}
+                                    onBlur={handleBlur("tournament_name")}
                                     placeholder="e.g. Summer Cup 2026"
                                     autoFocus
                                 />
+                                <FormError error={fieldErrors.tournament_name} />
                             </div>
 
                             <div className="col-12 col-md-4">
                                 <label htmlFor="t-code" className="form-label">Code <span className="text-danger">*</span></label>
                                 <input
                                     id="t-code"
-                                    className="form-control text-uppercase"
+                                    name="tournament_code"
+                                    className={`form-control text-uppercase ${fieldErrors.tournament_code ? "is-invalid border-danger" : ""}`}
                                     value={form.tournament_code}
                                     onChange={(e) => setField("tournament_code", e.target.value)}
+                                    onBlur={handleBlur("tournament_code")}
                                     placeholder="e.g. SC26"
                                 />
+                                <FormError error={fieldErrors.tournament_code} />
                                 <div className="form-text">Unique within the academy.</div>
                             </div>
 
@@ -410,6 +481,7 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-cat" className="form-label">Category</label>
                                 <input
                                     id="t-cat"
+                                    name="category"
                                     className="form-control"
                                     value={form.category}
                                     onChange={(e) => setField("category", e.target.value)}
@@ -421,6 +493,7 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-age" className="form-label">Age group</label>
                                 <select
                                     id="t-age"
+                                    name="age_group"
                                     className="form-select"
                                     value={form.age_group}
                                     onChange={(e) => setField("age_group", e.target.value)}
@@ -440,6 +513,7 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-desc" className="form-label">Description</label>
                                 <textarea
                                     id="t-desc"
+                                    name="description"
                                     className="form-control"
                                     rows={3}
                                     value={form.description}
@@ -455,27 +529,33 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-start" className="form-label">Start date <span className="text-danger">*</span></label>
                                 <input
                                     id="t-start"
+                                    name="start_date"
                                     type="date"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.start_date ? "is-invalid border-danger" : ""}`}
                                     value={form.start_date}
                                     onChange={(e) => setField("start_date", e.target.value)}
+                                    onBlur={handleBlur("start_date")}
                                 />
+                                <FormError error={fieldErrors.start_date} />
                             </div>
                             <div className="col-12 col-md-6">
                                 <label htmlFor="t-end" className="form-label">End date</label>
                                 <input
                                     id="t-end"
+                                    name="end_date"
                                     type="date"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.end_date ? "is-invalid border-danger" : ""}`}
                                     min={form.start_date || undefined}
                                     value={form.end_date}
                                     onChange={(e) => setField("end_date", e.target.value)}
                                 />
+                                <FormError error={fieldErrors.end_date} />
                             </div>
                             <div className="col-12 col-md-6">
                                 <label htmlFor="t-rs" className="form-label">Registration opens</label>
                                 <input
                                     id="t-rs"
+                                    name="registration_start"
                                     type="date"
                                     className="form-control"
                                     value={form.registration_start}
@@ -486,12 +566,14 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-re" className="form-label">Registration closes</label>
                                 <input
                                     id="t-re"
+                                    name="registration_end"
                                     type="date"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.registration_end ? "is-invalid border-danger" : ""}`}
                                     min={form.registration_start || undefined}
                                     value={form.registration_end}
                                     onChange={(e) => setField("registration_end", e.target.value)}
                                 />
+                                <FormError error={fieldErrors.registration_end} />
                             </div>
                         </div>
                     )}
@@ -502,38 +584,44 @@ export default function TournamentForm({ initial, tournamentId, returnTo, return
                                 <label htmlFor="t-fee" className="form-label">Fee per team (₹)</label>
                                 <input
                                     id="t-fee"
+                                    name="team_fee"
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.team_fee ? "is-invalid border-danger" : ""}`}
                                     value={form.team_fee}
                                     onChange={(e) => setField("team_fee", e.target.value)}
                                 />
+                                <FormError error={fieldErrors.team_fee} />
                                 <div className="form-text">Enter 0 for a free tournament.</div>
                             </div>
                             <div className="col-12 col-md-4">
                                 <label htmlFor="t-mt" className="form-label">Maximum teams</label>
                                 <input
                                     id="t-mt"
+                                    name="max_teams"
                                     type="number"
                                     min="1"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.max_teams ? "is-invalid border-danger" : ""}`}
                                     value={form.max_teams}
                                     onChange={(e) => setField("max_teams", e.target.value)}
                                     placeholder="No limit"
                                 />
+                                <FormError error={fieldErrors.max_teams} />
                             </div>
                             <div className="col-12 col-md-4">
                                 <label htmlFor="t-mp" className="form-label">Players per team</label>
                                 <input
                                     id="t-mp"
+                                    name="max_players_per_team"
                                     type="number"
                                     min="1"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.max_players_per_team ? "is-invalid border-danger" : ""}`}
                                     value={form.max_players_per_team}
                                     onChange={(e) => setField("max_players_per_team", e.target.value)}
                                     placeholder="No limit"
                                 />
+                                <FormError error={fieldErrors.max_players_per_team} />
                             </div>
                         </div>
                     )}

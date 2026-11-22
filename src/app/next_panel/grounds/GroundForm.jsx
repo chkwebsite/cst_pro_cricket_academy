@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError } from "@/app/components/form";
 
 const CODE_PREFIX = "GD-CODE-";
 
@@ -43,6 +44,7 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
     const [academiesLoading, setAcademiesLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     // Auto-set academy_id for non-super admins once user session is ready
     useEffect(() => {
@@ -215,6 +217,15 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         if (name === "ground_code") {
             setManualCode(true);
         }
@@ -239,17 +250,48 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
         }));
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "academy_id" && !formData.academy_id) err = "Please select an academy.";
+        if (field === "branch_id" && !formData.branch_id) err = "Please select a branch.";
+        if (field === "ground_name" && !formData.ground_name?.trim()) err = "Ground name is required.";
+        if (field === "ground_code" && !formData.ground_code?.trim()) err = "Ground code is required.";
+        if (field === "address" && !formData.address?.trim()) err = "Address is required.";
+        if (field === "email" && formData.email?.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
+            err = "Please enter a valid email address.";
+        }
+        if (err) setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        if (!formData.academy_id) errs.academy_id = "Please select an academy.";
+        if (!formData.branch_id) errs.branch_id = "Please select a branch.";
+        if (!formData.ground_name?.trim()) errs.ground_name = "Ground name is required.";
+        if (!formData.ground_code?.trim()) errs.ground_code = "Ground code is required.";
+        if (!formData.address?.trim()) errs.address = "Address is required.";
+        if (formData.email?.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
+            errs.email = "Please enter a valid email address.";
+        }
+
+        setFieldErrors(errs);
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Mirrors the API's required-field validation
-        if (!formData.academy_id) return setError("Please select an academy");
-        if (!formData.branch_id) return setError("Please select a branch");
-        if (!formData.ground_name.trim()) return setError("Ground name is required");
-        if (!formData.ground_code.trim()) return setError("Ground code is required");
-        if (!formData.address.trim()) return setError("Address is required");
-        if (formData.email.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
-            return setError("Please enter a valid email address");
+        if (!validateAll()) {
+            return;
         }
 
         try {
@@ -277,6 +319,15 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -306,12 +357,13 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
 
                 <form onSubmit={handleSubmit}>
                     <div className="mb-3">
-                        <label className="form-label">Academy</label>
+                        <label className="form-label">Academy <span className="text-danger ms-1">*</span></label>
                         <select
                             name="academy_id"
-                            className="form-select"
+                            className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                             value={formData.academy_id}
                             onChange={handleChange}
+                            onBlur={handleBlur("academy_id")}
                             disabled={!isSuper && Boolean(userAcademyId)}
                             required
                         >
@@ -322,15 +374,17 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
                                 </option>
                             ))}
                         </select>
+                        <FormError error={fieldErrors.academy_id} />
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Branch</label>
+                        <label className="form-label">Branch <span className="text-danger ms-1">*</span></label>
                         <select
                             name="branch_id"
-                            className="form-select"
+                            className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                             value={formData.branch_id}
                             onChange={handleChange}
+                            onBlur={handleBlur("branch_id")}
                             disabled={!formData.academy_id}
                             required
                         >
@@ -343,31 +397,35 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
                                 </option>
                             ))}
                         </select>
+                        <FormError error={fieldErrors.branch_id} />
                     </div>
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Ground Name</label>
+                            <label className="form-label">Ground Name <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="text"
                                 name="ground_name"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.ground_name ? "is-invalid border-danger" : ""}`}
                                 value={formData.ground_name}
                                 onChange={handleChange}
+                                onBlur={handleBlur("ground_name")}
                                 placeholder="Enter ground name"
                                 required
                             />
+                            <FormError error={fieldErrors.ground_name} />
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Ground Code</label>
+                            <label className="form-label">Ground Code <span className="text-danger ms-1">*</span></label>
                             <div className="input-group">
                                 <input
                                     type="text"
                                     name="ground_code"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.ground_code ? "is-invalid border-danger" : ""}`}
                                     value={formData.ground_code}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("ground_code")}
                                     placeholder="GD-CODE-001"
                                     disabled={isEdit}
                                     required
@@ -385,6 +443,7 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
                                     </button>
                                 )}
                             </div>
+                            <FormError error={fieldErrors.ground_code} />
                             {isEdit && (
                                 <div className="form-text">Ground code cannot be changed after creation.</div>
                             )}
@@ -393,7 +452,7 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Contact Person (optional)</label>
+                            <label className="form-label">Contact Person</label>
                             <input
                                 type="text"
                                 name="contact_person"
@@ -405,45 +464,51 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Phone (optional)</label>
+                            <label className="form-label">Phone</label>
                             <input
                                 type="tel"
                                 name="phone"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.phone ? "is-invalid border-danger" : ""}`}
                                 value={formData.phone}
                                 onChange={handleChange}
+                                onBlur={handleBlur("phone")}
                                 placeholder="Enter phone number"
                             />
+                            <FormError error={fieldErrors.phone} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Email (optional)</label>
+                            <label className="form-label">Email</label>
                             <input
                                 type="email"
                                 name="email"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.email ? "is-invalid border-danger" : ""}`}
                                 value={formData.email}
                                 onChange={handleChange}
+                                onBlur={handleBlur("email")}
                                 placeholder="Enter email"
                             />
+                            <FormError error={fieldErrors.email} />
                         </div>
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Address</label>
+                        <label className="form-label">Address <span className="text-danger ms-1">*</span></label>
                         <textarea
                             name="address"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.address ? "is-invalid border-danger" : ""}`}
                             rows={2}
                             value={formData.address}
                             onChange={handleChange}
+                            onBlur={handleBlur("address")}
                             placeholder="Enter full address"
                             required
                         />
+                        <FormError error={fieldErrors.address} />
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Facilities (optional)</label>
+                        <label className="form-label">Facilities</label>
                         <input
                             type="text"
                             name="ground_facility"
@@ -456,7 +521,7 @@ export default function GroundForm({ id = null, initialGroundCode = "", defaultA
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Description (optional)</label>
+                        <label className="form-label">Description</label>
                         <textarea
                             name="description"
                             className="form-control"

@@ -66,6 +66,8 @@ p.id,
     p.pin_code,
 
     p.under_age,
+    p.age_group_id,
+    ag.age_group,
     p.gender,
 
     p.aadhaar_no,
@@ -95,6 +97,9 @@ p.id,
 
             INNER JOIN cst_roles r
                 ON r.id = p.role_id
+
+            LEFT JOIN cst_age_groups ag
+                ON ag.id = p.age_group_id
 
             WHERE p.id = ?
     AND p.is_deleted = 0
@@ -197,6 +202,7 @@ export async function PUT(request, { params }) {
         const pin_code = formData.get("pin_code");
 
         const under_age = formData.get("under_age");
+        const age_group_id = formData.get("age_group_id");
         const gender = formData.get("gender");
 
         const aadhaar_no = formData.get("aadhaar_no");
@@ -246,6 +252,75 @@ export async function PUT(request, { params }) {
             return NextResponse.json({
                 success: false,
                 message: "Role ID is required"
+            }, { status: 400 });
+        }
+
+        if (!email || !String(email).trim()) {
+            return NextResponse.json({
+                success: false,
+                message: "Email is required"
+            }, { status: 400 });
+        }
+
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(String(email).trim())) {
+            return NextResponse.json({
+                success: false,
+                message: "Invalid email format"
+            }, { status: 400 });
+        }
+
+        if (!phone || !String(phone).trim()) {
+            return NextResponse.json({
+                success: false,
+                message: "Phone number is required"
+            }, { status: 400 });
+        }
+
+        const phoneDigits = String(phone).replace(/\D/g, "");
+        if (phoneDigits.length < 10) {
+            return NextResponse.json({
+                success: false,
+                message: "Phone number must have at least 10 digits"
+            }, { status: 400 });
+        }
+
+        if (!address || !String(address).trim()) {
+            return NextResponse.json({
+                success: false,
+                message: "Address is required"
+            }, { status: 400 });
+        }
+
+        if (under_age === null || under_age === undefined || under_age === "" || (Number(under_age) !== 0 && Number(under_age) !== 1)) {
+            return NextResponse.json({
+                success: false,
+                message: "Under Age selection is required (Yes or No)"
+            }, { status: 400 });
+        }
+
+        if (!age_group_id || Number(age_group_id) <= 0) {
+            return NextResponse.json({
+                success: false,
+                message: "Age Group is required"
+            }, { status: 400 });
+        }
+
+        const [ageGroupRows] = await connection.query(
+            "SELECT id FROM cst_age_groups WHERE id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1",
+            [Number(age_group_id)]
+        );
+        if (ageGroupRows.length === 0) {
+            return NextResponse.json({
+                success: false,
+                message: "Selected age group does not exist"
+            }, { status: 400 });
+        }
+
+        if (!aadhaar_no || !String(aadhaar_no).trim()) {
+            return NextResponse.json({
+                success: false,
+                message: "Aadhaar number is required"
             }, { status: 400 });
         }
 
@@ -519,6 +594,7 @@ admission_no = ?,
     pin_code = ?,
 
     under_age = ?,
+    age_group_id = ?,
     gender = ?,
 
     aadhaar_no = ?,
@@ -543,18 +619,19 @@ admission_no = ?,
                 father_name || null,
                 mother_name || null,
 
-                email || null,
-                phone || null,
+                String(email).trim(),
+                String(phone).trim(),
 
-                address || null,
+                String(address).trim(),
                 city || null,
                 state || null,
                 pin_code || null,
 
-                under_age ?? 0,
+                Number(under_age),
+                Number(age_group_id),
                 gender || null,
 
-                aadhaar_no || null,
+                String(aadhaar_no).trim(),
                 aadhaarCardPath,
 
                 playing_academy || null,
@@ -605,6 +682,8 @@ p.id,
     p.pin_code,
 
     p.under_age,
+    p.age_group_id,
+    ag.age_group,
     p.gender,
 
     p.aadhaar_no,
@@ -633,6 +712,9 @@ p.id,
 
             INNER JOIN cst_roles r
                 ON r.id = p.role_id
+
+            LEFT JOIN cst_age_groups ag
+                ON ag.id = p.age_group_id
 
             WHERE p.id = ?
 

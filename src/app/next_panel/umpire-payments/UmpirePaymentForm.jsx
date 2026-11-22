@@ -319,7 +319,7 @@ export default function UmpirePaymentForm() {
                     <textarea
                         rows={2}
                         className="form-control"
-                        placeholder="Optional remarks, notes or receipt details..."
+                        placeholder="Remarks, notes or receipt details..."
                         value={remarks}
                         onChange={(e) => setRemarks(e.target.value)}
                     />

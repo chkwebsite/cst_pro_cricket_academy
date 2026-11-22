@@ -372,7 +372,7 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
 
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Caption {uploadMode === "bulk" && "(Optional base caption)"}
+                                        Caption
                                     </label>
                                     <input
                                         type="text"
@@ -409,7 +409,7 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
                                 <div>
                                     <div className="border border-dashed rounded-3 p-4 text-center bg-light">
                                         <Upload size={36} className="text-secondary opacity-50 mb-2" />
-                                        <p className="mb-2 fw-semibold">Choose one or more image files</p>
+                                        <p className="mb-2 fw-semibold">Choose one or more image files <span className="text-danger">*</span></p>
                                         <input
                                             type="file"
                                             className="form-control"
@@ -455,7 +455,7 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
 
                                     <div className="col-md-8">
                                         <label className="form-label fw-semibold">
-                                            {isEdit ? "Replace Image (Optional)" : "Select Image (Max 2MB)"}
+                                            {isEdit ? "Replace Image" : <>Select Image (Max 2MB) <span className="text-danger">*</span></>}
                                         </label>
                                         <input
                                             type="file"

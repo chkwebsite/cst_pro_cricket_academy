@@ -475,7 +475,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Tournament</label>
+                            <label className="form-label">Tournament <span className="text-danger ms-1">*</span></label>
                             <select name="tournament_id" className="form-select" value={formData.tournament_id} onChange={handleChange} required>
                                 <option value="">Choose Tournament</option>
                                 {tournaments.map((t) => (
@@ -487,7 +487,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                         </div>
 
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Match No.</label>
+                            <label className="form-label">Match No. <span className="text-danger ms-1">*</span></label>
                             <input type="number" min="1" name="match_no" className="form-control" value={formData.match_no} onChange={handleChange} required />
                             <div className="form-text">Unique within the tournament.</div>
                         </div>
@@ -540,14 +540,14 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                             />
                         </div>
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Round / Match Name (optional)</label>
+                            <label className="form-label">Round / Match Name</label>
                             <input type="text" name="round_name" className="form-control" value={formData.round_name} onChange={handleChange} placeholder="e.g. Match 14 or Semi Final 1" />
                         </div>
                     </div>
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team A (optional)</label>
+                            <label className="form-label">Team A</label>
                             <select name="team_a_id" className="form-select" value={formData.team_a_id} onChange={handleChange}>
                                 <option value="">TBD</option>
                                 {teamOptions.map((t) => (
@@ -561,7 +561,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                             )}
                         </div>
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team B (optional)</label>
+                            <label className="form-label">Team B</label>
                             <select name="team_b_id" className="form-select" value={formData.team_b_id} onChange={handleChange}>
                                 <option value="">TBD</option>
                                 {teamBOptions.map((t) => (
@@ -578,11 +578,11 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Scheduled Date (optional)</label>
+                            <label className="form-label">Scheduled Date</label>
                             <input type="date" name="scheduled_date" className="form-control" value={formData.scheduled_date} onChange={handleChange} />
                         </div>
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Ground (optional)</label>
+                            <label className="form-label">Ground</label>
                             <select
                                 name="ground_id"
                                 className="form-select"
@@ -607,7 +607,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                         </div>
                         {!canCreateBooking && (
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">Scheduled Time (optional)</label>
+                                <label className="form-label">Scheduled Time</label>
                                 <input type="time" name="scheduled_time" className="form-control" value={formData.scheduled_time} onChange={handleChange} />
                             </div>
                         )}
@@ -627,7 +627,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Linked Match (optional)</label>
+                            <label className="form-label">Linked Match</label>
                             <select name="match_id" className="form-select" value={formData.match_id} onChange={handleChange} disabled={!formData.tournament_id}>
                                 <option value="">None</option>
                                 {matches.map((m) => (
@@ -756,7 +756,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                     </select>
                                 </div>
                                 <div className="col-md-6 mb-3">
-                                    <label className="form-label">Win Margin (optional)</label>
+                                    <label className="form-label">Win Margin</label>
                                     <input
                                         type="text"
                                         name="win_margin"
@@ -767,7 +767,7 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                     />
                                 </div>
                                 <div className="col-12 mb-3">
-                                    <label className="form-label">Match Result Summary (optional)</label>
+                                    <label className="form-label">Match Result Summary</label>
                                     <input
                                         type="text"
                                         name="result_summary"

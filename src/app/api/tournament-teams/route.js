@@ -210,7 +210,7 @@ export async function POST(request) {
             Number(tournament_id) <= 0
         ) {
             return NextResponse.json(
-                { success: false, message: "Valid tournament_id is required" },
+                { success: false, message: "Valid tournament_id is required", errors: { tournament_id: "Please select a valid tournament." } },
                 { status: 400 }
             );
         }
@@ -223,7 +223,7 @@ export async function POST(request) {
             Number(team_id) <= 0
         ) {
             return NextResponse.json(
-                { success: false, message: "Valid team_id is required" },
+                { success: false, message: "Valid team_id is required", errors: { team_id: "Please select a valid team." } },
                 { status: 400 }
             );
         }

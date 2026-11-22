@@ -103,7 +103,8 @@ export async function PUT(request, { params }) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Match type name is required"
+                    message: "Match type name is required",
+                    errors: { name: "Match type name is required." }
                 },
                 { status: 400 }
             );
@@ -113,7 +114,8 @@ export async function PUT(request, { params }) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Match type code is required"
+                    message: "Match type code is required",
+                    errors: { code: "Match type code is required." }
                 },
                 { status: 400 }
             );
@@ -170,7 +172,8 @@ export async function PUT(request, { params }) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Match type name already exists"
+                    message: "Match type name already exists",
+                    errors: { name: "Match type name already exists." }
                 },
                 { status: 409 }
             );
@@ -198,7 +201,8 @@ export async function PUT(request, { params }) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Match type code already exists"
+                    message: "Match type code already exists",
+                    errors: { code: "Match type code already exists." }
                 },
                 { status: 409 }
             );

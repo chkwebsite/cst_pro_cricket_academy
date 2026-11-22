@@ -44,7 +44,6 @@ export default function PermissionsForm({ id = null }) {
     }, [id]);
 
     // HANDLE INPUT
-    console.log(id);
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({
@@ -131,7 +130,7 @@ export default function PermissionsForm({ id = null }) {
                     {/* Permission Name */}
                     <div className="mb-3">
                         <label className="form-label">
-                            Module name
+                            Module name <span className="text-danger ms-1">*</span>
                         </label>
 
                         <input
@@ -147,7 +146,7 @@ export default function PermissionsForm({ id = null }) {
 
                     <div className="mb-3">
                         <label className="form-label">
-                            Permission name
+                            Permission name <span className="text-danger ms-1">*</span>
                         </label>
 
                         <input

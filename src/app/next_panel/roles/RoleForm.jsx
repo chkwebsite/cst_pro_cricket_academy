@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FormError } from "@/app/components/form";
 
 const emptyRole = {
     role_name: "",
@@ -32,6 +33,8 @@ export default function RoleForm({
     onChange,
     onSubmit,
     error,
+    fieldErrors = {},
+    onBlur = null,
     loading = false,
 }) {
     const [academies, setAcademies] = useState([]);
@@ -104,14 +107,17 @@ export default function RoleForm({
 
             <div className="row g-3">
                 <div className="col-md-6">
-                    <label className="form-label">Role Name</label>
+                    <label className="form-label">Role Name <span className="text-danger ms-1">*</span></label>
                     <input
-                        className="form-control"
+                        name="role_name"
+                        className={`form-control ${fieldErrors.role_name ? "is-invalid border-danger" : ""}`}
                         value={values.role_name}
                         onChange={handleChange("role_name")}
+                        onBlur={onBlur ? onBlur("role_name") : undefined}
                         required
                         disabled={loading}
                     />
+                    <FormError error={fieldErrors.role_name} />
                 </div>
 
                 <div className="col-md-6">

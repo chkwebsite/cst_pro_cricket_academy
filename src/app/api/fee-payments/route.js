@@ -455,6 +455,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "Valid fee_status_id is required.",
+                    errors: { fee_status_id: "Please choose a fee record." }
                 },
                 { status: 400 }
             );
@@ -465,6 +466,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "amount must be greater than zero.",
+                    errors: { amount: "Amount must be greater than zero." }
                 },
                 { status: 400 }
             );
@@ -475,6 +477,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "Invalid payment_mode.",
+                    errors: { payment_mode: "Please select a valid payment mode." }
                 },
                 { status: 400 }
             );

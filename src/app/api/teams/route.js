@@ -251,7 +251,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Team name is required"
+                    message: "Team name is required",
+                    errors: { team_name: "Team name is required." }
                 },
                 { status: 400 }
             );
@@ -275,7 +276,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Invalid team type"
+                    message: "Invalid team type",
+                    errors: { team_type: "Please select a valid team type." }
                 },
                 { status: 400 }
             );
@@ -309,7 +311,7 @@ export async function POST(request) {
 
         if (!finalAcademyId) {
             return NextResponse.json(
-                { success: false, message: "Academy is required to create a team" },
+                { success: false, message: "Academy is required to create a team", errors: { academy_id: "Please select an academy." } },
                 { status: 400 }
             );
         }
@@ -326,6 +328,40 @@ export async function POST(request) {
                     { status: 400 }
                 );
             }
+        }
+
+        // Check duplicate team name within the same academy and branch
+        const trimmedTeamName = team_name.toString().trim();
+        const [duplicateNameRows] = await connection.query(
+            `
+            SELECT id, team_name, team_code
+            FROM cst_teams
+            WHERE LOWER(TRIM(team_name)) = LOWER(?)
+            AND academy_id = ?
+            AND (
+                (? IS NULL AND (branch_id IS NULL OR branch_id = 0))
+                OR branch_id = ?
+            )
+            AND is_deleted = 0
+            LIMIT 1
+            `,
+            [
+                trimmedTeamName,
+                finalAcademyId,
+                finalBranchId || null,
+                finalBranchId || null
+            ]
+        );
+
+        if (duplicateNameRows.length > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "A team with this name already exists in the selected academy and branch",
+                    errors: { team_name: "A team with this name already exists in the selected academy and branch." }
+                },
+                { status: 409 }
+            );
         }
 
         // Check duplicate code within academy

@@ -367,7 +367,7 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
 
                                 <div className="col-md-4">
                                     <label className="form-label fw-semibold">
-                                        Academy {isAcademyAdmin ? <span className="text-danger">*</span> : "(Optional)"}
+                                        Academy {isAcademyAdmin && <span className="text-danger">*</span>}
                                     </label>
                                     {isAcademyAdmin ? (
                                         <select
@@ -400,7 +400,7 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                 </div>
 
                                 <div className="col-md-4">
-                                    <label className="form-label fw-semibold">Branch (Optional)</label>
+                                    <label className="form-label fw-semibold">Branch</label>
                                     <select
                                         className="form-select"
                                         value={formData.branch_id}

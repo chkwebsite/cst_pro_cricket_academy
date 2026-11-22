@@ -786,7 +786,7 @@ export default function StaffSalaryPaymentsPage() {
 
                                 <div className="row g-3">
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-bold">Disbursement Amount (₹) *</label>
+                                        <label className="form-label small fw-bold">Disbursement Amount (₹) <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="number"
                                             step="0.01"
@@ -798,7 +798,7 @@ export default function StaffSalaryPaymentsPage() {
                                     </div>
 
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-bold">Payment Method *</label>
+                                        <label className="form-label small fw-bold">Payment Method <span className="text-danger ms-1">*</span></label>
                                         <select
                                             className="form-select"
                                             value={payForm.payment_mode}

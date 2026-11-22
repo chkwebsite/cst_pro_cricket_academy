@@ -1,0 +1,1466 @@
+[
+  {
+    "file": "src\\app\\next_panel\\academies\\AcademyForm.jsx",
+    "name": "AcademyForm.jsx",
+    "apis": [],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\academies\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies${query ",
+      "/api/academies/${academy.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\admission-players\\AdmissionPlayerForm.jsx",
+    "name": "AdmissionPlayerForm.jsx",
+    "apis": [
+      "/api/branch",
+      "/api/roles",
+      "/api/age-groups",
+      "/api/programs",
+      "/api/admission-players/${id} "
+    ],
+    "fields": [
+      "user_id",
+      "first_name",
+      "last_name",
+      "father_name",
+      "mother_name",
+      "email",
+      "phone",
+      "city",
+      "state",
+      "pin_code",
+      "aadhaar_no",
+      "playing_academy",
+      "date_of_joining",
+      "date_of_appointment",
+      "aadhaar_card",
+      "paid_amount",
+      "transaction_no",
+      "payment_remarks",
+      "gender",
+      "under_age",
+      "age_group_id",
+      "status",
+      "branch_id",
+      "program_id",
+      "role_id",
+      "payment_mode",
+      "address"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\age-groups\\AgeGroupForm.jsx",
+    "name": "AgeGroupForm.jsx",
+    "apis": [
+      "/api/age-groups/${id}"
+    ],
+    "fields": [
+      "age_group",
+      "min_age",
+      "max_age",
+      "status"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\batch-coaches\\BatchCoachForm.jsx",
+    "name": "BatchCoachForm.jsx",
+    "apis": [
+      "/api/batches",
+      "/api/users",
+      "/api/user-roles",
+      "/api/batch-coaches/${id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\batch-coaches\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/batches",
+      "/api/batch-players",
+      "/api/batch-coaches"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\batch-players\\BatchPlayerForm.jsx",
+    "name": "BatchPlayerForm.jsx",
+    "apis": [
+      "/api/batches",
+      "/api/batch-players/${id}",
+      "/api/user-programs"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\batch-players\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/batches",
+      "/api/branch${branchQuery}",
+      "/api/programs",
+      "/api/batch-coaches",
+      "/api/batch-players"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\batches\\BatchForm.jsx",
+    "name": "BatchForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/programs",
+      "/api/age-groups",
+      "/api/branch",
+      "/api/batches/${id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\batches\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/branch${branchQuery}",
+      "/api/programs",
+      "/api/age-groups",
+      "/api/batch-coaches",
+      "/api/batch-players",
+      "/api/batches"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\branches\\BranchForm.jsx",
+    "name": "BranchForm.jsx",
+    "apis": [
+      "/api/academies"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\branches\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/branch${query ",
+      "/api/branch/${branch.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\coaches\\CoachForm.jsx",
+    "name": "CoachForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/users",
+      "/api/coaches/${id}"
+    ],
+    "fields": [
+      "coach_code",
+      "experience_years",
+      "qualification",
+      "previous_academy",
+      "date_of_birth",
+      "joining_date",
+      "salary",
+      "emergency_contact_name",
+      "emergency_contact_phone",
+      "user_id",
+      "academy_id",
+      "branch_id",
+      "employment_type",
+      "gender",
+      "status",
+      "certifications",
+      "bio"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\fee-payments\\FeePaymentForm.jsx",
+    "name": "FeePaymentForm.jsx",
+    "apis": [
+      "/api/fee-status${params.toString() ",
+      "/api/fee-status/${targetFeeId}",
+      "/api/fee-payments/${id}"
+    ],
+    "fields": [
+      "amount",
+      "transaction_no",
+      "payment_date",
+      "fee_status_id",
+      "payment_mode",
+      "status",
+      "remarks"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\fee-status\\FeeStatusForm.jsx",
+    "name": "FeeStatusForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/tournaments",
+      "/api/tournament-teams",
+      "/api/tournament-team-players",
+      "/api/matches",
+      "/api/match-teams",
+      "/api/match-players",
+      "/api/ground-bookings",
+      "/api/users",
+      "/api/outside-players",
+      "/api/fee-status/${id}"
+    ],
+    "fields": [
+      "fee_amount",
+      "paid_amount",
+      "cancelled",
+      "academy_id",
+      "branch_id",
+      "fee_type",
+      "tournament_id",
+      "tournament_team_id",
+      "tournament_team_player_id",
+      "match_id",
+      "match_team_id",
+      "match_player_id",
+      "ground_booking_id",
+      "payer_type",
+      "payer_id",
+      "remarks"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-albums\\GalleryAlbumForm.jsx",
+    "name": "GalleryAlbumForm.jsx",
+    "apis": [
+      "/api/gallery-categories",
+      "/api/academies",
+      "/api/branch",
+      "/api/gallery-albums/${id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-albums\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/gallery-categories",
+      "/api/gallery-albums${query ",
+      "/api/gallery-albums/${album.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-categories\\GalleryCategoryForm.jsx",
+    "name": "GalleryCategoryForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/gallery-categories/${id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-categories\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/gallery-categories${query ",
+      "/api/gallery-categories/${cat.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-images\\GalleryImageForm.jsx",
+    "name": "GalleryImageForm.jsx",
+    "apis": [
+      "/api/gallery-albums",
+      "/api/gallery-images/${id}",
+      "/api/gallery-images"
+    ],
+    "fields": [
+      "uploadMode"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-images\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/gallery-albums",
+      "/api/gallery-images${query ",
+      "/api/gallery-images/${img.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-videos\\GalleryVideoForm.jsx",
+    "name": "GalleryVideoForm.jsx",
+    "apis": [
+      "/api/gallery-albums",
+      "/api/gallery-videos/${id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\gallery-videos\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/gallery-albums",
+      "/api/gallery-videos${query ",
+      "/api/gallery-videos/${video.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\ground-booking-requests\\GroundBookingRequestForm.jsx",
+    "name": "GroundBookingRequestForm.jsx",
+    "apis": [
+      "/api/ground"
+    ],
+    "fields": [
+      "customer_name",
+      "mobile",
+      "email",
+      "number_of_players",
+      "booking_date",
+      "start_time",
+      "end_time",
+      "ground_id",
+      "booking_purpose",
+      "request_status",
+      "special_requirements",
+      "admin_remarks"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\ground-bookings\\GroundBookingForm.jsx",
+    "name": "GroundBookingForm.jsx",
+    "apis": [
+      "/api/umpires",
+      "/api/ground",
+      "/api/ground-slots",
+      "/api/matches",
+      "/api/tournaments",
+      "/api/ground-bookings/${id}",
+      "/api/ground-booking-requests/${requestId}"
+    ],
+    "fields": [
+      "booking_date",
+      "customer_name",
+      "customer_phone",
+      "customer_email",
+      "total_amount",
+      "paid_amount",
+      "transaction_no",
+      "ground_id",
+      "slot_id",
+      "purpose",
+      "match_id",
+      "tournament_id",
+      "booking_status",
+      "payment_mode",
+      "remarks"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\ground-images\\GroundImageForm.jsx",
+    "name": "GroundImageForm.jsx",
+    "apis": [
+      "/api/ground",
+      "/api/ground-images/${id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\ground-payments\\GroundPaymentForm.jsx",
+    "name": "GroundPaymentForm.jsx",
+    "apis": [
+      "/api/ground-bookings",
+      "/api/ground-payments/${id}"
+    ],
+    "fields": [
+      "payment_date",
+      "amount",
+      "transaction_no",
+      "booking_id",
+      "payment_mode",
+      "remarks"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\ground-slots\\GroundSlotForm.jsx",
+    "name": "GroundSlotForm.jsx",
+    "apis": [
+      "/api/ground",
+      "/api/ground-slots"
+    ],
+    "fields": [
+      "slot_name",
+      "start_time",
+      "end_time",
+      "price",
+      "ground_id",
+      "status"
+    ],
+    "hasOptional": false,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\grounds\\GroundForm.jsx",
+    "name": "GroundForm.jsx",
+    "apis": [
+      "/api/ground/next-code${query ",
+      "/api/academies",
+      "/api/ground/${id}",
+      "/api/branch"
+    ],
+    "fields": [
+      "ground_name",
+      "ground_code",
+      "contact_person",
+      "phone",
+      "email",
+      "ground_facility",
+      "academy_id",
+      "branch_id",
+      "status",
+      "address",
+      "description"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\individual-training\\IndividualTrainingForm.jsx",
+    "name": "IndividualTrainingForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/users",
+      "/api/user-roles",
+      "/api/branch",
+      "/api/user-programs",
+      "/api/individual-training/${id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\individual-training\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/branch${branchQuery}",
+      "/api/users",
+      "/api/user-roles",
+      "/api/individual-training",
+      "/api/individual-training/${item.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\match-bowling-scorecard\\MatchBowlingScorecardForm.jsx",
+    "name": "MatchBowlingScorecardForm.jsx",
+    "apis": [
+      "/api/matches",
+      "/api/match-bowling-scorecard/${id}",
+      "/api/match-innings",
+      "/api/match-bowling-scorecard"
+    ],
+    "fields": [
+      "overs",
+      "maidens",
+      "runs_conceded",
+      "wickets",
+      "wides",
+      "no_balls",
+      "match_id",
+      "innings_id",
+      "match_player_id"
+    ],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\match-innings\\MatchInningsForm.jsx",
+    "name": "MatchInningsForm.jsx",
+    "apis": [
+      "/api/matches",
+      "/api/tournaments",
+      "/api/tournament-matches${query}",
+      "/api/match-innings/${id}",
+      "/api/matches/${newMatchId}",
+      "/api/match-teams",
+      "/api/tournament-matches/${fixture.id}/scorecard"
+    ],
+    "fields": [
+      "batting_team_id",
+      "bowling_team_id",
+      "total_runs",
+      "total_wickets",
+      "total_overs",
+      "target_runs",
+      "extras",
+      "wides",
+      "no_balls",
+      "byes",
+      "leg_byes",
+      "penalty_runs",
+      "match_id",
+      "innings_no",
+      "innings_status"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\match-players\\MatchPlayerForm.jsx",
+    "name": "MatchPlayerForm.jsx",
+    "apis": [
+      "/api/match-players",
+      "/api/team-players",
+      "/api/outside-players",
+      "/api/match-players/${id}"
+    ],
+    "fields": [
+      "player_fee",
+      "paid_amount",
+      "transaction_no",
+      "player_ref",
+      "jersey_no",
+      "match_id",
+      "team_id",
+      "payment_mode",
+      "player_source",
+      "selection",
+      "status"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\match-scorecard\\MatchScorecardForm.jsx",
+    "name": "MatchScorecardForm.jsx",
+    "apis": [
+      "/api/matches",
+      "/api/match-scorecard/${id}",
+      "/api/match-innings",
+      "/api/match-players",
+      "/api/match-scorecard"
+    ],
+    "fields": [
+      "batting_position",
+      "runs",
+      "balls",
+      "fours",
+      "sixes",
+      "strike_rate",
+      "match_id",
+      "innings_id",
+      "match_player_id",
+      "dismissal_type",
+      "dismissed_by_player_id",
+      "fielder_player_id"
+    ],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\match-types\\MatchTypeForm.jsx",
+    "name": "MatchTypeForm.jsx",
+    "apis": [],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\matches\\MatchForm.jsx",
+    "name": "MatchForm.jsx",
+    "apis": [
+      "/api/ground-bookings",
+      "/api/ground",
+      "/api/ground-slots${query ",
+      "/api/matches/${id}",
+      "/api/matches/next-no${query "
+    ],
+    "fields": [
+      "match_no",
+      "overs",
+      "match_fee",
+      "team_a_fee",
+      "team_b_fee",
+      "match_date",
+      "match_time",
+      "match_type",
+      "status",
+      "team_a_id",
+      "team_b_id",
+      "academy_id",
+      "branch_id",
+      "tournament_id",
+      "ground_id",
+      "booking_id",
+      "toss_winner",
+      "toss_decision",
+      "remarks"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\menu\\MenuForm.jsx",
+    "name": "MenuForm.jsx",
+    "apis": [
+      "/api/menu"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\menu\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/menu",
+      "/api/menu/${id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\menu-management\\components\\MenuFormModal.jsx",
+    "name": "MenuFormModal.jsx",
+    "apis": [],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\menu-management\\components\\PermissionsPanel.jsx",
+    "name": "PermissionsPanel.jsx",
+    "apis": [],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\menu-management\\page.jsx",
+    "name": "page.jsx",
+    "apis": [],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\menu-permissions\\MenuPermissionForm-Old.jsx",
+    "name": "MenuPermissionForm-Old.jsx",
+    "apis": [
+      "/api/menu",
+      "/api/permissions"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\menu-permissions\\MenuPermissionForm.jsx",
+    "name": "MenuPermissionForm.jsx",
+    "apis": [
+      "/api/menu",
+      "/api/permissions"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\menu-permissions\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/menu-permissions",
+      "/api/menu-permissions/${id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\order-payments\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/order-payments",
+      "/api/orders",
+      "/api/order-payments/${editPayment.id}",
+      "/api/order-payments/${id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\orders\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/orders",
+      "/api/order-items",
+      "/api/order-payments",
+      "/api/order-status-history",
+      "/api/orders/${statusModalOrder.id}",
+      "/api/orders/${paymentModalOrder.id}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\outside-players\\OutsidePlayerForm.jsx",
+    "name": "OutsidePlayerForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/age-groups",
+      "/api/outside-players/${id}"
+    ],
+    "fields": [
+      "profile_image",
+      "player_name",
+      "date_of_birth",
+      "phone",
+      "email",
+      "bowling_style",
+      "age_group_id",
+      "gender",
+      "batting_style",
+      "status",
+      "address"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\permissions\\PermissionsForm.jsx",
+    "name": "PermissionsForm.jsx",
+    "apis": [
+      "/api/permissions/${id}"
+    ],
+    "fields": [
+      "module_name",
+      "permission_name",
+      "status"
+    ],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\player-attendance\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/programs",
+      "/api/batches",
+      "/api/player-attendance",
+      "/api/player-attendance/${item.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\player-attendance\\PlayerAttendanceForm.jsx",
+    "name": "PlayerAttendanceForm.jsx",
+    "apis": [
+      "/api/user-programs",
+      "/api/player-attendance/${id}"
+    ],
+    "fields": [
+      "attendance_date",
+      "attendance_status",
+      "user_program_id",
+      "remarks"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\player-fees-matrix\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/player-program-fees/ensure",
+      "/api/programs",
+      "/api/player-program-fees/matrix"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\player-payments\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/player-program-fees/${feeIdParam}",
+      "/api/player-payments",
+      "/api/player-payments/${p.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\player-payments\\PlayerPaymentForm.jsx",
+    "name": "PlayerPaymentForm.jsx",
+    "apis": [
+      "/api/player-program-fees/ensure",
+      "/api/player-program-fees/${targetFeeId}",
+      "/api/player-program-fees",
+      "/api/player-payments/${id}",
+      "/api/player-payments"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\player-program-fees\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/programs",
+      "/api/player-program-fees",
+      "/api/player-program-fees/${fee.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\player-program-fees\\PlayerProgramFeeForm.jsx",
+    "name": "PlayerProgramFeeForm.jsx",
+    "apis": [
+      "/api/user-programs",
+      "/api/player-program-fees/${id}",
+      "/api/player-program-fees"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\product-categories\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/product-categories",
+      "/api/product-categories/${item.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\product-images\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/products",
+      "/api/product-images",
+      "/api/product-images/${item.id}",
+      "/api/product-images/${editingImage.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\product-stock\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/product-stock",
+      "/api/product-stock/${editingItem.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\products\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/products",
+      "/api/products/${p.id}",
+      "/api/product-images",
+      "/api/product-images/${imgId}",
+      "/api/product-stock"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\programs\\ProgramForm.jsx",
+    "name": "ProgramForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/programs/${id}"
+    ],
+    "fields": [
+      "program_name",
+      "program_code",
+      "program_fee",
+      "registration_fee",
+      "daily_fee",
+      "kit_fee",
+      "academy_id",
+      "branch_id",
+      "status",
+      "program_features",
+      "description"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\public-users\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/public-users",
+      "/api/public-users/${user.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\role-permissions\\RolePermissionForm-old.jsx",
+    "name": "RolePermissionForm-old.jsx",
+    "apis": [
+      "/api/roles",
+      "/api/permissions",
+      "/api/role-permissions/${id}"
+    ],
+    "fields": [
+      "role_id",
+      "permission_id"
+    ],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\role-permissions\\RolePermissionForm.jsx",
+    "name": "RolePermissionForm.jsx",
+    "apis": [
+      "/api/roles",
+      "/api/permissions",
+      "/api/role-permissions/${id}",
+      "/api/role-permissions"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\roles\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/roles${query ",
+      "/api/roles/${role.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\roles\\RoleForm.jsx",
+    "name": "RoleForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\staff\\StaffForm.jsx",
+    "name": "StaffForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/roles",
+      "/api/staff/${id}"
+    ],
+    "fields": [
+      "user_id",
+      "first_name",
+      "last_name",
+      "father_name",
+      "mother_name",
+      "dob",
+      "speciality",
+      "experience",
+      "previous_academy",
+      "previous_academy_duration",
+      "last_salary",
+      "current_salary",
+      "date_of_joining",
+      "date_of_appointment",
+      "gender",
+      "status",
+      "academy_id",
+      "branch_id",
+      "role_id",
+      "qualification",
+      "achievement"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\staff-salary\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/staff-salary",
+      "/api/staff",
+      "/api/staff/${staffId}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\staff-salary-payments\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/staff-salary-payments",
+      "/api/staff-salary-transactions"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\student-enquiries\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/branch",
+      "/api/programs",
+      "/api/student-enquiries${query ",
+      "/api/student-enquiries/${item.id}",
+      "/api/student-enquiries-flowup"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\student-enquiries\\StudentEnquiryForm.jsx",
+    "name": "StudentEnquiryForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/programs",
+      "/api/users",
+      "/api/student-enquiries/${id}"
+    ],
+    "fields": [
+      "student_name",
+      "age",
+      "phone",
+      "email",
+      "enquiry_source",
+      "academy_id",
+      "branch_id",
+      "program_id",
+      "enquiry_status",
+      "assigned_to",
+      "message"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\student-enquiries\\[id]\\followup\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/student-enquiries/${id}",
+      "/api/student-enquiries-flowup",
+      "/api/student-enquiries-flowup/${editingFollowup.id}",
+      "/api/student-enquiries-flowup/${fId}"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\team-players\\TeamPlayerForm.jsx",
+    "name": "TeamPlayerForm.jsx",
+    "apis": [
+      "/api/team-players/${id}"
+    ],
+    "fields": [
+      "jersey_no",
+      "joined_date",
+      "left_date",
+      "team_id",
+      "player_role",
+      "status"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\teams\\TeamForm.jsx",
+    "name": "TeamForm.jsx",
+    "apis": [
+      "/api/age-groups",
+      "/api/teams/${id}",
+      "/api/teams${query "
+    ],
+    "fields": [
+      "academy_id",
+      "branch_id",
+      "team_name",
+      "team_code",
+      "category",
+      "age_group",
+      "team_type",
+      "status"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\tournament-matches\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/tournament-matches/${fixture.id}/scorecard",
+      "/api/tournament-matches/${scoreModalMatch.id}",
+      "/api/tournament-matches${query ",
+      "/api/tournament-matches/${item.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\tournament-matches\\TournamentMatchForm.jsx",
+    "name": "TournamentMatchForm.jsx",
+    "apis": [
+      "/api/tournament-teams",
+      "/api/ground",
+      "/api/ground-bookings",
+      "/api/ground-slots${query ",
+      "/api/matches",
+      "/api/tournament-matches/${id}"
+    ],
+    "fields": [
+      "match_no",
+      "overs",
+      "round_name",
+      "scheduled_date",
+      "scheduled_time",
+      "team_a_runs",
+      "team_a_wickets",
+      "team_a_overs",
+      "team_b_runs",
+      "team_b_wickets",
+      "team_b_overs",
+      "win_margin",
+      "result_summary",
+      "tournament_id",
+      "status",
+      "round_type",
+      "group_name",
+      "team_a_id",
+      "team_b_id",
+      "ground_id",
+      "match_id",
+      "winner_team_id"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\tournament-team-players\\TournamentTeamPlayerForm.jsx",
+    "name": "TournamentTeamPlayerForm.jsx",
+    "apis": [
+      "/api/tournament-team-players/${id}",
+      "/api/tournament-teams",
+      "/api/tournament-team-players"
+    ],
+    "fields": [
+      "jersey_no",
+      "player_fee",
+      "paid_amount",
+      "transaction_no",
+      "tournament_id",
+      "tournament_team_id",
+      "player_source",
+      "player_role",
+      "payment_mode",
+      "payment_status",
+      "status"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": false
+  },
+  {
+    "file": "src\\app\\next_panel\\tournament-teams\\TournamentTeamForm.jsx",
+    "name": "TournamentTeamForm.jsx",
+    "apis": [
+      "/api/tournament-teams/${id}",
+      "/api/tournament-teams"
+    ],
+    "fields": [
+      "registration_no",
+      "registered_date",
+      "team_fee",
+      "group_name",
+      "tournament_id",
+      "team_id",
+      "payment_status",
+      "status"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\tournaments\\TournamentForm.jsx",
+    "name": "TournamentForm.jsx",
+    "apis": [],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\umpire-payments\\UmpirePaymentForm.jsx",
+    "name": "UmpirePaymentForm.jsx",
+    "apis": [
+      "/api/umpires",
+      "/api/umpire-payments"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\umpires\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/umpires",
+      "/api/umpires/${deleteConfirmUmpire.id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\umpires\\UmpireForm.jsx",
+    "name": "UmpireForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/umpires/${id}"
+    ],
+    "fields": [
+      "umpire_name",
+      "mobile",
+      "email",
+      "alternate_mobile",
+      "experience_years",
+      "qualification",
+      "password",
+      "academy_id",
+      "branch_id",
+      "status",
+      "address"
+    ],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\user-branches\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/user-branches",
+      "/api/user-branches/${id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\user-branches\\UserBranchForm.jsx",
+    "name": "UserBranchForm.jsx",
+    "apis": [
+      "/api/users",
+      "/api/branch"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\user-programs\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/programs",
+      "/api/user-programs",
+      "/api/user-programs/${id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\user-programs\\UserProgramForm.jsx",
+    "name": "UserProgramForm.jsx",
+    "apis": [
+      "/api/users",
+      "/api/programs",
+      "/api/branch",
+      "/api/admission-players"
+    ],
+    "fields": [],
+    "hasOptional": true,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\user-roles\\page.jsx",
+    "name": "page.jsx",
+    "apis": [
+      "/api/user-roles",
+      "/api/user-roles/${id}"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\user-roles\\UserRoleForm.jsx",
+    "name": "UserRoleForm.jsx",
+    "apis": [
+      "/api/users",
+      "/api/roles"
+    ],
+    "fields": [],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\users\\UserForm.jsx",
+    "name": "UserForm.jsx",
+    "apis": [
+      "/api/academies",
+      "/api/branch",
+      "/api/roles",
+      "/api/users/${id}",
+      "/api/staff",
+      "/api/admission-players"
+    ],
+    "fields": [
+      "appointment_no",
+      "first_name",
+      "last_name",
+      "email",
+      "phone",
+      "password",
+      "profile_image",
+      "academy_id",
+      "branch_id",
+      "status",
+      "user_type"
+    ],
+    "hasOptional": false,
+    "hasAsterisk": true
+  },
+  {
+    "file": "src\\app\\next_panel\\usersxxxx\\users\\UserForm.jsx",
+    "name": "UserForm.jsx",
+    "apis": [
+      "/api/users/${id}",
+      "/api/staff",
+      "/api/admission-players"
+    ],
+    "fields": [
+      "appointment_no",
+      "academy_id",
+      "branch_id",
+      "first_name",
+      "last_name",
+      "email",
+      "phone",
+      "password",
+      "profile_image",
+      "status",
+      "user_type"
+    ],
+    "hasOptional": false,
+    "hasAsterisk": false
+  }
+]

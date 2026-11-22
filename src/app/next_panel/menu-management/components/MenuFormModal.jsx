@@ -124,7 +124,7 @@ export default function MenuFormModal({ menu, menus, onClose, onSubmit }) {
                         <div className={styles.fieldGrid}>
                             <div className={styles.formField}>
                                 <label htmlFor="menu_key">
-                                    menu_key <span className={styles.mono}>*</span>
+                                    menu_key <span className="text-danger ms-1">*</span>
                                 </label>
                                 <input
                                     id="menu_key"
@@ -159,7 +159,9 @@ export default function MenuFormModal({ menu, menus, onClose, onSubmit }) {
                             </div>
 
                             <div className={styles.formField}>
-                                <label htmlFor="menu_name">menu_name *</label>
+                                <label htmlFor="menu_name">
+                                    menu_name <span className="text-danger ms-1">*</span>
+                                </label>
                                 <input
                                     id="menu_name"
                                     className={`${styles.input} ${
@@ -176,7 +178,9 @@ export default function MenuFormModal({ menu, menus, onClose, onSubmit }) {
                             </div>
 
                             <div className={styles.formField}>
-                                <label htmlFor="menu_title">menu_title *</label>
+                                <label htmlFor="menu_title">
+                                    menu_title <span className="text-danger ms-1">*</span>
+                                </label>
                                 <input
                                     id="menu_title"
                                     className={`${styles.input} ${

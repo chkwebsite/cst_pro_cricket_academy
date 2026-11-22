@@ -205,7 +205,7 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
 
                 <form onSubmit={handleSubmit}>
                     <div className="mb-3">
-                        <label className="form-label">Team</label>
+                        <label className="form-label">Team <span className="text-danger ms-1">*</span></label>
                         <select name="team_id" className="form-select" value={formData.team_id} onChange={handleChange} required>
                             <option value="">Choose Team</option>
                             {teamChoices.map((t) => (
@@ -245,49 +245,52 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                         </div>
                     </div>
 
-                    <div className="row">
-                        <div className="col-md-4 mb-3">
-                            <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Search player..."
-                                value={playerSearch}
-                                onChange={(e) => setPlayerSearch(e.target.value)}
-                            />
-                        </div>
-                        <div className="col-md-8 mb-3">
-                            <div className="d-flex flex-column flex-sm-row gap-2">
-                                <select
-                                    name={isUserSource ? "user_id" : "outside_player_id"}
-                                    className="form-select flex-grow-1"
-                                    value={isUserSource ? formData.user_id : formData.outside_player_id}
-                                    onChange={handleChange}
-                                    required
-                                >
-                                    <option value="">{isUserSource ? "Choose Academy Player" : "Choose Outside Player"}</option>
-                                    {playerChoices.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.label}
-                                            {p.email ? ` — ${p.email}` : ""}
-                                        </option>
-                                    ))}
-                                </select>
-                                {!isUserSource && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-outline-primary text-nowrap d-inline-flex align-items-center justify-content-center"
-                                        onClick={() => setShowOutsidePlayerModal(true)}
+                    <div className="mb-3">
+                        <label className="form-label">Player <span className="text-danger ms-1">*</span></label>
+                        <div className="row">
+                            <div className="col-md-4 mb-2 mb-md-0">
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    placeholder="Search player..."
+                                    value={playerSearch}
+                                    onChange={(e) => setPlayerSearch(e.target.value)}
+                                />
+                            </div>
+                            <div className="col-md-8">
+                                <div className="d-flex flex-column flex-sm-row gap-2">
+                                    <select
+                                        name={isUserSource ? "user_id" : "outside_player_id"}
+                                        className="form-select flex-grow-1"
+                                        value={isUserSource ? formData.user_id : formData.outside_player_id}
+                                        onChange={handleChange}
+                                        required
                                     >
-                                        <Plus size={16} className="me-1" /> Add New Outside Player
-                                    </button>
-                                )}
+                                        <option value="">{isUserSource ? "Choose Academy Player" : "Choose Outside Player"}</option>
+                                        {playerChoices.map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.label}
+                                                {p.email ? ` — ${p.email}` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {!isUserSource && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-primary text-nowrap d-inline-flex align-items-center justify-content-center"
+                                            onClick={() => setShowOutsidePlayerModal(true)}
+                                        >
+                                            <Plus size={16} className="me-1" /> Add New Outside Player
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Jersey No (optional)</label>
+                            <label className="form-label">Jersey No</label>
                             <input
                                 type="text"
                                 name="jersey_no"
@@ -319,7 +322,7 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Joined Date (optional)</label>
+                            <label className="form-label">Joined Date</label>
                             <input
                                 type="date"
                                 name="joined_date"
@@ -329,7 +332,7 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                             />
                         </div>
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Left Date (optional)</label>
+                            <label className="form-label">Left Date</label>
                             <input
                                 type="date"
                                 name="left_date"

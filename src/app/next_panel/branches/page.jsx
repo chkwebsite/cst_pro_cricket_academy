@@ -4,10 +4,26 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Building2, Edit, MapPin, Plus, Search, Trash2 } from "lucide-react";
 import Pagination from "../components/Pagination";
+import { useUser } from "../components/UserContext";
 
 export default function BranchesPage() {
+    const { user } = useUser() || {};
+    const roleStr = String(user?.role || user?.role_name || user?.user_type || "").toLowerCase();
+    const isSuper = Boolean(
+        user?.isSuperAdmin ||
+        roleStr === "super_admin" ||
+        roleStr === "super admin" ||
+        roleStr === "superadmin" ||
+        user?.role === "SUPER_ADMIN" ||
+        user?.user_type === "1" ||
+        user?.role_id === 1
+    );
+    const userAcademyId = user?.academy_id ? String(user.academy_id) : "";
+
     const [branches, setBranches] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [academies, setAcademies] = useState([]);
+    const [academyId, setAcademyId] = useState("");
+    const [loading, setLoading] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
     const [error, setError] = useState(null);
     const [search, setSearch] = useState("");
@@ -15,12 +31,47 @@ export default function BranchesPage() {
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
 
+    // Load academies for filter dropdown
+    useEffect(() => {
+        async function loadAcademies() {
+            try {
+                const res = await fetch("/api/academies?status=1");
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    setAcademies(json.data || []);
+                }
+            } catch (err) {
+                console.error("Failed to load academies:", err);
+            }
+        }
+        loadAcademies();
+    }, []);
+
+    // Academy Admin: default to their assigned academy
+    useEffect(() => {
+        if (!isSuper && userAcademyId) {
+            setAcademyId(userAcademyId);
+        }
+    }, [isSuper, userAcademyId]);
+
+    const effectiveAcademyId = isSuper ? academyId : (userAcademyId || academyId);
+
     const loadBranches = async () => {
+        // If super admin and no academy is selected yet, do not fetch
+        if (isSuper && !effectiveAcademyId) {
+            setBranches([]);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
         try {
             const params = new URLSearchParams();
+            if (effectiveAcademyId && effectiveAcademyId !== "all") {
+                params.set("academy_id", effectiveAcademyId);
+            }
             if (search.trim()) params.set("search", search.trim());
             if (status) params.set("status", status);
 
@@ -39,7 +90,7 @@ export default function BranchesPage() {
 
     useEffect(() => {
         loadBranches();
-    }, [status]);
+    }, [status, effectiveAcademyId]);
 
     const handleSearch = (event) => {
         event.preventDefault();
@@ -48,7 +99,13 @@ export default function BranchesPage() {
 
     const handleClear = () => {
         setSearch("");
-        setTimeout(() => loadBranches(), 0);
+        setStatus("");
+        if (isSuper) {
+            setAcademyId("");
+            setBranches([]);
+        } else {
+            setTimeout(() => loadBranches(), 0);
+        }
     };
 
     const handleDelete = async (branch) => {
@@ -117,11 +174,37 @@ export default function BranchesPage() {
                                 </div>
                             </form>
 
+                            {/* Academy Filter Dropdown */}
+                            <select
+                                value={isSuper ? academyId : (userAcademyId || academyId)}
+                                onChange={(e) => {
+                                    setAcademyId(e.target.value);
+                                    setPage(1);
+                                }}
+                                disabled={!isSuper && Boolean(userAcademyId)}
+                                className="form-select"
+                                style={{ maxWidth: 260 }}
+                                title="Filter branch list by academy"
+                            >
+                                {isSuper && (
+                                    <>
+                                        <option value="">-- Select Academy --</option>
+                                        <option value="all">All Academies</option>
+                                    </>
+                                )}
+                                {academies.map((ac) => (
+                                    <option key={ac.id} value={ac.id}>
+                                        {ac.academy_name} {ac.academy_code ? `(${ac.academy_code})` : ""}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Status Filter */}
                             <select
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value)}
                                 className="form-select"
-                                style={{ maxWidth: 200 }}
+                                style={{ maxWidth: 160 }}
                             >
                                 <option value="">All Statuses</option>
                                 <option value="1">Active</option>
@@ -133,8 +216,17 @@ export default function BranchesPage() {
 
                         {loading ? (
                             <div className="text-center py-5 text-muted">Loading branches...</div>
+                        ) : isSuper && !academyId ? (
+                            <div className="text-center py-5">
+                                <div className="text-muted fw-semibold mb-1">
+                                    Please select an academy to view its branch list.
+                                </div>
+                                <small className="text-secondary">
+                                    Super Admin: Use the Academy dropdown above to choose an academy.
+                                </small>
+                            </div>
                         ) : branches.length === 0 ? (
-                            <div className="text-center py-5 text-muted">No branches found yet.</div>
+                            <div className="text-center py-5 text-muted">No branches found for selected filters.</div>
                         ) : (
                             <>
                             <div className="table-responsive">

@@ -395,17 +395,15 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "academy_id is required",
+                    message: "academy_id is required",
+                    errors: { academy_id: "Please select an academy." },
                 },
                 { status: 400 }
             );
         }
 
-
         const academyIdNumber =
             Number(academy_id);
-
 
         if (
             !Number.isInteger(
@@ -416,34 +414,30 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Invalid academy_id",
+                    message: "Invalid academy_id",
+                    errors: { academy_id: "Invalid academy selected." },
                 },
                 { status: 400 }
             );
         }
-
 
         if (!branch_name?.trim()) {
-
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Branch name is required",
+                    message: "Branch name is required",
+                    errors: { branch_name: "Branch name is required." },
                 },
                 { status: 400 }
             );
         }
 
-
         if (!branch_code?.trim()) {
-
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Branch code is required",
+                    message: "Branch code is required",
+                    errors: { branch_code: "Branch code is required." },
                 },
                 { status: 400 }
             );

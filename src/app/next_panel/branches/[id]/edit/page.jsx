@@ -25,6 +25,7 @@ export default function EditBranchPage() {
                     academy_id: branch.academy_id ?? "",
                     branch_name: branch.branch_name || "",
                     branch_code: branch.branch_code || "",
+                    directions: branch.directions || "",
                     email: branch.email || "",
                     phone: branch.phone || "",
                     address: branch.address || "",
@@ -55,10 +56,16 @@ export default function EditBranchPage() {
                 body: JSON.stringify(buildBranchPayload(values)),
             });
             const json = await res.json();
-            if (!res.ok) throw new Error(json.message || "Unable to update branch.");
+            if (!res.ok) {
+                if (json.errors) {
+                    setError(json);
+                    return;
+                }
+                throw new Error(json.message || "Unable to update branch.");
+            }
             router.push(`/next_panel/branches/${params.id}`);
         } catch (err) {
-            setError(err.message);
+            setError(err.message || "Unable to update branch.");
         } finally {
             setSaving(false);
         }
@@ -96,6 +103,7 @@ export default function EditBranchPage() {
                                 onSubmit={handleSubmit}
                                 error={error}
                                 loading={saving}
+                                isEdit={true}
                             />
                         )}
                     </div>

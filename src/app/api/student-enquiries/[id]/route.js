@@ -172,12 +172,28 @@ export async function PUT(request, { params }) {
             );
         }
 
+        const errors = {};
         if (body.student_name !== undefined && !String(body.student_name).trim()) {
-            return NextResponse.json({ success: false, message: "Student name cannot be empty" }, { status: 400 });
+            errors.student_name = "Student name cannot be empty.";
         }
 
-        if (body.phone !== undefined && !String(body.phone).trim()) {
-            return NextResponse.json({ success: false, message: "Phone cannot be empty" }, { status: 400 });
+        if (body.phone !== undefined) {
+            if (!String(body.phone).trim()) {
+                errors.phone = "Phone number cannot be empty.";
+            } else if (!/^[0-9+\s\-()]{7,20}$/.test(String(body.phone).trim())) {
+                errors.phone = "Please enter a valid phone number.";
+            }
+        }
+
+        if (body.email && String(body.email).trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email).trim())) {
+            errors.email = "Please enter a valid email address.";
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json(
+                { success: false, message: "Validation failed", errors },
+                { status: 400 }
+            );
         }
 
         if (

@@ -7,6 +7,7 @@ import useOrgOptions from "../teams/useOrgOptions";
 import useTeamOptions from "../team-players/useTeamOptions";
 import useTournamentOptions from "../tournament-teams/useTournamentOptions";
 import GroundBookingForm from "../ground-bookings/GroundBookingForm";
+import { FormError } from "@/app/components/form";
 
 const MATCH_TYPES = ["Practice", "Friendly", "League", "Tournament", "Knockout"];
 const MATCH_STATUSES = ["Scheduled", "Live", "Completed", "Cancelled", "Postponed"];
@@ -72,13 +73,38 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const teamOptions = teams.filter(
         (team) => !formData.academy_id || team.academy_id == null || Number(team.academy_id) === Number(formData.academy_id)
     );
     const teamBOptions = teamOptions.filter((team) => Number(team.id) !== Number(formData.team_a_id));
-    const teamAName = teamOptions.find((team) => Number(team.id) === Number(formData.team_a_id))?.team_name;
-    const teamBName = teamOptions.find((team) => Number(team.id) === Number(formData.team_b_id))?.team_name;
+    const selectedTeamA =
+        teamOptions.find((team) => Number(team.id) === Number(formData.team_a_id)) ||
+        teams.find((team) => Number(team.id) === Number(formData.team_a_id));
+    const selectedTeamB =
+        teamOptions.find((team) => Number(team.id) === Number(formData.team_b_id)) ||
+        teams.find((team) => Number(team.id) === Number(formData.team_b_id));
+    const teamAName = selectedTeamA?.team_name;
+    const teamBName = selectedTeamB?.team_name;
+
+    const isAcademyOrBranchTeam = (team) => {
+        if (!team) return false;
+        const type = String(team.team_type || "").trim().toLowerCase();
+        if (type === "academy") return true;
+        const nonAcademyTypes = ["external", "club", "school", "corporate", "other"];
+        if (!nonAcademyTypes.includes(type) && (team.branch_id != null || team.academy_id != null)) {
+            return true;
+        }
+        if (team.branch_id != null && type !== "external") {
+            return true;
+        }
+        return false;
+    };
+
+    const isAcademyTeamInvolved = Boolean(
+        isAcademyOrBranchTeam(selectedTeamA) || isAcademyOrBranchTeam(selectedTeamB)
+    );
     const activeBookings = bookings.filter((booking) =>
         ["booked", "confirmed"].includes(String(booking.booking_status).toLowerCase())
     );
@@ -331,6 +357,13 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
         if (name === "match_no") {
             setManualMatchNo(true);
         }
@@ -339,6 +372,10 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
         }
         setFormData((prev) => {
             const next = { ...prev, [name]: value };
+            if (name === "match_fee") {
+                next.team_a_fee = value;
+                next.team_b_fee = value;
+            }
             if (name === "match_type" && value !== "Tournament") {
                 next.tournament_id = "";
             }
@@ -393,16 +430,83 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
         });
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "match_no" && !formData.match_no?.trim()) err = "Match number is required.";
+        if (field === "overs" && (!formData.overs || Number(formData.overs) < 1 || Number(formData.overs) > 100)) {
+            err = "Overs must be between 1 and 100.";
+        }
+        if (field === "team_a_id" && (!formData.team_a_id || Number(formData.team_a_id) <= 0)) {
+            err = "Please choose Team A.";
+        }
+        if (field === "team_b_id") {
+            if (!formData.team_b_id || Number(formData.team_b_id) <= 0) err = "Please choose Team B.";
+            else if (Number(formData.team_b_id) === Number(formData.team_a_id)) err = "Team A and Team B must be different.";
+        }
+        if (field === "match_date" && !formData.match_date) err = "Match date is required.";
+        if (field === "match_fee") {
+            if (isAcademyTeamInvolved && (formData.match_fee === "" || formData.match_fee === null || formData.match_fee === undefined)) {
+                err = "Match fee is required when an academy or branch team is selected.";
+            } else if (formData.match_fee !== "" && (isNaN(Number(formData.match_fee)) || Number(formData.match_fee) < 0)) {
+                err = "Match fee must be a valid amount (0 or greater).";
+            }
+        }
+        if (err) setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.match_no?.trim()) errors.match_no = "Match number is required.";
+        if (!formData.overs || Number(formData.overs) < 1 || Number(formData.overs) > 100) {
+            errors.overs = "Overs must be between 1 and 100.";
+        }
+        const teamA = Number(formData.team_a_id);
+        const teamB = Number(formData.team_b_id);
+        if (!Number.isInteger(teamA) || teamA <= 0) errors.team_a_id = "Please choose Team A.";
+        if (!Number.isInteger(teamB) || teamB <= 0) errors.team_b_id = "Please choose Team B.";
+        if (teamA > 0 && teamB > 0 && teamA === teamB) errors.team_b_id = "Team A and Team B must be different.";
+        if (!formData.match_date) errors.match_date = "Match date is required.";
+
+        if (isAcademyTeamInvolved) {
+            if (formData.match_fee === "" || formData.match_fee === null || formData.match_fee === undefined) {
+                errors.match_fee = "Match fee is required when an academy or branch team is selected.";
+            } else {
+                const feeNum = Number(formData.match_fee);
+                if (isNaN(feeNum) || feeNum < 0) {
+                    errors.match_fee = "Match fee must be a valid amount (0 or greater).";
+                }
+            }
+        } else if (formData.match_fee !== "" && formData.match_fee !== null && formData.match_fee !== undefined) {
+            const feeNum = Number(formData.match_fee);
+            if (isNaN(feeNum) || feeNum < 0) {
+                errors.match_fee = "Match fee must be a valid amount (0 or greater).";
+            }
+        }
+
+        if (formData.toss_decision && !formData.toss_winner) {
+            errors.toss_winner = "Select toss winner before choosing toss decision.";
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Mirrors the API's validation
+        if (!validateAll()) return;
+
         const teamA = Number(formData.team_a_id);
         const teamB = Number(formData.team_b_id);
-        if (!Number.isInteger(teamA) || teamA <= 0) return setError("Please choose Team A");
-        if (!Number.isInteger(teamB) || teamB <= 0) return setError("Please choose Team B");
-        if (teamA === teamB) return setError("Team A and Team B must be different");
-        if (!formData.match_date) return setError("Match date is required");
 
         for (const [label, value] of [
             ["Academy ID", formData.academy_id],
@@ -413,10 +517,6 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
         ]) {
             const n = optionalId(value);
             if (n !== null && (!Number.isInteger(n) || n <= 0)) return setError(`Invalid ${label}`);
-        }
-
-        if (formData.toss_decision && !formData.toss_winner) {
-            return setError("Select the toss winner before choosing a toss decision");
         }
 
         const tossWinnerTeamId =
@@ -444,8 +544,8 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                     match_time: formData.match_time || null,
                     team_a_id: teamA,
                     team_b_id: teamB,
-                    team_a_fee: formData.team_a_fee !== "" ? Number(formData.team_a_fee) : null,
-                    team_b_fee: formData.team_b_fee !== "" ? Number(formData.team_b_fee) : null,
+                    team_a_fee: formData.team_a_fee !== "" ? Number(formData.team_a_fee) : (formData.match_fee !== "" ? Number(formData.match_fee) : 0),
+                    team_b_fee: formData.team_b_fee !== "" ? Number(formData.team_b_fee) : (formData.match_fee !== "" ? Number(formData.match_fee) : 0),
                     academy_id: optionalId(academyValue),
                     branch_id: optionalId(branchValue),
                     tournament_id: optionalId(formData.tournament_id),
@@ -460,6 +560,9 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -496,14 +599,16 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Match No. (optional)</label>
+                            <label className="form-label" htmlFor="match_no">Match No. <span className="text-danger ms-1">*</span></label>
                             <div className="input-group">
                                 <input
+                                    id="match_no"
                                     type="text"
                                     name="match_no"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.match_no ? "is-invalid border-danger" : ""}`}
                                     value={formData.match_no}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("match_no")}
                                     placeholder="e.g. M-001"
                                 />
                                 <button
@@ -518,11 +623,13 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                                     {suggestedMatchNo || "M-001"}
                                 </button>
                             </div>
+                            <FormError error={fieldErrors.match_no} />
                         </div>
 
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Match Type</label>
+                            <label className="form-label" htmlFor="match_type">Match Type <span className="text-danger ms-1">*</span></label>
                             <select
+                                id="match_type"
                                 name="match_type"
                                 className="form-select"
                                 value={formData.match_type}
@@ -535,20 +642,22 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                         </div>
 
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">
-                                Overs <span className="text-danger">*</span>
+                            <label className="form-label" htmlFor="overs">
+                                Overs <span className="text-danger ms-1">*</span>
                             </label>
                             <input
+                                id="overs"
                                 type="number"
                                 min="1"
                                 max="100"
                                 name="overs"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.overs ? "is-invalid border-danger" : ""}`}
                                 value={formData.overs}
                                 onChange={handleChange}
+                                onBlur={handleBlur("overs")}
                                 placeholder="e.g. 20 (T20), 50 (ODI)"
-                                required
                             />
+                            <FormError error={fieldErrors.overs} />
                             <div className="form-text">Allotted match overs.</div>
                         </div>
 
@@ -567,123 +676,9 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                         </div>
                     </div>
 
-                    {(formData.match_type === "Practice" || formData.match_type === "Friendly") && (
-                        <div className="row">
-                            <div className="col-md-6 mb-3">
-                                <label className="form-label">Match Fee (₹)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    name="match_fee"
-                                    className="form-control"
-                                    value={formData.match_fee}
-                                    onChange={handleChange}
-                                    placeholder="e.g. 500"
-                                />
-                                <div className="form-text">Per-player match fee for this {formData.match_type} match (auto-populates when adding academy players).</div>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="row">
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Team A</label>
-                            <select
-                                name="team_a_id"
-                                className="form-select"
-                                value={formData.team_a_id}
-                                onChange={handleChange}
-                                required
-                            >
-                                <option value="">Choose Team A</option>
-                                {teamOptions.map((team) => (
-                                    <option key={team.id} value={team.id}>
-                                        {team.team_name}{team.team_code ? ` (${team.team_code})` : ""}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Team B</label>
-                            <select
-                                name="team_b_id"
-                                className="form-select"
-                                value={formData.team_b_id}
-                                onChange={handleChange}
-                                required
-                            >
-                                <option value="">Choose Team B</option>
-                                {teamBOptions.map((team) => (
-                                    <option key={team.id} value={team.id}>
-                                        {team.team_name}{team.team_code ? ` (${team.team_code})` : ""}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="row">
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Team A Match Fee (₹) (optional)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                name="team_a_fee"
-                                className="form-control"
-                                value={formData.team_a_fee}
-                                onChange={handleChange}
-                                placeholder="Auto-populated or optional"
-                            />
-                        </div>
-
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Team B Match Fee (₹) (optional)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                name="team_b_fee"
-                                className="form-control"
-                                value={formData.team_b_fee}
-                                onChange={handleChange}
-                                placeholder="Auto-populated or optional"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="row">
-                        <div className="col-md-6 mb-3">
-                            <label className="form-label">Match Date</label>
-                            <input
-                                type="date"
-                                name="match_date"
-                                className="form-control"
-                                value={formData.match_date}
-                                onChange={handleChange}
-                                required
-                            />
-                        </div>
-
-                        {formData.booking_id && (
-                            <div className="col-md-6 mb-3">
-                                <label className="form-label">Match Time (optional)</label>
-                                <input
-                                    type="time"
-                                    name="match_time"
-                                    className="form-control"
-                                    value={formData.match_time}
-                                    onChange={handleChange}
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="row">
-                        <div className="col-md-4 mb-3">
-                            <label className="form-label">Academy ID (optional)</label>
+                        <div className={formData.match_type === "Tournament" ? "col-md-4 mb-3" : "col-md-6 mb-3"}>
+                            <label className="form-label">Academy</label>
                             <select
                                 name="academy_id"
                                 className="form-select"
@@ -698,8 +693,8 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                             </select>
                         </div>
 
-                        <div className="col-md-4 mb-3">
-                            <label className="form-label">Branch (optional)</label>
+                        <div className={formData.match_type === "Tournament" ? "col-md-4 mb-3" : "col-md-6 mb-3"}>
+                            <label className="form-label">Branch</label>
                             <select
                                 name="branch_id"
                                 className="form-select"
@@ -718,44 +713,125 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                         </div>
 
                         {formData.match_type === "Tournament" && (
-                            <>
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">Tournament ID (optional)</label>
-                                    <select
-                                        name="tournament_id"
-                                        className="form-select"
-                                        value={formData.tournament_id}
-                                        onChange={handleChange}
-                                    >
-                                        <option value="">Choose Tournament</option>
-                                        {tournamentOptions.map((tournament) => (
-                                            <option key={tournament.id} value={tournament.id}>
-                                                {tournament.tournament_name}{tournament.tournament_code ? ` (${tournament.tournament_code})` : ""}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">Match Fee (₹) (optional)</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        name="match_fee"
-                                        className="form-control"
-                                        value={formData.match_fee}
-                                        onChange={handleChange}
-                                        placeholder="e.g. 500"
-                                    />
-                                    <div className="form-text">Per-player fee for this tournament match.</div>
-                                </div>
-                            </>
+                            <div className="col-md-4 mb-3">
+                                <label className="form-label">Tournament</label>
+                                <select
+                                    name="tournament_id"
+                                    className="form-select"
+                                    value={formData.tournament_id}
+                                    onChange={handleChange}
+                                >
+                                    <option value="">Choose Tournament</option>
+                                    {tournamentOptions.map((tournament) => (
+                                        <option key={tournament.id} value={tournament.id}>
+                                            {tournament.tournament_name}{tournament.tournament_code ? ` (${tournament.tournament_code})` : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         )}
                     </div>
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Ground ID (optional)</label>
+                            <label className="form-label" htmlFor="team_a_id">Team A <span className="text-danger ms-1">*</span></label>
+                            <select
+                                id="team_a_id"
+                                name="team_a_id"
+                                className={`form-select ${fieldErrors.team_a_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.team_a_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur("team_a_id")}
+                            >
+                                <option value="">Choose Team A</option>
+                                {teamOptions.map((team) => (
+                                    <option key={team.id} value={team.id}>
+                                        {team.team_name}{team.team_code ? ` (${team.team_code})` : ""}
+                                    </option>
+                                ))}
+                            </select>
+                            <FormError error={fieldErrors.team_a_id} />
+                        </div>
+
+                        <div className="col-md-6 mb-3">
+                            <label className="form-label" htmlFor="team_b_id">Team B <span className="text-danger ms-1">*</span></label>
+                            <select
+                                id="team_b_id"
+                                name="team_b_id"
+                                className={`form-select ${fieldErrors.team_b_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.team_b_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur("team_b_id")}
+                            >
+                                <option value="">Choose Team B</option>
+                                {teamBOptions.map((team) => (
+                                    <option key={team.id} value={team.id}>
+                                        {team.team_name}{team.team_code ? ` (${team.team_code})` : ""}
+                                    </option>
+                                ))}
+                            </select>
+                            <FormError error={fieldErrors.team_b_id} />
+                        </div>
+                    </div>
+
+                    <div className="row">
+                        <div className="col-md-6 mb-3">
+                            <label className="form-label" htmlFor="match_fee">
+                                Match Fee (₹) {isAcademyTeamInvolved && <span className="text-danger ms-1">*</span>}
+                            </label>
+                            <input
+                                id="match_fee"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                name="match_fee"
+                                className={`form-control ${fieldErrors.match_fee ? "is-invalid border-danger" : ""}`}
+                                value={formData.match_fee}
+                                onChange={handleChange}
+                                onBlur={handleBlur("match_fee")}
+                                placeholder="e.g. 500"
+                            />
+                            <FormError error={fieldErrors.match_fee} />
+                            <div className="form-text">
+                                {isAcademyTeamInvolved
+                                    ? `Per-player match fee for this ${formData.match_type} match (required because an academy/branch team is participating).`
+                                    : `Per-player match fee for this ${formData.match_type} match (auto-populates when adding academy players).`}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="row">
+                        <div className={formData.booking_id ? "col-md-6 mb-3" : "col-md-12 mb-3"}>
+                            <label className="form-label" htmlFor="match_date">Match Date <span className="text-danger ms-1">*</span></label>
+                            <input
+                                id="match_date"
+                                type="date"
+                                name="match_date"
+                                className={`form-control ${fieldErrors.match_date ? "is-invalid border-danger" : ""}`}
+                                value={formData.match_date}
+                                onChange={handleChange}
+                                onBlur={handleBlur("match_date")}
+                            />
+                            <FormError error={fieldErrors.match_date} />
+                        </div>
+
+                        {formData.booking_id && (
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">Match Time</label>
+                                <input
+                                    type="time"
+                                    name="match_time"
+                                    className="form-control"
+                                    value={formData.match_time}
+                                    onChange={handleChange}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="row">
+                        <div className="col-md-6 mb-3">
+                            <label className="form-label">Ground</label>
                             <select
                                 name="ground_id"
                                 className="form-select"
@@ -778,7 +854,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Ground Booking ID (optional)</label>
+                            <label className="form-label">Ground Booking</label>
                             <select
                                 name="booking_id"
                                 className="form-select"
@@ -819,7 +895,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Toss Winner (optional)</label>
+                            <label className="form-label">Toss Winner</label>
                             <select
                                 name="toss_winner"
                                 className="form-select"
@@ -837,7 +913,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Toss Decision (optional)</label>
+                            <label className="form-label">Toss Decision</label>
                             <select
                                 name="toss_decision"
                                 className="form-select"
@@ -853,7 +929,7 @@ export default function MatchForm({ id = null, returnTo = "/next_panel/matches",
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Remarks (optional)</label>
+                        <label className="form-label">Remarks</label>
                         <textarea
                             name="remarks"
                             className="form-control"

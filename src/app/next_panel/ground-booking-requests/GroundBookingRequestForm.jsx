@@ -188,7 +188,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Customer Name *
+                                Customer Name <span className="text-danger ms-1">*</span>
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -208,7 +208,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Mobile Number *
+                                Mobile Number <span className="text-danger ms-1">*</span>
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -229,7 +229,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Email Address (Optional)
+                                Email Address
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -293,7 +293,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Select Ground *
+                                Select Ground <span className="text-danger ms-1">*</span>
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -321,7 +321,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Booking Date *
+                                Booking Date <span className="text-danger ms-1">*</span>
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -341,7 +341,7 @@ export default function GroundBookingRequestForm({
                         <div className="row g-2 mb-3">
                             <div className="col-6">
                                 <label className="form-label small fw-semibold text-secondary">
-                                    Start Time *
+                                    Start Time <span className="text-danger ms-1">*</span>
                                 </label>
                                 <div className="input-group">
                                     <span className="input-group-text bg-light">
@@ -359,7 +359,7 @@ export default function GroundBookingRequestForm({
                             </div>
                             <div className="col-6">
                                 <label className="form-label small fw-semibold text-secondary">
-                                    End Time *
+                                    End Time <span className="text-danger ms-1">*</span>
                                 </label>
                                 <div className="input-group">
                                     <span className="input-group-text bg-light">
@@ -379,7 +379,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Booking Purpose *
+                                Booking Purpose <span className="text-danger ms-1">*</span>
                             </label>
                             <select
                                 name="booking_purpose"

@@ -313,14 +313,32 @@ export async function PUT(request, { params }) {
         if (!academy_id) {
             return NextResponse.json({
                 success: false,
-                message: "Academy ID is required"
+                message: "Academy ID is required",
+                errors: { academy_id: "Please select an academy." }
             }, { status: 400 });
         }
 
         if (!program_name || !String(program_name).trim()) {
             return NextResponse.json({
                 success: false,
-                message: "Program name is required"
+                message: "Program name is required",
+                errors: { program_name: "Program name is required." }
+            }, { status: 400 });
+        }
+
+        if (program_fee === undefined || program_fee === null || String(program_fee).trim() === "") {
+            return NextResponse.json({
+                success: false,
+                message: "Program fee is required",
+                errors: { program_fee: "Program fee is required." }
+            }, { status: 400 });
+        }
+
+        if (isNaN(Number(program_fee)) || Number(program_fee) < 0) {
+            return NextResponse.json({
+                success: false,
+                message: "Program fee must be a valid non-negative number",
+                errors: { program_fee: "Program fee must be a valid non-negative number." }
             }, { status: 400 });
         }
 
@@ -405,7 +423,8 @@ export async function PUT(request, { params }) {
             if (duplicateCode.length > 0) {
                 return NextResponse.json({
                     success: false,
-                    message: "Program code already exists"
+                    message: "Program code already exists",
+                    errors: { program_code: "Program code already exists in this academy." }
                 }, { status: 409 });
             }
         }
@@ -468,7 +487,7 @@ export async function PUT(request, { params }) {
                 program_features ? String(program_features).trim() : null,
                 finalImagePath,
                 description ? String(description).trim() : null,
-                program_fee !== undefined && program_fee !== "" && program_fee !== null ? Number(program_fee) : 0,
+                Number(program_fee),
                 registration_fee !== undefined && registration_fee !== "" && registration_fee !== null ? Number(registration_fee) : 0,
                 daily_fee !== undefined && daily_fee !== "" && daily_fee !== null ? Number(daily_fee) : 0,
                 kit_fee !== undefined && kit_fee !== "" && kit_fee !== null ? Number(kit_fee) : 0,

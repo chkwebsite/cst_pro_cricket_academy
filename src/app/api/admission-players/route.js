@@ -265,12 +265,18 @@ async function generateAdmissionNumber(connection) {
     );
 }
 
-function validateRequiredFields(
+function validateRequiredFields({
     first_name,
     branch_id,
     role_id,
-    program_id
-) {
+    program_id,
+    email,
+    phone,
+    address,
+    under_age,
+    age_group_id,
+    aadhaar_no,
+}) {
     if (!first_name || !String(first_name).trim()) {
         throw new Error("First name is required");
     }
@@ -285,6 +291,66 @@ function validateRequiredFields(
 
     if (!program_id) {
         throw new Error("Program ID is required");
+    }
+
+    if (!email || !String(email).trim()) {
+        throw new Error("Email is required");
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(String(email).trim())) {
+        throw new Error("Invalid email format");
+    }
+
+    if (!phone || !String(phone).trim()) {
+        throw new Error("Phone number is required");
+    }
+
+    const phoneDigits = String(phone).replace(/\D/g, "");
+    if (phoneDigits.length < 10) {
+        throw new Error("Phone number must have at least 10 digits");
+    }
+
+    if (!address || !String(address).trim()) {
+        throw new Error("Address is required");
+    }
+
+    if (
+        under_age === null ||
+        under_age === undefined ||
+        under_age === "" ||
+        (Number(under_age) !== 0 && Number(under_age) !== 1)
+    ) {
+        throw new Error("Under Age selection is required (Yes or No)");
+    }
+
+    if (!age_group_id || Number(age_group_id) <= 0) {
+        throw new Error("Age Group is required");
+    }
+
+    if (!aadhaar_no || !String(aadhaar_no).trim()) {
+        throw new Error("Aadhaar number is required");
+    }
+}
+
+async function validateAgeGroup(connection, age_group_id) {
+    if (!age_group_id) {
+        throw new Error("Age Group is required");
+    }
+
+    const [rows] = await connection.query(
+        `
+        SELECT id
+        FROM cst_age_groups
+        WHERE id = ?
+          AND (is_deleted = 0 OR is_deleted IS NULL)
+        LIMIT 1
+        `,
+        [Number(age_group_id)]
+    );
+
+    if (rows.length === 0) {
+        throw new Error("Selected age group does not exist");
     }
 }
 
@@ -337,6 +403,8 @@ export async function GET(request) {
                 p.pin_code,
 
                 p.under_age,
+                p.age_group_id,
+                ag.age_group,
                 p.gender,
 
                 p.aadhaar_no,
@@ -365,6 +433,9 @@ export async function GET(request) {
 
             INNER JOIN cst_roles r
                 ON r.id = p.role_id
+
+            LEFT JOIN cst_age_groups ag
+                ON ag.id = p.age_group_id
 
             WHERE p.is_deleted = 0
         `;
@@ -586,7 +657,12 @@ export async function POST(request) {
         const under_age =
             toNumberOrNull(
                 formData.get("under_age")
-            ) ?? 0;
+            );
+
+        const age_group_id =
+            toNumberOrNull(
+                formData.get("age_group_id")
+            );
 
         const gender =
             formData.get("gender");
@@ -681,18 +757,29 @@ export async function POST(request) {
            VALIDATION
         ----------------------------- */
 
-        validateRequiredFields(
+        validateRequiredFields({
             first_name,
             branch_id,
             role_id,
-            program_id
-        );
+            program_id,
+            email,
+            phone,
+            address,
+            under_age,
+            age_group_id,
+            aadhaar_no,
+        });
 
         await validateBranchRoleProgram(
             connection,
             branch_id,
             role_id,
             program_id
+        );
+
+        await validateAgeGroup(
+            connection,
+            age_group_id
         );
 
         await validateUser(
@@ -769,6 +856,7 @@ export async function POST(request) {
                         pin_code,
 
                         under_age,
+                        age_group_id,
                         gender,
 
                         aadhaar_no,
@@ -789,7 +877,7 @@ export async function POST(request) {
                         ?, ?, ?, ?,
                         ?, ?,
                         ?, ?, ?, ?,
-                        ?, ?,
+                        ?, ?, ?,
                         ?, ?,
                         ?,
                         ?, ?,
@@ -807,18 +895,19 @@ export async function POST(request) {
                         toNullable(father_name),
                         toNullable(mother_name),
 
-                        toNullable(email),
-                        toNullable(phone),
+                        String(email).trim(),
+                        String(phone).trim(),
 
-                        toNullable(address),
+                        String(address).trim(),
                         toNullable(city),
                         toNullable(state),
                         toNullable(pin_code),
 
-                        under_age,
+                        Number(under_age),
+                        Number(age_group_id),
                         toNullable(gender),
 
-                        toNullable(aadhaar_no),
+                        String(aadhaar_no).trim(),
                         uploadedFile
                             ? uploadedFile.url
                             : null,
@@ -930,6 +1019,8 @@ export async function POST(request) {
                         p.pin_code,
 
                         p.under_age,
+                        p.age_group_id,
+                        ag.age_group,
                         p.gender,
 
                         p.aadhaar_no,
@@ -956,6 +1047,9 @@ export async function POST(request) {
 
                     INNER JOIN cst_roles r
                         ON r.id = p.role_id
+
+                    LEFT JOIN cst_age_groups ag
+                        ON ag.id = p.age_group_id
 
                     WHERE p.id = ?
 
@@ -1088,7 +1182,12 @@ export async function PUT(request, context) {
         const under_age =
             toNumberOrNull(
                 formData.get("under_age")
-            ) ?? 0;
+            );
+
+        const age_group_id =
+            toNumberOrNull(
+                formData.get("age_group_id")
+            );
 
         const gender =
             formData.get("gender");
@@ -1153,12 +1252,18 @@ export async function PUT(request, context) {
            VALIDATION
         ----------------------------- */
 
-        validateRequiredFields(
+        validateRequiredFields({
             first_name,
             branch_id,
             role_id,
-            program_id
-        );
+            program_id,
+            email,
+            phone,
+            address,
+            under_age,
+            age_group_id,
+            aadhaar_no,
+        });
 
         /* -----------------------------
            GET EXISTING PLAYER
@@ -1204,6 +1309,11 @@ export async function PUT(request, context) {
             branch_id,
             role_id,
             program_id
+        );
+
+        await validateAgeGroup(
+            connection,
+            age_group_id
         );
 
         await validateUser(
@@ -1269,6 +1379,7 @@ export async function PUT(request, context) {
                     pin_code = ?,
 
                     under_age = ?,
+                    age_group_id = ?,
                     gender = ?,
 
                     aadhaar_no = ?,
@@ -1293,18 +1404,19 @@ export async function PUT(request, context) {
                     toNullable(father_name),
                     toNullable(mother_name),
 
-                    toNullable(email),
-                    toNullable(phone),
+                    String(email).trim(),
+                    String(phone).trim(),
 
-                    toNullable(address),
+                    String(address).trim(),
                     toNullable(city),
                     toNullable(state),
                     toNullable(pin_code),
 
-                    under_age,
+                    Number(under_age),
+                    Number(age_group_id),
                     toNullable(gender),
 
-                    toNullable(aadhaar_no),
+                    String(aadhaar_no).trim(),
 
                     uploadedFile
                         ? uploadedFile.url

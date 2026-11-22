@@ -533,7 +533,7 @@ export default function ProductCategoriesPage() {
                                     )}
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Category Name *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Category Name <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="text"
                                             className="form-control"
@@ -545,7 +545,7 @@ export default function ProductCategoriesPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Slug (URL friendly) *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Slug (URL friendly) <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="text"
                                             className="form-control"

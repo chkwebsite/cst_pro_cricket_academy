@@ -507,7 +507,7 @@ export default function ProductStockPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Current Quantity on Hand *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Current Quantity on Hand <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="number"
                                             min="0"
@@ -595,7 +595,7 @@ export default function ProductStockPage() {
                                     )}
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Product *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Product <span className="text-danger ms-1">*</span></label>
                                         <select
                                             className="form-select"
                                             required
@@ -615,7 +615,7 @@ export default function ProductStockPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Branch *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Branch <span className="text-danger ms-1">*</span></label>
                                         <select
                                             className="form-select"
                                             required
@@ -636,7 +636,7 @@ export default function ProductStockPage() {
 
                                     <div className="row g-2">
                                         <div className="col-12 col-sm-6 mb-3">
-                                            <label className="form-label small fw-semibold text-secondary">Initial Quantity *</label>
+                                            <label className="form-label small fw-semibold text-secondary">Initial Quantity <span className="text-danger ms-1">*</span></label>
                                             <input
                                                 type="number"
                                                 min="0"
@@ -649,7 +649,7 @@ export default function ProductStockPage() {
                                         </div>
 
                                         <div className="col-12 col-sm-6 mb-3">
-                                            <label className="form-label small fw-semibold text-secondary">Low Stock Alert *</label>
+                                            <label className="form-label small fw-semibold text-secondary">Low Stock Alert <span className="text-danger ms-1">*</span></label>
                                             <input
                                                 type="number"
                                                 min="1"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FormError } from "@/app/components/form";
 
 const emptyUserRole = {
     user_id: "",
@@ -34,6 +35,8 @@ export default function UserRoleForm({
     onChange,
     onSubmit,
     error,
+    fieldErrors = {},
+    onBlur = null,
     loading = false,
 }) {
     const [users, setUsers] = useState([]);
@@ -101,9 +104,11 @@ export default function UserRoleForm({
                     </label>
 
                     <select
-                        className="form-select"
+                        name="user_id"
+                        className={`form-select ${fieldErrors.user_id ? "is-invalid border-danger" : ""}`}
                         value={values.user_id}
                         onChange={change("user_id")}
+                        onBlur={onBlur ? onBlur("user_id") : undefined}
                         required
                         disabled={loading}
                     >
@@ -119,6 +124,7 @@ export default function UserRoleForm({
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.user_id} />
                 </div>
 
                 <div className="col-md-6">
@@ -127,9 +133,11 @@ export default function UserRoleForm({
                     </label>
 
                     <select
-                        className="form-select"
+                        name="role_id"
+                        className={`form-select ${fieldErrors.role_id ? "is-invalid border-danger" : ""}`}
                         value={values.role_id}
                         onChange={change("role_id")}
+                        onBlur={onBlur ? onBlur("role_id") : undefined}
                         required
                         disabled={loading}
                     >
@@ -141,6 +149,7 @@ export default function UserRoleForm({
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.role_id} />
                 </div>
             </div>
         </form>

@@ -253,23 +253,22 @@ export async function POST(request) {
             branch_id = authUser.branch_id;
         }
 
+        const errors = {};
         if (!program_id) {
-            return NextResponse.json(
-                { success: false, message: "program_id is required" },
-                { status: 400 }
-            );
+            errors.program_id = "Please select a program.";
         }
 
         if (!branch_id) {
-            return NextResponse.json(
-                { success: false, message: "branch_id is required" },
-                { status: 400 }
-            );
+            errors.branch_id = "Please select a branch.";
         }
 
         if (!admission_players_id) {
+            errors.admission_players_id = "Please select an admission player.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "admission_players_id is required" },
+                { success: false, message: "Validation failed", errors },
                 { status: 400 }
             );
         }

@@ -200,27 +200,32 @@ export async function PUT(request, { params }) {
             }
         }
 
+        const errors = {};
         if (!umpire_name || !umpire_name.trim()) {
-            return NextResponse.json(
-                { success: false, message: "Umpire name is required" },
-                { status: 400 }
-            );
+            errors.umpire_name = "Umpire name is required.";
         }
 
         if (!mobile || !mobile.trim()) {
+            errors.mobile = "Mobile number is required.";
+        } else {
+            const cleanMobile = mobile.trim();
+            if (cleanMobile.length < 7 || cleanMobile.length > 20) {
+                errors.mobile = "Please provide a valid mobile number (7 to 20 digits).";
+            }
+        }
+
+        if (email && email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
+            errors.email = "Please enter a valid email address.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "Mobile number is required" },
+                { success: false, message: "Validation failed", errors },
                 { status: 400 }
             );
         }
 
         const cleanMobile = mobile.trim();
-        if (cleanMobile.length < 7 || cleanMobile.length > 20) {
-            return NextResponse.json(
-                { success: false, message: "Please provide a valid mobile number (7 to 20 digits)" },
-                { status: 400 }
-            );
-        }
 
         // Validate branch if provided
         if (branch_id) {

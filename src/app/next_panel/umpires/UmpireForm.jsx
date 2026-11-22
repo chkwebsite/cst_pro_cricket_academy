@@ -16,6 +16,7 @@ import {
     Key
 } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const MATCH_TYPES = [
     { type: "T20", defaultPayment: "Per Match", desc: "20-over matches" },
@@ -43,6 +44,7 @@ export default function UmpireForm({ id = null }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState(null);
 
     const [academies, setAcademies] = useState([]);
@@ -105,6 +107,13 @@ export default function UmpireForm({ id = null }) {
     // Reload branches when academy changes
     const handleAcademyChange = async (e) => {
         const selectedAcad = e.target.value;
+        if (fieldErrors.academy_id) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.academy_id;
+                return next;
+            });
+        }
         setFormData((prev) => ({ ...prev, academy_id: selectedAcad, branch_id: "" }));
         if (selectedAcad) {
             try {
@@ -186,7 +195,34 @@ export default function UmpireForm({ id = null }) {
 
     const handleProfileChange = (e) => {
         const { name, value } = e.target;
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
         setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        if (name === "academy_id" && !value) {
+            setFieldErrors((prev) => ({ ...prev, academy_id: "Please select an academy." }));
+        }
+        if (name === "umpire_name" && !value?.trim()) {
+            setFieldErrors((prev) => ({ ...prev, umpire_name: "Umpire name is required." }));
+        }
+        if (name === "mobile") {
+            if (!value?.trim()) {
+                setFieldErrors((prev) => ({ ...prev, mobile: "Mobile number is required." }));
+            } else if (value.trim().length < 7 || value.trim().length > 20) {
+                setFieldErrors((prev) => ({ ...prev, mobile: "Please provide a valid mobile number (7-20 digits)." }));
+            }
+        }
+        if (name === "email" && value?.trim() && !/^\S+@\S+\.\S+$/.test(value.trim())) {
+            setFieldErrors((prev) => ({ ...prev, email: "Please enter a valid email address." }));
+        }
     };
 
     const handleFeeChange = (index, field, value) => {
@@ -202,32 +238,40 @@ export default function UmpireForm({ id = null }) {
         setError(null);
         setSuccessMsg(null);
 
-        // Validation
+        const errs = {};
         if (!formData.academy_id) {
-            setError("Please select an academy");
-            return;
+            errs.academy_id = "Please select an academy.";
         }
 
         if (!formData.umpire_name.trim()) {
-            setError("Umpire name is required");
-            return;
+            errs.umpire_name = "Umpire name is required.";
         }
 
         if (!formData.mobile.trim()) {
-            setError("Mobile number is required");
+            errs.mobile = "Mobile number is required.";
+        } else {
+            const cleanMobile = formData.mobile.trim();
+            if (cleanMobile.length < 7 || cleanMobile.length > 20) {
+                errs.mobile = "Please provide a valid mobile number (7-20 digits).";
+            }
+        }
+
+        if (formData.email && formData.email.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
+            errs.email = "Please enter a valid email address.";
+        }
+
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
             return;
         }
 
         const cleanMobile = formData.mobile.trim();
-        if (cleanMobile.length < 7 || cleanMobile.length > 20) {
-            setError("Please provide a valid mobile number (7-20 digits)");
-            return;
-        }
-
-        if (formData.email && formData.email.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
-            setError("Please enter a valid email address");
-            return;
-        }
 
         // Prepare fees payload
         const feesPayload = fees
@@ -257,6 +301,7 @@ export default function UmpireForm({ id = null }) {
 
         try {
             setLoading(true);
+            setFieldErrors({});
             const url = isEdit ? `/api/umpires/${id}` : "/api/umpires";
             const method = isEdit ? "PUT" : "POST";
 
@@ -269,6 +314,15 @@ export default function UmpireForm({ id = null }) {
             const json = await res.json();
 
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save umpire");
             }
 
@@ -295,7 +349,7 @@ export default function UmpireForm({ id = null }) {
     }
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
             {error && (
                 <div className="alert alert-danger d-flex align-items-center gap-2 mb-4" role="alert">
                     <AlertCircle size={18} className="flex-shrink-0" />
@@ -329,15 +383,15 @@ export default function UmpireForm({ id = null }) {
                         {/* Academy */}
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Academy <span className="text-danger">*</span>
+                                Academy <span style={{ color: "#dc3545" }}>*</span>
                             </label>
                             <select
-                                className="form-select"
+                                className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                 name="academy_id"
                                 value={formData.academy_id}
                                 onChange={handleAcademyChange}
+                                onBlur={handleBlur}
                                 disabled={!isSuperAdmin && Boolean(userAcademyId)}
-                                required
                             >
                                 <option value="">Select Academy</option>
                                 {academies.map((a) => (
@@ -346,12 +400,13 @@ export default function UmpireForm({ id = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.academy_id} />
                         </div>
 
                         {/* Branch */}
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Branch <span className="text-muted fw-normal">(Optional: Leave empty for Academy-wide)</span>
+                                Branch <span className="text-muted fw-normal">(Leave empty for Academy-wide)</span>
                             </label>
                             <select
                                 className="form-select"
@@ -372,33 +427,35 @@ export default function UmpireForm({ id = null }) {
                         {/* Umpire Name */}
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Umpire Name <span className="text-danger">*</span>
+                                Umpire Name <span style={{ color: "#dc3545" }}>*</span>
                             </label>
                             <input
                                 type="text"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.umpire_name ? "is-invalid border-danger" : ""}`}
                                 name="umpire_name"
                                 placeholder="e.g. Anil Chaudhary"
                                 value={formData.umpire_name}
                                 onChange={handleProfileChange}
-                                required
+                                onBlur={handleBlur}
                             />
+                            <FormError error={fieldErrors.umpire_name} />
                         </div>
 
                         {/* Mobile */}
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Mobile Number <span className="text-danger">*</span>
+                                Mobile Number <span style={{ color: "#dc3545" }}>*</span>
                             </label>
                             <input
                                 type="tel"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.mobile ? "is-invalid border-danger" : ""}`}
                                 name="mobile"
                                 placeholder="10-digit mobile number"
                                 value={formData.mobile}
                                 onChange={handleProfileChange}
-                                required
+                                onBlur={handleBlur}
                             />
+                            <FormError error={fieldErrors.mobile} />
                         </div>
 
                         {/* Email */}
@@ -406,12 +463,14 @@ export default function UmpireForm({ id = null }) {
                             <label className="form-label fw-semibold">Email Address</label>
                             <input
                                 type="email"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.email ? "is-invalid border-danger" : ""}`}
                                 name="email"
                                 placeholder="umpire@example.com"
                                 value={formData.email}
                                 onChange={handleProfileChange}
+                                onBlur={handleBlur}
                             />
+                            <FormError error={fieldErrors.email} />
                         </div>
 
                         {/* Alternate Mobile */}

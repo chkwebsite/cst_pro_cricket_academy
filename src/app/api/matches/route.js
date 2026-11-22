@@ -1079,10 +1079,10 @@ export async function POST(request) {
 
         const feeA = body.team_a_fee !== undefined && body.team_a_fee !== null && body.team_a_fee !== ""
             ? Number(body.team_a_fee)
-            : 0;
+            : finalMatchFee;
         const feeB = body.team_b_fee !== undefined && body.team_b_fee !== null && body.team_b_fee !== ""
             ? Number(body.team_b_fee)
-            : 0;
+            : finalMatchFee;
 
         await connection.execute(
             `INSERT INTO cst_match_teams (match_id, team_id, team_side, match_fee, payment_status, status)

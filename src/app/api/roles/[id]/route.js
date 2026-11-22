@@ -172,12 +172,11 @@ export async function PUT(
         ========================================= */
 
         if (!role_name?.trim()) {
-
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Role name is required",
+                    message: "Role name is required",
+                    errors: { role_name: "Role name is required." },
                 },
                 { status: 400 }
             );
@@ -404,12 +403,11 @@ export async function PUT(
 
 
         if (existing.length > 0) {
-
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Role already exists in this scope",
+                    message: "Role already exists in this scope",
+                    errors: { role_name: "Role already exists in this scope." },
                 },
                 { status: 409 }
             );

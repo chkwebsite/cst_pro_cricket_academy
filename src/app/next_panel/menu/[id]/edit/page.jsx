@@ -33,6 +33,30 @@ export default function EditMenuPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const handleValuesChange = (newValues) => {
+        setFieldErrors((prev) => {
+            const next = { ...prev };
+            if (newValues.menu_key && next.menu_key) delete next.menu_key;
+            if (newValues.menu_name && next.menu_name) delete next.menu_name;
+            if (newValues.menu_title && next.menu_title) delete next.menu_title;
+            return next;
+        });
+        setValues(newValues);
+    };
+
+    const handleBlur = (field) => () => {
+        if (field === "menu_key" && !values?.menu_key?.trim()) {
+            setFieldErrors((prev) => ({ ...prev, menu_key: "Menu key is required." }));
+        }
+        if (field === "menu_name" && !values?.menu_name?.trim()) {
+            setFieldErrors((prev) => ({ ...prev, menu_name: "Menu name is required." }));
+        }
+        if (field === "menu_title" && !values?.menu_title?.trim()) {
+            setFieldErrors((prev) => ({ ...prev, menu_title: "Menu title is required." }));
+        }
+    };
 
     // =====================================================
     // LOAD MENU
@@ -84,6 +108,22 @@ export default function EditMenuPage() {
     const submit = async (e) => {
         e.preventDefault();
 
+        const errs = {};
+        if (!values?.menu_key?.trim()) errs.menu_key = "Menu key is required.";
+        if (!values?.menu_name?.trim()) errs.menu_name = "Menu name is required.";
+        if (!values?.menu_title?.trim()) errs.menu_title = "Menu title is required.";
+
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
+        }
+
         setSaving(true);
         setError(null);
 
@@ -106,6 +146,15 @@ export default function EditMenuPage() {
             const json = await readJson(res);
 
             if (!res.ok) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(
                     json.message ||
                     "Unable to update menu."
@@ -188,9 +237,11 @@ export default function EditMenuPage() {
                             <MenuForm
                                 formId="menuEditForm"
                                 values={values}
-                                onChange={setValues}
+                                onChange={handleValuesChange}
                                 onSubmit={submit}
                                 error={error}
+                                fieldErrors={fieldErrors}
+                                onBlur={handleBlur}
                                 loading={saving}
                                 excludeId={params.id}
                             />

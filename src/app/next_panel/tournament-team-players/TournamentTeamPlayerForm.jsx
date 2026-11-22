@@ -347,7 +347,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Tournament</label>
+                            <label className="form-label">Tournament <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="tournament_id"
                                 className="form-select"
@@ -364,7 +364,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Tournament Team</label>
+                            <label className="form-label">Tournament Team <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="tournament_team_id"
                                 className="form-select"
@@ -404,7 +404,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                         </div>
 
                         <div className="col-md-8 mb-3">
-                            <label className="form-label">{isUser ? "Registered Player" : "Outside Player"}</label>
+                            <label className="form-label">{isUser ? "Registered Player" : "Outside Player"} <span className="text-danger ms-1">*</span></label>
                             <select
                                 name={isUser ? "user_id" : "outside_player_id"}
                                 className="form-select"
@@ -456,7 +456,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Jersey No. (optional)</label>
+                            <label className="form-label">Jersey No.</label>
                             <input
                                 type="text"
                                 name="jersey_no"
@@ -530,7 +530,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                                             </select>
                                         </div>
                                         <div className="col-md-3 mb-3">
-                                            <label className="form-label">Transaction No. (optional)</label>
+                                            <label className="form-label">Transaction No.</label>
                                             <input type="text" name="transaction_no" className="form-control" value={formData.transaction_no} onChange={handleChange} />
                                         </div>
                                     </>

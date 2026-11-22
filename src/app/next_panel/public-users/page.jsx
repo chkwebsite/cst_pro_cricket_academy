@@ -717,7 +717,7 @@ export default function PublicUsersPage() {
                                     )}
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Full Name *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Full Name <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="text"
                                             className="form-control"
@@ -729,7 +729,7 @@ export default function PublicUsersPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Email Address *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Email Address <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="email"
                                             className="form-control"
@@ -741,7 +741,7 @@ export default function PublicUsersPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Phone Number *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Phone Number <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="tel"
                                             className="form-control"
@@ -754,7 +754,7 @@ export default function PublicUsersPage() {
 
                                     <div className="mb-3">
                                         <label className="form-label small fw-semibold text-secondary">
-                                            {editUser ? "New Password (leave blank to keep current)" : "Password *"}
+                                            {editUser ? "New Password (leave blank to keep current)" : <>Password <span className="text-danger ms-1">*</span></>}
                                         </label>
                                         <input
                                             type="password"

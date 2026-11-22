@@ -490,12 +490,16 @@ export async function POST(request) {
             }
         }
 
-        userData.permissions = uniquePermissions;
-
         /*
          * JWT with Full Role & Scope Context
          */
         const isSuperAdmin = userRole === ROLES.SUPER_ADMIN;
+
+        userData.permissions = uniquePermissions;
+        userData.role = userRole;
+        userData.isSuperAdmin = isSuperAdmin;
+        userData.isAcademyAdmin = userRole === ROLES.ACADEMY_ADMIN;
+        userData.isBranchAdmin = userRole === ROLES.BRANCH_ADMIN;
 
         const roleAllowed = ROLE_ALLOWED_ROUTES[userRole] || [];
         const tokenPermissions = isSuperAdmin

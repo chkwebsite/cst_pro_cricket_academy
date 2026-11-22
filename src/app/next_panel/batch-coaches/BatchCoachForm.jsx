@@ -334,7 +334,7 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
 
                         <div className="col-md-6">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Calendar size={15} /> End Date (Optional)
+                                <Calendar size={15} /> End Date
                             </label>
                             <input
                                 type="date"
@@ -354,7 +354,7 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
                         <textarea
                             className="form-control"
                             rows={3}
-                            placeholder="Optional notes regarding training focus (e.g. Batting drills, fast bowling analysis, fielding supervision)."
+                            placeholder="Notes regarding training focus (e.g. Batting drills, fast bowling analysis, fielding supervision)."
                             value={remarks}
                             onChange={(e) => setRemarks(e.target.value)}
                         />

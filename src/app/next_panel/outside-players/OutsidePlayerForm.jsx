@@ -4,6 +4,8 @@ import { ImagePlus, Building2, GitBranch } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError } from "@/app/components/form";
+import { validateEmail, validatePhone } from "@/app/components/form";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const MAX_IMAGE_MB = 2;
@@ -37,6 +39,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const isSuperAdmin = !user?.academy_id || user?.user_type === "Super Admin";
     const isAcademyAdmin = user?.user_type === "Academy Admin";
@@ -156,12 +159,73 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
         getPlayer();
     }, [id]);
 
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.player_name.trim()) errors.player_name = "Player name is required.";
+        if (!formData.date_of_birth) errors.date_of_birth = "Date of birth is required.";
+        if (!formData.age_group_id) errors.age_group_id = "Please select an age group.";
+        if (!formData.phone.trim()) {
+            errors.phone = "Phone number is required.";
+        } else {
+            const phoneErr = validatePhone(formData.phone);
+            if (phoneErr) errors.phone = phoneErr;
+        }
+        if (!formData.email.trim()) {
+            errors.email = "Email is required.";
+        } else {
+            const emailErr = validateEmail(formData.email);
+            if (emailErr) errors.email = emailErr;
+        }
+
+        const effectiveAcademyId = academyId || user?.academy_id;
+        if (!effectiveAcademyId && isSuperAdmin) {
+            errors.academy_id = "Please select an academy.";
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({
             ...prev,
             [name]: name === "status" ? Number(value) : value,
         }));
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "player_name" && !formData.player_name.trim()) err = "Player name is required.";
+        if (field === "date_of_birth" && !formData.date_of_birth) err = "Date of birth is required.";
+        if (field === "age_group_id" && !formData.age_group_id) err = "Please select an age group.";
+        if (field === "phone") {
+            if (!formData.phone.trim()) err = "Phone number is required.";
+            else err = validatePhone(formData.phone);
+        }
+        if (field === "email") {
+            if (!formData.email.trim()) err = "Email is required.";
+            else err = validateEmail(formData.email);
+        }
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
     };
 
     // IMAGE PICK (same rules as the API: jpg / jpeg / png / webp)
@@ -171,14 +235,22 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
 
         if (!ALLOWED_TYPES.includes(file.type)) {
             e.target.value = "";
-            return setError("Only JPG, JPEG, PNG and WEBP images are allowed");
+            setFieldErrors((prev) => ({ ...prev, profile_image: "Only JPG, JPEG, PNG and WEBP images are allowed." }));
+            return;
         }
         if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
             e.target.value = "";
-            return setError(`Image must be smaller than ${MAX_IMAGE_MB} MB`);
+            setFieldErrors((prev) => ({ ...prev, profile_image: `Image must be smaller than ${MAX_IMAGE_MB} MB.` }));
+            return;
         }
 
-        setError("");
+        if (fieldErrors.profile_image) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.profile_image;
+                return next;
+            });
+        }
         setImageFile(file);
         setPreview(URL.createObjectURL(file));
     };
@@ -186,16 +258,9 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Validation
-        if (!formData.player_name.trim()) return setError("Player name is required");
-        if (formData.email.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
-            return setError("Please enter a valid email address");
-        }
+        if (!validateAll()) return;
 
         const effectiveAcademyId = academyId || user?.academy_id;
-        if (!effectiveAcademyId && isSuperAdmin) {
-            return setError("Please select an academy");
-        }
 
         try {
             setLoading(true);
@@ -225,6 +290,9 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -283,7 +351,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                                 <div className="col-md-6 mb-2 mb-md-0">
                                     <label className="form-label fw-semibold">
                                         <Building2 size={16} className="me-1 text-primary" />
-                                        Academy <span className="text-danger">*</span>
+                                        Academy <span className="text-danger ms-1">*</span>
                                     </label>
                                     <select
                                         className="form-select"
@@ -305,7 +373,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
                                         <GitBranch size={16} className="me-1 text-primary" />
-                                        Branch (optional)
+                                        Branch
                                     </label>
                                     <select
                                         className="form-select"
@@ -340,7 +408,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
                                         <GitBranch size={16} className="me-1 text-primary" />
-                                        Branch (optional)
+                                        Branch
                                     </label>
                                     <select
                                         className="form-select"
@@ -391,7 +459,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
 
                     {/* Profile image */}
                     <div className="mb-3">
-                        <label className="form-label">Profile Image (optional)</label>
+                        <label className="form-label">Profile Image</label>
                         <div className="d-flex align-items-center gap-3">
                             {preview ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -419,40 +487,48 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                             />
                         </div>
                         <div className="form-text">JPG, PNG or WEBP, up to {MAX_IMAGE_MB} MB.</div>
+                        <FormError error={fieldErrors.profile_image} />
                     </div>
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Player Name <span className="text-danger">*</span></label>
+                            <label className="form-label" htmlFor="player_name">Player Name <span className="text-danger ms-1">*</span></label>
                             <input
+                                id="player_name"
                                 type="text"
                                 name="player_name"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.player_name ? "is-invalid border-danger" : ""}`}
                                 value={formData.player_name}
                                 onChange={handleChange}
+                                onBlur={handleBlur("player_name")}
                                 placeholder="Enter player name"
-                                required
                             />
+                            <FormError error={fieldErrors.player_name} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Date of Birth (optional)</label>
+                            <label className="form-label" htmlFor="date_of_birth">Date of Birth <span className="text-danger ms-1">*</span></label>
                             <input
+                                id="date_of_birth"
                                 type="date"
                                 name="date_of_birth"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.date_of_birth ? "is-invalid border-danger" : ""}`}
                                 value={formData.date_of_birth}
                                 onChange={handleChange}
+                                onBlur={handleBlur("date_of_birth")}
                             />
+                            <FormError error={fieldErrors.date_of_birth} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Age Group (optional)</label>
+                            <label className="form-label" htmlFor="age_group_id">Age Group <span className="text-danger ms-1">*</span></label>
                             <select
+                                id="age_group_id"
                                 name="age_group_id"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.age_group_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.age_group_id}
                                 onChange={handleChange}
+                                onBlur={handleBlur("age_group_id")}
                             >
                                 <option value="">Select Age Group</option>
                                 {ageGroups.map((item) => (
@@ -461,36 +537,43 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.age_group_id} />
                         </div>
                     </div>
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Phone (optional)</label>
+                            <label className="form-label" htmlFor="phone">Phone <span className="text-danger ms-1">*</span></label>
                             <input
+                                id="phone"
                                 type="tel"
                                 name="phone"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.phone ? "is-invalid border-danger" : ""}`}
                                 value={formData.phone}
                                 onChange={handleChange}
+                                onBlur={handleBlur("phone")}
                                 placeholder="Enter phone number"
                             />
+                            <FormError error={fieldErrors.phone} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Email (optional)</label>
+                            <label className="form-label" htmlFor="email">Email <span className="text-danger ms-1">*</span></label>
                             <input
+                                id="email"
                                 type="email"
                                 name="email"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.email ? "is-invalid border-danger" : ""}`}
                                 value={formData.email}
                                 onChange={handleChange}
+                                onBlur={handleBlur("email")}
                                 placeholder="Enter email"
                             />
+                            <FormError error={fieldErrors.email} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Gender (optional)</label>
+                            <label className="form-label">Gender</label>
                             <select
                                 name="gender"
                                 className="form-select"
@@ -507,7 +590,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Batting Style (optional)</label>
+                            <label className="form-label">Batting Style</label>
                             <select
                                 name="batting_style"
                                 className="form-select"
@@ -521,7 +604,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Bowling Style (optional)</label>
+                            <label className="form-label">Bowling Style</label>
                             <input
                                 type="text"
                                 name="bowling_style"
@@ -545,7 +628,7 @@ export default function OutsidePlayerForm({ id = null, embedded = false, onCreat
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Address (optional)</label>
+                        <label className="form-label">Address</label>
                         <textarea
                             name="address"
                             className="form-control"

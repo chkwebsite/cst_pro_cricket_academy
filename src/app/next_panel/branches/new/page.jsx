@@ -24,10 +24,16 @@ export default function NewBranchPage() {
                 body: JSON.stringify(buildBranchPayload(values)),
             });
             const json = await res.json();
-            if (!res.ok) throw new Error(json.message || "Unable to create branch.");
+            if (!res.ok) {
+                if (json.errors) {
+                    setError(json);
+                    return;
+                }
+                throw new Error(json.message || "Unable to create branch.");
+            }
             router.push("/next_panel/branches");
         } catch (err) {
-            setError(err.message);
+            setError(err.message || "Unable to create branch.");
         } finally {
             setSaving(false);
         }

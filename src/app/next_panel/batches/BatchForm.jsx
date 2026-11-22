@@ -14,6 +14,8 @@ import {
     AlertCircle,
     Sparkles,
 } from "lucide-react";
+import { FormError } from "@/app/components/form";
+import { useUser } from "../components/UserContext";
 
 const ALL_DAYS = [
     { key: "Monday", label: "Mon" },
@@ -28,9 +30,21 @@ const ALL_DAYS = [
 export default function BatchForm({ id = null, initialData = null }) {
     const router = useRouter();
     const isEdit = Boolean(id);
+    const { user } = useUser() || {};
+    const roleStr = String(user?.role || user?.role_name || user?.user_type || "").toLowerCase();
+    const isSuper = Boolean(
+        user?.isSuperAdmin ||
+        roleStr === "super_admin" ||
+        roleStr === "super admin" ||
+        roleStr === "superadmin" ||
+        user?.role === "SUPER_ADMIN" ||
+        user?.user_type === "1" ||
+        user?.role_id === 1
+    );
+    const userAcademyId = user?.academy_id ? String(user.academy_id) : "";
 
     // Form states
-    const [academyId, setAcademyId] = useState(initialData?.academy_id || "");
+    const [academyId, setAcademyId] = useState(initialData?.academy_id || (!isSuper && userAcademyId ? userAcademyId : ""));
     const [branchId, setBranchId] = useState(initialData?.branch_id || "");
     const [programId, setProgramId] = useState(initialData?.program_id || "");
     const [ageGroupId, setAgeGroupId] = useState(initialData?.age_group_id || "");
@@ -65,11 +79,73 @@ export default function BatchForm({ id = null, initialData = null }) {
     const [programs, setPrograms] = useState([]);
     const [ageGroups, setAgeGroups] = useState([]);
 
+    // Auto-select academy for Academy Admin
+    useEffect(() => {
+        if (!isEdit && !academyId && !isSuper && userAcademyId) {
+            setAcademyId(userAcademyId);
+        }
+    }, [isEdit, isSuper, userAcademyId, academyId]);
+
     // UI state
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit && !initialData);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState(null);
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "academy_id" && !academyId) err = "Please select an academy.";
+        if (field === "branch_id" && !branchId) err = "Please select a branch.";
+        if (field === "program_id" && !programId) err = "Please select a program.";
+        if (field === "age_group_id" && !ageGroupId) err = "Please select an age group.";
+        if (field === "batch_name" && !batchName.trim()) err = "Please enter a batch name.";
+        if (field === "batch_code" && !batchCode.trim()) err = "Please enter a batch code.";
+        if (field === "start_time" && !startTime) err = "Start time is required.";
+        if (field === "end_time" && !endTime) err = "End time is required.";
+        if (field === "max_players" && Number(maxPlayers) < 1) err = "Max players must be at least 1.";
+        if (err) setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        if (!academyId) errs.academy_id = "Please select an academy.";
+        if (!branchId) errs.branch_id = "Please select a branch.";
+        if (!programId) errs.program_id = "Please select a program.";
+        if (!ageGroupId) errs.age_group_id = "Please select an age group.";
+        if (!batchName.trim()) errs.batch_name = "Please enter a batch name.";
+        if (!batchCode.trim()) errs.batch_code = "Please enter a batch code.";
+        if (!startTime) errs.start_time = "Start time is required.";
+        if (!endTime) errs.end_time = "End time is required.";
+        if (startTime && endTime && startTime >= endTime) errs.end_time = "End time must be after start time.";
+        if (selectedDays.length === 0) errs.training_days = "Please select at least one training day.";
+        if (Number(maxPlayers) < 1) errs.max_players = "Max players must be at least 1.";
+        if (startDate && endDate && endDate < startDate) {
+            errs.end_date = "End date cannot be earlier than start date.";
+        }
+
+        setFieldErrors(errs);
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
 
     // 1. Fetch lookup options
     useEffect(() => {
@@ -219,19 +295,8 @@ export default function BatchForm({ id = null, initialData = null }) {
         setError(null);
         setSuccessMsg(null);
 
-        // Validation
-        if (!academyId) return setError("Please select an academy.");
-        if (!branchId) return setError("Please select a branch.");
-        if (!programId) return setError("Please select a program.");
-        if (!ageGroupId) return setError("Please select an age group.");
-        if (!batchName.trim()) return setError("Please enter a batch name.");
-        if (!batchCode.trim()) return setError("Please enter a batch code.");
-        if (!startTime || !endTime) return setError("Please specify start and end times.");
-        if (startTime >= endTime) return setError("End time must be after start time.");
-        if (selectedDays.length === 0) return setError("Please select at least one training day.");
-        if (Number(maxPlayers) < 1) return setError("Max players must be at least 1.");
-        if (startDate && endDate && endDate < startDate) {
-            return setError("End date cannot be earlier than start date.");
+        if (!validateAll()) {
+            return;
         }
 
         setLoading(true);
@@ -266,6 +331,15 @@ export default function BatchForm({ id = null, initialData = null }) {
 
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save batch.");
             }
 
@@ -327,13 +401,17 @@ export default function BatchForm({ id = null, initialData = null }) {
                                 Academy <span className="text-danger">*</span>
                             </label>
                             <select
-                                className="form-select"
+                                name="academy_id"
+                                className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                 value={academyId}
                                 onChange={(e) => {
+                                    clearError("academy_id");
                                     setAcademyId(e.target.value);
                                     setBranchId("");
                                     setProgramId("");
                                 }}
+                                onBlur={handleBlur("academy_id")}
+                                disabled={!isSuper && Boolean(userAcademyId)}
                                 required
                             >
                                 <option value="">-- Select Academy --</option>
@@ -343,6 +421,7 @@ export default function BatchForm({ id = null, initialData = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.academy_id} />
                         </div>
 
                         <div className="col-md-6">
@@ -350,22 +429,26 @@ export default function BatchForm({ id = null, initialData = null }) {
                                 Branch <span className="text-danger">*</span>
                             </label>
                             <select
-                                className="form-select"
+                                name="branch_id"
+                                className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                 value={branchId}
                                 onChange={(e) => {
+                                    clearError("branch_id");
                                     setBranchId(e.target.value);
                                     setProgramId("");
                                 }}
+                                onBlur={handleBlur("branch_id")}
                                 disabled={!academyId}
                                 required
                             >
-                                <option value="">-- Select Branch --</option>
+                                <option value="">{academyId ? "-- Select Branch --" : "-- Please select an academy first --"}</option>
                                 {branches.map((b) => (
                                     <option key={b.id} value={b.id}>
                                         {b.branch_name} ({b.branch_code})
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.branch_id} />
                         </div>
                     </div>
 
@@ -376,9 +459,14 @@ export default function BatchForm({ id = null, initialData = null }) {
                                 Cricket Program <span className="text-danger">*</span>
                             </label>
                             <select
-                                className="form-select"
+                                name="program_id"
+                                className={`form-select ${fieldErrors.program_id ? "is-invalid border-danger" : ""}`}
                                 value={programId}
-                                onChange={(e) => setProgramId(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("program_id");
+                                    setProgramId(e.target.value);
+                                }}
+                                onBlur={handleBlur("program_id")}
                                 disabled={!branchId}
                                 required
                             >
@@ -389,6 +477,7 @@ export default function BatchForm({ id = null, initialData = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.program_id} />
                         </div>
 
                         <div className="col-md-6">
@@ -396,9 +485,14 @@ export default function BatchForm({ id = null, initialData = null }) {
                                 Age Group <span className="text-danger">*</span>
                             </label>
                             <select
-                                className="form-select"
+                                name="age_group_id"
+                                className={`form-select ${fieldErrors.age_group_id ? "is-invalid border-danger" : ""}`}
                                 value={ageGroupId}
-                                onChange={(e) => setAgeGroupId(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("age_group_id");
+                                    setAgeGroupId(e.target.value);
+                                }}
+                                onBlur={handleBlur("age_group_id")}
                                 required
                             >
                                 <option value="">-- Select Age Group --</option>
@@ -408,6 +502,7 @@ export default function BatchForm({ id = null, initialData = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.age_group_id} />
                         </div>
                     </div>
 
@@ -419,12 +514,18 @@ export default function BatchForm({ id = null, initialData = null }) {
                             </label>
                             <input
                                 type="text"
-                                className="form-control"
+                                name="batch_name"
+                                className={`form-control ${fieldErrors.batch_name ? "is-invalid border-danger" : ""}`}
                                 placeholder="e.g. Morning Elite U-16 Squad"
                                 value={batchName}
-                                onChange={(e) => setBatchName(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("batch_name");
+                                    setBatchName(e.target.value);
+                                }}
+                                onBlur={handleBlur("batch_name")}
                                 required
                             />
+                            <FormError error={fieldErrors.batch_name} />
                         </div>
 
                         <div className="col-md-6">
@@ -444,12 +545,18 @@ export default function BatchForm({ id = null, initialData = null }) {
                             </div>
                             <input
                                 type="text"
-                                className="form-control font-monospace"
+                                name="batch_code"
+                                className={`form-control font-monospace ${fieldErrors.batch_code ? "is-invalid border-danger" : ""}`}
                                 placeholder="e.g. BAT-MAIN-REG-U16-0600"
                                 value={batchCode}
-                                onChange={(e) => setBatchCode(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("batch_code");
+                                    setBatchCode(e.target.value);
+                                }}
+                                onBlur={handleBlur("batch_code")}
                                 required
                             />
+                            <FormError error={fieldErrors.batch_code} />
                         </div>
                     </div>
 
@@ -461,11 +568,17 @@ export default function BatchForm({ id = null, initialData = null }) {
                             </label>
                             <input
                                 type="time"
-                                className="form-control"
+                                name="start_time"
+                                className={`form-control ${fieldErrors.start_time ? "is-invalid border-danger" : ""}`}
                                 value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("start_time");
+                                    setStartTime(e.target.value);
+                                }}
+                                onBlur={handleBlur("start_time")}
                                 required
                             />
+                            <FormError error={fieldErrors.start_time} />
                         </div>
 
                         <div className="col-md-4">
@@ -474,11 +587,17 @@ export default function BatchForm({ id = null, initialData = null }) {
                             </label>
                             <input
                                 type="time"
-                                className="form-control"
+                                name="end_time"
+                                className={`form-control ${fieldErrors.end_time ? "is-invalid border-danger" : ""}`}
                                 value={endTime}
-                                onChange={(e) => setEndTime(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("end_time");
+                                    setEndTime(e.target.value);
+                                }}
+                                onBlur={handleBlur("end_time")}
                                 required
                             />
+                            <FormError error={fieldErrors.end_time} />
                         </div>
 
                         <div className="col-md-4">
@@ -487,13 +606,19 @@ export default function BatchForm({ id = null, initialData = null }) {
                             </label>
                             <input
                                 type="number"
-                                className="form-control"
+                                name="max_players"
+                                className={`form-control ${fieldErrors.max_players ? "is-invalid border-danger" : ""}`}
                                 min="1"
                                 max="200"
                                 value={maxPlayers}
-                                onChange={(e) => setMaxPlayers(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("max_players");
+                                    setMaxPlayers(e.target.value);
+                                }}
+                                onBlur={handleBlur("max_players")}
                                 required
                             />
+                            <FormError error={fieldErrors.max_players} />
                             <div className="form-text" style={{ fontSize: "0.75rem" }}>
                                 Batch will reject further assignments once this limit is reached.
                             </div>
@@ -541,7 +666,10 @@ export default function BatchForm({ id = null, initialData = null }) {
                                     <button
                                         key={d.key}
                                         type="button"
-                                        onClick={() => toggleDay(d.key)}
+                                        onClick={() => {
+                                            clearError("training_days");
+                                            toggleDay(d.key);
+                                        }}
                                         className={`btn btn-sm px-3 py-1 fw-semibold transition-all ${
                                             isSelected
                                                 ? "btn-primary shadow-sm"
@@ -553,6 +681,7 @@ export default function BatchForm({ id = null, initialData = null }) {
                                 );
                             })}
                         </div>
+                        <FormError error={fieldErrors.training_days} />
                         <div className="small text-muted mt-2" style={{ fontSize: "0.75rem" }}>
                             Selected {selectedDays.length} of 7 days: {selectedDays.join(", ") || "None"}
                         </div>
@@ -562,26 +691,35 @@ export default function BatchForm({ id = null, initialData = null }) {
                     <div className="row g-3 mb-3">
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Calendar size={15} /> Start Date (Optional)
+                                <Calendar size={15} /> Start Date
                             </label>
                             <input
                                 type="date"
+                                name="start_date"
                                 className="form-control"
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("end_date");
+                                    setStartDate(e.target.value);
+                                }}
                             />
                         </div>
 
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Calendar size={15} /> End Date (Optional)
+                                <Calendar size={15} /> End Date
                             </label>
                             <input
                                 type="date"
-                                className="form-control"
+                                name="end_date"
+                                className={`form-control ${fieldErrors.end_date ? "is-invalid border-danger" : ""}`}
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(e) => {
+                                    clearError("end_date");
+                                    setEndDate(e.target.value);
+                                }}
                             />
+                            <FormError error={fieldErrors.end_date} />
                         </div>
 
                         <div className="col-md-4">
@@ -603,7 +741,7 @@ export default function BatchForm({ id = null, initialData = null }) {
                         <textarea
                             className="form-control"
                             rows={3}
-                            placeholder="Optional notes regarding ground nets, pitch allotment, equipment, or batch schedule."
+                            placeholder="Notes regarding ground nets, pitch allotment, equipment, or batch schedule."
                             value={remarks}
                             onChange={(e) => setRemarks(e.target.value)}
                         />

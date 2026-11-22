@@ -1059,7 +1059,7 @@ export default function OrdersPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Payment Method *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Payment Method <span className="text-danger ms-1">*</span></label>
                                         <select
                                             className="form-select"
                                             value={paymentMethod}
@@ -1074,7 +1074,7 @@ export default function OrdersPage() {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary">Amount Received (₹) *</label>
+                                        <label className="form-label small fw-semibold text-secondary">Amount Received (₹) <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="number"
                                             step="0.01"
@@ -1102,7 +1102,7 @@ export default function OrdersPage() {
                                         <textarea
                                             className="form-control"
                                             rows={2}
-                                            placeholder="Optional payment notes..."
+                                            placeholder="Payment notes..."
                                             value={paymentNotes}
                                             onChange={(e) => setPaymentNotes(e.target.value)}
                                         />

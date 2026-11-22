@@ -9,6 +9,7 @@ import {
     Search,
     Trash2,
 } from "lucide-react";
+import { useUser } from "../components/UserContext";
 
 async function readJson(res) {
     const text = await res.text();
@@ -27,10 +28,27 @@ async function readJson(res) {
 }
 
 export default function UserBranchesPage() {
+    const { user } = useUser() || {};
+    const roleStr = String(user?.role || user?.role_name || user?.user_type || "").toLowerCase();
+    const isSuper = Boolean(
+        user?.isSuperAdmin ||
+        roleStr === "super_admin" ||
+        roleStr === "super admin" ||
+        roleStr === "superadmin" ||
+        user?.role === "SUPER_ADMIN" ||
+        user?.user_type === "1" ||
+        user?.role_id === 1
+    );
+    const userAcademyId = user?.academy_id ? String(user.academy_id) : "";
+
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const [academies, setAcademies] = useState([]);
+    const [selectedAcademy, setSelectedAcademy] = useState(
+        !isSuper && userAcademyId ? userAcademyId : ""
+    );
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("");
     const [isPrimary, setIsPrimary] = useState("");
@@ -41,6 +59,29 @@ export default function UserBranchesPage() {
         total: 0,
         totalPages: 1,
     });
+
+    // Auto-select academy for Academy Admin
+    useEffect(() => {
+        if (!isSuper && userAcademyId) {
+            setSelectedAcademy(userAcademyId);
+        }
+    }, [isSuper, userAcademyId]);
+
+    // Load academies for filter
+    useEffect(() => {
+        async function loadAcademies() {
+            try {
+                const res = await fetch("/api/academies?status=1");
+                const json = await readJson(res);
+                if (res.ok && json.success) {
+                    setAcademies(json.data || []);
+                }
+            } catch (err) {
+                console.error("Failed to load academies:", err);
+            }
+        }
+        loadAcademies();
+    }, []);
 
     // =====================================================
     // LOAD USER BRANCHES
@@ -55,6 +96,11 @@ export default function UserBranchesPage() {
                 page: String(nextPage),
                 limit: "20",
             });
+
+            const effectiveAcademy = isSuper ? selectedAcademy : (userAcademyId || selectedAcademy);
+            if (effectiveAcademy) {
+                p.set("academy_id", effectiveAcademy);
+            }
 
             if (search.trim()) {
                 p.set("search", search.trim());
@@ -104,7 +150,7 @@ export default function UserBranchesPage() {
 
     useEffect(() => {
         load(1);
-    }, [status, isPrimary]);
+    }, [status, isPrimary, selectedAcademy]);
 
     // =====================================================
     // SEARCH
@@ -121,7 +167,11 @@ export default function UserBranchesPage() {
 
     const clear = () => {
         setSearch("");
-
+        setStatus("");
+        setIsPrimary("");
+        if (isSuper) {
+            setSelectedAcademy("");
+        }
         setTimeout(() => {
             load(1);
         }, 0);
@@ -257,6 +307,24 @@ export default function UserBranchesPage() {
                             <select
                                 className="form-select"
                                 style={{
+                                    maxWidth: 220,
+                                }}
+                                value={isSuper ? selectedAcademy : (userAcademyId || selectedAcademy)}
+                                onChange={(e) => setSelectedAcademy(e.target.value)}
+                                disabled={!isSuper && Boolean(userAcademyId)}
+                                title="Filter user branches by academy"
+                            >
+                                {isSuper && <option value="">All Academies</option>}
+                                {academies.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.academy_name} {a.academy_code ? `(${a.academy_code})` : ""}
+                                    </option>
+                                ))}
+                            </select>
+
+                            <select
+                                className="form-select"
+                                style={{
                                     maxWidth: 200,
                                 }}
                                 value={isPrimary}
@@ -267,7 +335,7 @@ export default function UserBranchesPage() {
                                 }
                             >
                                 <option value="">
-                                    All Branches
+                                    All Types (Primary &amp; Other)
                                 </option>
 
                                 <option value="1">

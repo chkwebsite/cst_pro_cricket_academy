@@ -793,7 +793,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                         name="target_runs"
                         className="form-control"
                         min="0"
-                        placeholder="Auto / optional"
+                        placeholder="Auto-calculated from Total Runs + Extras"
                         value={formData.target_runs}
                         onChange={handleChange}
                     />

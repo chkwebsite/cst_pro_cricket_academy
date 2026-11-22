@@ -461,7 +461,7 @@ export default function StudentEnquiryFollowupPage() {
 
                                     <div className="mb-3">
                                         <label className="form-label fw-semibold small">
-                                            Next Follow-up Date (Optional)
+                                            Next Follow-up Date
                                         </label>
                                         <input
                                             type="date"

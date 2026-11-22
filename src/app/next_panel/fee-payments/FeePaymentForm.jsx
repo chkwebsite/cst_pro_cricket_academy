@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const PAYMENT_MODES = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
 const PAYMENT_STATUSES = ["Paid", "Refunded", "Cancelled"];
@@ -51,6 +52,7 @@ export default function FeePaymentForm({ id = null }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const selectedFee = isEdit ? editFee : fees.find((f) => Number(f.id) === Number(formData.fee_status_id));
     const balance = selectedFee
@@ -143,6 +145,13 @@ export default function FeePaymentForm({ id = null }) {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
         if (name === "fee_status_id") {
             const match = fees.find((f) => String(f.id) === String(value));
             const bal = match
@@ -158,17 +167,46 @@ export default function FeePaymentForm({ id = null }) {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        if (!isEdit && name === "fee_status_id" && !value) {
+            setFieldErrors((prev) => ({ ...prev, fee_status_id: "Please select a fee record." }));
+        }
+        if (name === "amount") {
+            const num = Number(value);
+            if (!value || isNaN(num) || num <= 0) {
+                setFieldErrors((prev) => ({ ...prev, amount: "Amount must be greater than zero." }));
+            } else if (!isEdit && balance !== null && num > balance) {
+                setFieldErrors((prev) => ({ ...prev, amount: `Cannot exceed balance of ₹${money(balance)}.` }));
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         const feeId = Number(formData.fee_status_id);
         const amount = Number(formData.amount);
 
-        if (!Number.isInteger(feeId) || feeId <= 0) return setError("Please choose a fee record");
-        if (!Number.isFinite(amount) || amount <= 0) return setError("Amount must be greater than zero");
-        // Only new payments are checked against the balance here; the API checks edits against the fee total
-        if (!isEdit && balance !== null && amount > balance) {
-            return setError(`Payment amount cannot exceed the remaining balance of ₹${money(balance)}`);
+        const errs = {};
+        if (!isEdit && (!Number.isInteger(feeId) || feeId <= 0)) {
+            errs.fee_status_id = "Please select a fee record.";
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            errs.amount = "Amount must be greater than zero.";
+        } else if (!isEdit && balance !== null && amount > balance) {
+            errs.amount = `Payment amount cannot exceed the remaining balance of ₹${money(balance)}.`;
+        }
+
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
         }
 
         const payload = {
@@ -185,6 +223,7 @@ export default function FeePaymentForm({ id = null }) {
         try {
             setLoading(true);
             setError("");
+            setFieldErrors({});
 
             const res = await fetch(isEdit ? `/api/fee-payments/${id}` : "/api/fee-payments", {
                 method: isEdit ? "PUT" : "POST",
@@ -192,7 +231,18 @@ export default function FeePaymentForm({ id = null }) {
                 body: JSON.stringify(payload),
             });
             const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.message || "Something went wrong");
+            if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
+                throw new Error(data.message || "Something went wrong");
+            }
 
             alert(isEdit ? "Payment updated successfully" : "Payment recorded successfully");
             const from = searchParams.get("from");
@@ -240,10 +290,12 @@ export default function FeePaymentForm({ id = null }) {
             <div className="card-body">
                 {error && <div className="alert alert-danger">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="row">
                         <div className="col-md-8 mb-3">
-                            <label className="form-label">Fee Record</label>
+                            <label className="form-label fw-semibold">
+                                Fee Record <span style={{ color: "#dc3545" }}>*</span>
+                            </label>
                             {isEdit ? (
                                 <input
                                     type="text"
@@ -256,12 +308,21 @@ export default function FeePaymentForm({ id = null }) {
                                     }
                                 />
                             ) : (
-                                <select name="fee_status_id" className="form-select" value={formData.fee_status_id} onChange={handleChange} required>
-                                    <option value="">Choose Fee Record</option>
-                                    {fees.map((f) => (
-                                        <option key={f.id} value={f.id}>{feeLabel(f)}</option>
-                                    ))}
-                                </select>
+                                <>
+                                    <select
+                                        name="fee_status_id"
+                                        className={`form-select ${fieldErrors.fee_status_id ? "is-invalid border-danger" : ""}`}
+                                        value={formData.fee_status_id}
+                                        onChange={handleChange}
+                                        onBlur={handleBlur}
+                                    >
+                                        <option value="">Choose Fee Record</option>
+                                        {fees.map((f) => (
+                                            <option key={f.id} value={f.id}>{feeLabel(f)}</option>
+                                        ))}
+                                    </select>
+                                    <FormError error={fieldErrors.fee_status_id} />
+                                </>
                             )}
                             <div className="form-text">
                                 {isEdit
@@ -302,8 +363,20 @@ export default function FeePaymentForm({ id = null }) {
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Amount (₹)</label>
-                            <input type="number" min="0.01" step="0.01" name="amount" className="form-control" value={formData.amount} onChange={handleChange} required />
+                            <label className="form-label fw-semibold">
+                                Amount (₹) <span style={{ color: "#dc3545" }}>*</span>
+                            </label>
+                            <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                name="amount"
+                                className={`form-control ${fieldErrors.amount ? "is-invalid border-danger" : ""}`}
+                                value={formData.amount}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                            />
+                            <FormError error={fieldErrors.amount} />
                             {!isEdit && balance !== null && (
                                 <div className="form-text">
                                     <button type="button" className="btn btn-link btn-sm p-0" onClick={() => setFormData((p) => ({ ...p, amount: String(balance) }))}>
@@ -314,7 +387,9 @@ export default function FeePaymentForm({ id = null }) {
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Payment Mode</label>
+                            <label className="form-label fw-semibold">
+                                Payment Mode <span style={{ color: "#dc3545" }}>*</span>
+                            </label>
                             <select name="payment_mode" className="form-select" value={formData.payment_mode} onChange={handleChange}>
                                 {PAYMENT_MODES.map((m) => (
                                     <option key={m} value={m}>{m}</option>
@@ -323,14 +398,14 @@ export default function FeePaymentForm({ id = null }) {
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Transaction No. (optional)</label>
+                            <label className="form-label">Transaction No.</label>
                             <input type="text" name="transaction_no" className="form-control" value={formData.transaction_no} onChange={handleChange} placeholder="UPI ref / cheque no." />
                         </div>
                     </div>
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Payment Date (optional)</label>
+                            <label className="form-label">Payment Date</label>
                             <input type="datetime-local" name="payment_date" className="form-control" value={formData.payment_date} onChange={handleChange} />
                             <div className="form-text">{isEdit ? "Leave unchanged to keep the date." : "Leave blank to use the current time."}</div>
                         </div>
@@ -353,7 +428,7 @@ export default function FeePaymentForm({ id = null }) {
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Remarks (optional)</label>
+                        <label className="form-label">Remarks</label>
                         <textarea name="remarks" rows="3" className="form-control" value={formData.remarks} onChange={handleChange} placeholder="Enter remarks" />
                     </div>
 

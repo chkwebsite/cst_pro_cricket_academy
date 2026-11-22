@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save } from "lucide-react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const LIST_URL = "/next_panel/match-types";
 
@@ -22,17 +23,50 @@ export default function MatchTypeForm({ initial, matchTypeId }) {
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
 
-    const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+    const setField = (key, value) => {
+        if (fieldErrors[key]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
+        setForm((f) => ({ ...f, [key]: value }));
+    };
+
+    const handleBlur = (field) => () => {
+        if (field === "name" && !form.name.trim()) {
+            setFieldErrors((prev) => ({ ...prev, name: "Match type name is required." }));
+        }
+        if (field === "code" && !form.code.trim()) {
+            setFieldErrors((prev) => ({ ...prev, code: "Match type code is required." }));
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
 
-        if (!form.name.trim()) return setError("Match type name is required");
-        if (!form.code.trim()) return setError("Match type code is required");
+        const errs = {};
+        if (!form.name.trim()) errs.name = "Match type name is required.";
+        if (!form.code.trim()) errs.code = "Match type code is required.";
+
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.getElementById(`mt-${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
+        }
 
         setSaving(true);
+        setFieldErrors({});
+
         try {
             const res = await fetch(isEdit ? `/api/match-types/${matchTypeId}` : "/api/match-types", {
                 method: isEdit ? "PUT" : "POST",
@@ -45,7 +79,18 @@ export default function MatchTypeForm({ initial, matchTypeId }) {
                 }),
             });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok || !json.success) throw new Error(json.message || "Failed to save match type");
+            if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.getElementById(`mt-${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
+                throw new Error(json.message || "Failed to save match type");
+            }
 
             router.push(LIST_URL);
             router.refresh();
@@ -69,31 +114,39 @@ export default function MatchTypeForm({ initial, matchTypeId }) {
 
                 <form onSubmit={handleSubmit} noValidate>
                     <div className="mb-3">
-                        <label htmlFor="mt-name" className="form-label">Name <span className="text-danger">*</span></label>
+                        <label htmlFor="mt-name" className="form-label fw-semibold">
+                            Name <span style={{ color: "#dc3545" }}>*</span>
+                        </label>
                         <input
                             id="mt-name"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.name ? "is-invalid border-danger" : ""}`}
                             value={form.name}
                             onChange={(e) => setField("name", e.target.value)}
+                            onBlur={handleBlur("name")}
                             placeholder="e.g. Limited Overs"
                             autoFocus
                         />
+                        <FormError error={fieldErrors.name} />
                     </div>
 
                     <div className="mb-3">
-                        <label htmlFor="mt-code" className="form-label">Code <span className="text-danger">*</span></label>
+                        <label htmlFor="mt-code" className="form-label fw-semibold">
+                            Code <span style={{ color: "#dc3545" }}>*</span>
+                        </label>
                         <input
                             id="mt-code"
-                            className="form-control text-uppercase"
+                            className={`form-control text-uppercase ${fieldErrors.code ? "is-invalid border-danger" : ""}`}
                             value={form.code}
                             onChange={(e) => setField("code", e.target.value)}
+                            onBlur={handleBlur("code")}
                             placeholder="e.g. LO"
                         />
+                        <FormError error={fieldErrors.code} />
                         <div className="form-text">Saved in capitals and must be unique.</div>
                     </div>
 
                     <div className="mb-3">
-                        <label htmlFor="mt-desc" className="form-label">Description</label>
+                        <label htmlFor="mt-desc" className="form-label fw-semibold">Description</label>
                         <textarea
                             id="mt-desc"
                             className="form-control"
@@ -104,7 +157,7 @@ export default function MatchTypeForm({ initial, matchTypeId }) {
                     </div>
 
                     <div className="mb-4">
-                        <label htmlFor="mt-status" className="form-label">Status</label>
+                        <label htmlFor="mt-status" className="form-label fw-semibold">Status</label>
                         <select
                             id="mt-status"
                             className="form-select"

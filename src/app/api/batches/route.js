@@ -214,21 +214,23 @@ export async function POST(request) {
             remarks = null,
         } = body;
 
-        if (
-            !academy_id ||
-            !branch_id ||
-            !program_id ||
-            !age_group_id ||
-            !batch_name?.trim() ||
-            !batch_code?.trim() ||
-            !start_time ||
-            !end_time ||
-            !training_days
-        ) {
+        const errors = {};
+        if (!academy_id) errors.academy_id = "Please select an academy.";
+        if (!branch_id) errors.branch_id = "Please select a branch.";
+        if (!program_id) errors.program_id = "Please select a program.";
+        if (!age_group_id) errors.age_group_id = "Please select an age group.";
+        if (!batch_name?.trim()) errors.batch_name = "Please enter a batch name.";
+        if (!batch_code?.trim()) errors.batch_code = "Please enter a batch code.";
+        if (!start_time) errors.start_time = "Start time is required.";
+        if (!end_time) errors.end_time = "End time is required.";
+        if (!training_days) errors.training_days = "Please select at least one training day.";
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
                     message: "Please provide all required batch fields",
+                    errors,
                 },
                 { status: 400 }
             );
@@ -269,6 +271,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "max_players must be a positive integer",
+                    errors: { max_players: "Max players must be at least 1." },
                 },
                 { status: 400 }
             );
@@ -279,6 +282,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "end_time must be later than start_time",
+                    errors: { end_time: "End time must be after start time." },
                 },
                 { status: 400 }
             );
@@ -293,6 +297,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "end_date cannot be before start_date",
+                    errors: { end_date: "End date cannot be earlier than start date." },
                 },
                 { status: 400 }
             );
@@ -540,16 +545,18 @@ export async function PUT(request) {
             remarks: remarks === undefined ? existing.remarks : remarks,
         };
 
-        if (
-            !updated.batch_name?.trim() ||
-            !updated.batch_code?.trim() ||
-            !updated.start_time ||
-            !updated.end_time
-        ) {
+        const updateErrors = {};
+        if (!updated.batch_name?.trim()) updateErrors.batch_name = "Please enter a batch name.";
+        if (!updated.batch_code?.trim()) updateErrors.batch_code = "Please enter a batch code.";
+        if (!updated.start_time) updateErrors.start_time = "Start time is required.";
+        if (!updated.end_time) updateErrors.end_time = "End time is required.";
+
+        if (Object.keys(updateErrors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
                     message: "Batch name, code and timing are required",
+                    errors: updateErrors,
                 },
                 { status: 400 }
             );
@@ -560,6 +567,7 @@ export async function PUT(request) {
                 {
                     success: false,
                     message: "end_time must be later than start_time",
+                    errors: { end_time: "End time must be after start time." },
                 },
                 { status: 400 }
             );
@@ -573,6 +581,7 @@ export async function PUT(request) {
                 {
                     success: false,
                     message: "max_players must be a positive integer",
+                    errors: { max_players: "Max players must be at least 1." },
                 },
                 { status: 400 }
             );
@@ -587,6 +596,7 @@ export async function PUT(request) {
                 {
                     success: false,
                     message: "end_date cannot be before start_date",
+                    errors: { end_date: "End date cannot be earlier than start date." },
                 },
                 { status: 400 }
             );

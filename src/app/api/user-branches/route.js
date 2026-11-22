@@ -15,6 +15,7 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
+        const academy_id = searchParams.get("academy_id");
         const user_id = searchParams.get("user_id");
         const branch_id = searchParams.get("branch_id");
         const is_primary = searchParams.get("is_primary");
@@ -69,6 +70,10 @@ export async function GET(request) {
             }
         } else {
             // Super Admin can filter
+            if (academy_id) {
+                where.push("b.academy_id = ?");
+                values.push(academy_id);
+            }
             if (branch_id) {
                 where.push("ub.branch_id = ?");
                 values.push(branch_id);
@@ -233,11 +238,20 @@ export async function POST(request) {
             branch_id = authUser.branch_id;
         }
 
+        const errors = {};
+        if (!user_id) {
+            errors.user_id = "Please select a user.";
+        }
         if (!branch_id) {
+            errors.branch_id = "Please select a branch.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "branch_id is required",
+                    message: "Validation failed",
+                    errors,
                 },
                 { status: 400 }
             );
@@ -315,6 +329,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "User is already assigned to this branch",
+                    errors: { branch_id: "This user is already assigned to this branch." }
                 },
                 { status: 409 }
             );

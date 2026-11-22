@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FormError } from "@/app/components/form";
 
 const emptyMenu = {
     parent_id: "",
@@ -52,6 +53,8 @@ export default function MenuForm({
     onChange,
     onSubmit,
     error,
+    fieldErrors = {},
+    onBlur = null,
     loading = false,
     excludeId = null,
 }) {
@@ -131,13 +134,16 @@ export default function MenuForm({
 
                     <input
                         type="text"
-                        className="form-control"
+                        name="menu_key"
+                        className={`form-control ${fieldErrors.menu_key ? "is-invalid border-danger" : ""}`}
                         value={values.menu_key}
                         onChange={change("menu_key")}
+                        onBlur={onBlur ? onBlur("menu_key") : undefined}
                         placeholder="e.g. dashboard, user_management"
                         required
                         disabled={loading}
                     />
+                    <FormError error={fieldErrors.menu_key} />
                 </div>
 
                 <div className="col-md-6">
@@ -146,6 +152,7 @@ export default function MenuForm({
                     </label>
 
                     <select
+                        name="parent_id"
                         className="form-select"
                         value={values.parent_id}
                         onChange={change("parent_id")}
@@ -172,12 +179,15 @@ export default function MenuForm({
 
                     <input
                         type="text"
-                        className="form-control"
+                        name="menu_name"
+                        className={`form-control ${fieldErrors.menu_name ? "is-invalid border-danger" : ""}`}
                         value={values.menu_name}
                         onChange={change("menu_name")}
+                        onBlur={onBlur ? onBlur("menu_name") : undefined}
                         required
                         disabled={loading}
                     />
+                    <FormError error={fieldErrors.menu_name} />
                 </div>
 
                 <div className="col-md-6">
@@ -187,13 +197,16 @@ export default function MenuForm({
 
                     <input
                         type="text"
-                        className="form-control"
+                        name="menu_title"
+                        className={`form-control ${fieldErrors.menu_title ? "is-invalid border-danger" : ""}`}
                         value={values.menu_title}
                         onChange={change("menu_title")}
+                        onBlur={onBlur ? onBlur("menu_title") : undefined}
                         placeholder="Label shown in the UI"
                         required
                         disabled={loading}
                     />
+                    <FormError error={fieldErrors.menu_title} />
                 </div>
 
                 <div className="col-md-4">

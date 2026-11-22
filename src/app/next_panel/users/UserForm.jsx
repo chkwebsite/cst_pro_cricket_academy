@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FormError } from "@/app/components/form";
+import { validateEmail, validatePhone, validatePassword } from "@/app/components/form";
 
 const EMPTY_FORM = {
     appointment_no: "",
@@ -34,6 +36,7 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const isEdit = Boolean(id);
 
     // LOAD ACADEMY + BRANCH + ROLE OPTIONS
@@ -181,6 +184,14 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
     const handleChange = (e) => {
         const { name, value } = e.target;
 
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         if (name === "user_type") {
             setFormData((prev) => ({
                 ...prev,
@@ -220,13 +231,64 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
         }));
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "appointment_no" && !formData.appointment_no?.trim()) err = "Appointment number is required.";
+        if (field === "first_name" && !formData.first_name?.trim()) err = "First name is required.";
+        if (field === "user_type" && !formData.user_type) err = "Please select a user type.";
+        if (field === "password") {
+            if (!isEdit && !formData.password) err = "Password is required.";
+            else if (formData.password && formData.password.length < 6) err = "Password must be at least 6 characters.";
+        }
+        if (field === "email" && formData.email) err = validateEmail(formData.email);
+        if (field === "phone" && formData.phone) err = validatePhone(formData.phone);
+        if (err) setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.appointment_no?.trim()) {
+            errors.appointment_no = formData.user_type?.toLowerCase().includes("player")
+                ? "Please select a player record to link."
+                : "Please enter an appointment number.";
+        }
+        if (!formData.first_name?.trim()) errors.first_name = "First name is required.";
+        if (!isEdit && !formData.password) {
+            errors.password = "Password is required.";
+        } else if (formData.password && formData.password.length < 6) {
+            errors.password = "Password must be at least 6 characters long.";
+        }
+        if (!formData.user_type) errors.user_type = "Please select a user type.";
+        if (formData.email && validateEmail(formData.email)) errors.email = validateEmail(formData.email);
+        if (formData.phone && validatePhone(formData.phone)) errors.phone = validatePhone(formData.phone);
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleFileChange = (e) => {
         const file = e.target.files?.[0] || null;
         if (file && file.size > 2 * 1024 * 1024) {
-            setError("Profile image must be less than 2MB");
+            setFieldErrors((prev) => ({ ...prev, profile_image: "Profile image must be less than 2MB." }));
             e.target.value = "";
             setProfileImage(null);
             return;
+        }
+        if (fieldErrors.profile_image) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.profile_image;
+                return next;
+            });
         }
         setProfileImage(file);
     };
@@ -235,26 +297,7 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.first_name.trim()) {
-            setError("First name is required");
-            return;
-        }
-        if (!isEdit && !formData.password) {
-            setError("Password is required");
-            return;
-        }
-        if (!formData.user_type) {
-            setError("Please select a user type");
-            return;
-        }
-        if (!formData.appointment_no) {
-            setError(
-                formData.user_type.toLowerCase().includes("player")
-                    ? "Please select a player record to link"
-                    : "Please select a staff record to link"
-            );
-            return;
-        }
+        if (!validateAll()) return;
 
         try {
             setLoading(true);
@@ -374,31 +417,34 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
                 <form onSubmit={handleSubmit} encType="multipart/form-data">
 
                     <div className="mb-3">
-                        <label className="form-label">Apointment No</label>
+                        <label className="form-label" htmlFor="appointment_no">Appointment No <span className="text-danger ms-1">*</span></label>
                         <input
+                            id="appointment_no"
                             type="text"
                             name="appointment_no"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.appointment_no ? "is-invalid border-danger" : ""}`}
                             value={formData.appointment_no}
                             onChange={handleChange}
+                            onBlur={handleBlur("appointment_no")}
                             readOnly={isEdit}
-                            required
                             autoComplete="off"
-                            placeholder="Enter Apointment No"
+                            placeholder="Enter Appointment No"
                         />
+                        <FormError error={fieldErrors.appointment_no} />
                         {isEdit ? (
-                            <div className="form-text">Apointment No cannot be changed while editing.</div>
+                            <div className="form-text">Appointment No cannot be changed while editing.</div>
                         ) : (
                             <div className={`form-text ${lookupMessage.startsWith("No ") || lookupMessage.startsWith("Unable") ? "text-danger" : "text-success"}`}>
-                                {lookupMessage || "Enter Apointment No to automatically load staff/player details."}
+                                {lookupMessage || "Enter Appointment No to automatically load staff/player details."}
                             </div>
                         )}
                     </div>
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Academy</label>
+                            <label className="form-label" htmlFor="academy_id">Academy</label>
                             <select
+                                id="academy_id"
                                 name="academy_id"
                                 className="form-select"
                                 value={formData.academy_id}
@@ -414,8 +460,9 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
                             </select>
                         </div>
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Branch</label>
+                            <label className="form-label" htmlFor="branch_id">Branch</label>
                             <select
+                                id="branch_id"
                                 name="branch_id"
                                 className="form-select"
                                 value={formData.branch_id}
@@ -437,19 +484,22 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">First Name</label>
+                            <label className="form-label" htmlFor="first_name">First Name <span className="text-danger ms-1">*</span></label>
                             <input
+                                id="first_name"
                                 type="text"
                                 name="first_name"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.first_name ? "is-invalid border-danger" : ""}`}
                                 value={formData.first_name}
                                 onChange={handleChange}
-                                required
+                                onBlur={handleBlur("first_name")}
                             />
+                            <FormError error={fieldErrors.first_name} />
                         </div>
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Last Name</label>
+                            <label className="form-label" htmlFor="last_name">Last Name</label>
                             <input
+                                id="last_name"
                                 type="text"
                                 name="last_name"
                                 className="form-control"
@@ -461,46 +511,55 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Email</label>
+                            <label className="form-label" htmlFor="email">Email</label>
                             <input
+                                id="email"
                                 type="email"
                                 name="email"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.email ? "is-invalid border-danger" : ""}`}
                                 value={formData.email}
                                 onChange={handleChange}
+                                onBlur={handleBlur("email")}
                             />
+                            <FormError error={fieldErrors.email} />
                         </div>
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Phone</label>
+                            <label className="form-label" htmlFor="phone">Phone</label>
                             <input
+                                id="phone"
                                 type="text"
                                 name="phone"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.phone ? "is-invalid border-danger" : ""}`}
                                 value={formData.phone}
                                 onChange={handleChange}
+                                onBlur={handleBlur("phone")}
                             />
+                            <FormError error={fieldErrors.phone} />
                         </div>
                     </div>
 
                     <div className="row">
                         <div className={isPublicRegister ? "col-12 mb-3" : "col-md-6 mb-3"}>
-                            <label className="form-label">
-                                Password {isEdit && <span className="text-muted">(leave blank to keep current)</span>}
+                            <label className="form-label" htmlFor="password">
+                                Password {!isEdit && <span className="text-danger ms-1">*</span>} {isEdit && <span className="text-muted">(leave blank to keep current)</span>}
                             </label>
                             <input
+                                id="password"
                                 type="password"
                                 name="password"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.password ? "is-invalid border-danger" : ""}`}
                                 value={formData.password}
                                 onChange={handleChange}
-                                required={!isEdit}
+                                onBlur={handleBlur("password")}
                                 placeholder={isPublicRegister ? "Create a secure account password" : ""}
                             />
+                            <FormError error={fieldErrors.password} />
                         </div>
                         {!isPublicRegister && (
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Status</label>
+                                <label className="form-label" htmlFor="status">Status</label>
                                 <select
+                                    id="status"
                                     name="status"
                                     className="form-select"
                                     value={formData.status}
@@ -514,14 +573,15 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">User Type</label>
+                        <label className="form-label" htmlFor="user_type">User Type <span className="text-danger ms-1">*</span></label>
                         <select
+                            id="user_type"
                             name="user_type"
-                            className="form-select"
+                            className={`form-select ${fieldErrors.user_type ? "is-invalid border-danger" : ""}`}
                             value={formData.user_type}
                             onChange={handleChange}
+                            onBlur={handleBlur("user_type")}
                             disabled={refLoading}
-                            required
                         >
                             <option value="">
                                 {refLoading ? "Loading user types…" : "Select User Type"}
@@ -538,6 +598,7 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
                                     <option key={r.id} value={r.role_name}>{r.role_name}</option>
                                 ))}
                         </select>
+                        <FormError error={fieldErrors.user_type} />
                     </div>
 
                     {!isEdit && formData.appointment_no && formData.user_type && (
@@ -551,10 +612,11 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
                         <input
                             type="file"
                             name="profile_image"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.profile_image ? "is-invalid border-danger" : ""}`}
                             accept=".jpg,.jpeg,.png,.webp"
                             onChange={handleFileChange}
                         />
+                        <FormError error={fieldErrors.profile_image} />
                         {existingImageUrl && !profileImage && (
                             <div className="mt-2">
                                 <img

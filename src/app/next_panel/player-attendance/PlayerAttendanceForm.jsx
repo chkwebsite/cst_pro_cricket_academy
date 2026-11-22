@@ -296,7 +296,7 @@ export default function PlayerAttendanceForm({ id = null }) {
                         </div>
 
                         <div className="col-12">
-                            <label className="form-label fw-semibold">Remarks (optional)</label>
+                            <label className="form-label fw-semibold">Remarks</label>
                             <textarea
                                 name="remarks"
                                 rows="3"

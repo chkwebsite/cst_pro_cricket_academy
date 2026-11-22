@@ -200,7 +200,7 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
 
                 <form onSubmit={handleSubmit}>
                     <div className="mb-3">
-                        <label className="form-label">Ground</label>
+                        <label className="form-label">Ground <span className="text-danger ms-1">*</span></label>
                         <select
                             className="form-select"
                             value={groundId}
@@ -232,7 +232,7 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
 
                     <div className="mb-3">
                         <label className="form-label">
-                            {isEdit ? "Replace Image (optional)" : "Images"}
+                            {isEdit ? "Replace Image" : <>Images <span className="text-danger ms-1">*</span></>}
                         </label>
                         <input
                             ref={fileInputRef}

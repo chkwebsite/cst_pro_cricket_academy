@@ -108,57 +108,37 @@ export async function PUT(request, { params }) {
             }, { status: 400 });
         }
 
+        const errors = {};
 
         if (!age_group || !age_group.trim()) {
-            return NextResponse.json({
-                success: false,
-                message: "Age group is required"
-            }, { status: 400 });
+            errors.age_group = "Age group name is required.";
         }
-
 
         // =================================================
-        // AGE VALIDATION
+        // AGE VALIDATION (MANDATORY)
         // =================================================
 
-        if (
-            min_age !== undefined &&
-            min_age !== null &&
-            min_age !== "" &&
-            Number(min_age) < 0
-        ) {
-            return NextResponse.json({
-                success: false,
-                message: "Minimum age cannot be negative"
-            }, { status: 400 });
+        if (min_age === undefined || min_age === null || String(min_age).trim() === "") {
+            errors.min_age = "Minimum age is required.";
+        } else if (isNaN(Number(min_age)) || Number(min_age) < 0) {
+            errors.min_age = "Minimum age must be a valid non-negative number.";
         }
 
-
-        if (
-            max_age !== undefined &&
-            max_age !== null &&
-            max_age !== "" &&
-            Number(max_age) < 0
-        ) {
-            return NextResponse.json({
-                success: false,
-                message: "Maximum age cannot be negative"
-            }, { status: 400 });
+        if (max_age === undefined || max_age === null || String(max_age).trim() === "") {
+            errors.max_age = "Maximum age is required.";
+        } else if (isNaN(Number(max_age)) || Number(max_age) < 0) {
+            errors.max_age = "Maximum age must be a valid non-negative number.";
         }
 
+        if (!errors.min_age && !errors.max_age && Number(min_age) > Number(max_age)) {
+            errors.min_age = "Minimum age cannot be greater than maximum age.";
+        }
 
-        if (
-            min_age !== undefined &&
-            min_age !== null &&
-            min_age !== "" &&
-            max_age !== undefined &&
-            max_age !== null &&
-            max_age !== "" &&
-            Number(min_age) > Number(max_age)
-        ) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json({
                 success: false,
-                message: "Minimum age cannot be greater than maximum age"
+                message: Object.values(errors)[0],
+                errors,
             }, { status: 400 });
         }
 
@@ -210,7 +190,8 @@ export async function PUT(request, { params }) {
         if (duplicate.length > 0) {
             return NextResponse.json({
                 success: false,
-                message: "Age group already exists"
+                message: "Age group already exists",
+                errors: { age_group: "Age group already exists." }
             }, { status: 409 });
         }
 
@@ -222,18 +203,18 @@ export async function PUT(request, { params }) {
         await connection.query(
             `
             UPDATE cst_age_groups
-SET
-age_group = ?,
-    min_age = ?,
-    max_age = ?,
-    status = ?
-        WHERE id = ?
+            SET
+                age_group = ?,
+                min_age = ?,
+                max_age = ?,
+                status = ?
+            WHERE id = ?
             `,
             [
                 age_group.trim(),
-                min_age !== undefined && min_age !== "" ? min_age : null,
-                max_age !== undefined && max_age !== "" ? max_age : null,
-                status ?? 1,
+                Number(min_age),
+                Number(max_age),
+                status !== undefined ? Number(status) : 1,
                 id
             ]
         );

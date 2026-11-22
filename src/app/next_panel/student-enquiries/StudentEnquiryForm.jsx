@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ENQUIRY_SOURCES, ENQUIRY_STATUSES } from "./enquiryHelpers";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     academy_id: 1,
@@ -33,6 +34,7 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
 
     // Load master options (academies, branches, programs, staff)
@@ -104,7 +106,31 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
         setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        if (name === "student_name" && !value?.trim()) {
+            setFieldErrors((prev) => ({ ...prev, student_name: "Student name is required." }));
+        }
+        if (name === "phone") {
+            if (!value?.trim()) {
+                setFieldErrors((prev) => ({ ...prev, phone: "Phone number is required." }));
+            } else if (!/^[0-9+\s\-()]{7,20}$/.test(value.trim())) {
+                setFieldErrors((prev) => ({ ...prev, phone: "Please enter a valid phone number." }));
+            }
+        }
+        if (name === "email" && value?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+            setFieldErrors((prev) => ({ ...prev, email: "Please enter a valid email address." }));
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -112,13 +138,27 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
         setError("");
         setSuccessMsg("");
 
+        const errs = {};
         if (!formData.student_name?.trim()) {
-            setError("Student name is required.");
-            return;
+            errs.student_name = "Student name is required.";
+        }
+        if (!formData.phone?.trim()) {
+            errs.phone = "Phone number is required.";
+        } else if (!/^[0-9+\s\-()]{7,20}$/.test(formData.phone.trim())) {
+            errs.phone = "Please enter a valid phone number.";
+        }
+        if (formData.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+            errs.email = "Please enter a valid email address.";
         }
 
-        if (!formData.phone?.trim()) {
-            setError("Phone number is required.");
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
             return;
         }
 
@@ -149,6 +189,15 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
 
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save student enquiry");
             }
 
@@ -172,7 +221,7 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
     }
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
             {error && <div className="alert alert-danger">{error}</div>}
             {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
@@ -180,17 +229,18 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
                 {/* Student Name */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Student Name <span className="text-danger">*</span>
+                        Student Name <span style={{ color: "#dc3545" }}>*</span>
                     </label>
                     <input
                         type="text"
                         name="student_name"
-                        className="form-control"
+                        className={`form-control ${fieldErrors.student_name ? "is-invalid border-danger" : ""}`}
                         placeholder="e.g. Aarav Mehta"
                         value={formData.student_name}
                         onChange={handleChange}
-                        required
+                        onBlur={handleBlur}
                     />
+                    <FormError error={fieldErrors.student_name} />
                 </div>
 
                 {/* Age */}
@@ -228,17 +278,18 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
                 {/* Phone */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Phone Number <span className="text-danger">*</span>
+                        Phone Number <span style={{ color: "#dc3545" }}>*</span>
                     </label>
                     <input
                         type="tel"
                         name="phone"
-                        className="form-control"
+                        className={`form-control ${fieldErrors.phone ? "is-invalid border-danger" : ""}`}
                         placeholder="e.g. +91 9876543210"
                         value={formData.phone}
                         onChange={handleChange}
-                        required
+                        onBlur={handleBlur}
                     />
+                    <FormError error={fieldErrors.phone} />
                 </div>
 
                 {/* Email */}
@@ -247,11 +298,13 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
                     <input
                         type="email"
                         name="email"
-                        className="form-control"
+                        className={`form-control ${fieldErrors.email ? "is-invalid border-danger" : ""}`}
                         placeholder="e.g. parent@example.com"
                         value={formData.email}
                         onChange={handleChange}
+                        onBlur={handleBlur}
                     />
+                    <FormError error={fieldErrors.email} />
                 </div>
 
                 {/* Academy & Branch */}
@@ -279,7 +332,7 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
                         value={formData.branch_id}
                         onChange={handleChange}
                     >
-                        <option value="">Select Branch (Optional)</option>
+                        <option value="">Select Branch</option>
                         {filteredBranches.map((b) => (
                             <option key={b.id} value={b.id}>
                                 {b.branch_name} {b.city ? `(${b.city})` : ""}
@@ -297,7 +350,7 @@ export default function StudentEnquiryForm({ id = null, returnTo = "/next_panel/
                         value={formData.program_id}
                         onChange={handleChange}
                     >
-                        <option value="">Select Program (Optional)</option>
+                        <option value="">Select Program</option>
                         {programs.map((p) => (
                             <option key={p.id} value={p.id}>
                                 {p.program_name}

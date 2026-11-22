@@ -638,7 +638,7 @@ export default function GroundBookingForm({
                     {/* Ground / slot / date */}
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Ground</label>
+                            <label className="form-label">Ground <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="ground_id"
                                 className="form-select"
@@ -654,7 +654,7 @@ export default function GroundBookingForm({
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Slot</label>
+                            <label className="form-label">Slot <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="slot_id"
                                 className="form-select"
@@ -677,7 +677,7 @@ export default function GroundBookingForm({
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Booking Date</label>
+                            <label className="form-label">Booking Date <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="date"
                                 name="booking_date"
@@ -692,7 +692,7 @@ export default function GroundBookingForm({
                     {/* Customer */}
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Customer Name</label>
+                            <label className="form-label">Customer Name <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="text"
                                 name="customer_name"
@@ -705,7 +705,7 @@ export default function GroundBookingForm({
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Phone (optional)</label>
+                            <label className="form-label">Phone</label>
                             <input
                                 type="tel"
                                 name="customer_phone"
@@ -717,7 +717,7 @@ export default function GroundBookingForm({
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Email (optional)</label>
+                            <label className="form-label">Email</label>
                             <input
                                 type="email"
                                 name="customer_email"
@@ -732,7 +732,7 @@ export default function GroundBookingForm({
                     {/* Purpose / links */}
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Purpose</label>
+                            <label className="form-label">Purpose <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="purpose"
                                 className="form-select"
@@ -747,7 +747,7 @@ export default function GroundBookingForm({
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Match ID (optional)</label>
+                            <label className="form-label">Match ID</label>
                             <select
                                 name="match_id"
                                 className="form-select"
@@ -767,7 +767,7 @@ export default function GroundBookingForm({
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Tournament ID (optional)</label>
+                            <label className="form-label">Tournament ID</label>
                             <select
                                 name="tournament_id"
                                 className="form-select"
@@ -857,7 +857,7 @@ export default function GroundBookingForm({
                     {/* Payment */}
                     <div className="row">
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Total Amount (₹)</label>
+                            <label className="form-label">Total Amount (₹) <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="number"
                                 name="total_amount"
@@ -908,7 +908,7 @@ export default function GroundBookingForm({
                     {Number(formData.paid_amount) > 0 && (
                         <div className="row">
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">Payment Mode</label>
+                                <label className="form-label">Payment Mode <span className="text-danger ms-1">*</span></label>
                                 <select
                                     name="payment_mode"
                                     className="form-select"
@@ -922,7 +922,7 @@ export default function GroundBookingForm({
                             </div>
 
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">Transaction No (optional)</label>
+                                <label className="form-label">Transaction No</label>
                                 <input
                                     type="text"
                                     name="transaction_no"
@@ -943,7 +943,7 @@ export default function GroundBookingForm({
                     )}
 
                     <div className="mb-3">
-                        <label className="form-label">Remarks (optional)</label>
+                        <label className="form-label">Remarks</label>
                         <textarea
                             name="remarks"
                             className="form-control"

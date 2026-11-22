@@ -554,7 +554,7 @@ export default function FeeStatusForm({ id = null }) {
 
     const idInput = (name) => (
         <div className="col-md-4 mb-3" key={name}>
-            <label className="form-label">{REF_LABELS[name]}</label>
+            <label className="form-label">{REF_LABELS[name]} <span className="text-danger ms-1">*</span></label>
             <input type="number" min="1" name={name} className="form-control" value={formData[name]} onChange={handleChange} required />
         </div>
     );
@@ -571,7 +571,7 @@ export default function FeeStatusForm({ id = null }) {
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Academy</label>
+                            <label className="form-label">Academy <span className="text-danger ms-1">*</span></label>
                             <select name="academy_id" className="form-select" value={academyValue} onChange={handleChange} disabled={hasAssignedAcademy} required>
                                 <option value="">Select Academy</option>
                                 {academies.map((a) => (
@@ -581,7 +581,7 @@ export default function FeeStatusForm({ id = null }) {
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Branch (optional)</label>
+                            <label className="form-label">Branch</label>
                             <select name="branch_id" className="form-select" value={formData.branch_id} onChange={handleChange} disabled={!academyValue}>
                                 <option value="">{academyValue ? "Select Branch" : "Select an academy first"}</option>
                                 {branches.map((b) => (
@@ -591,7 +591,7 @@ export default function FeeStatusForm({ id = null }) {
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Fee Type</label>
+                            <label className="form-label">Fee Type <span className="text-danger ms-1">*</span></label>
                             <select name="fee_type" className="form-select" value={formData.fee_type} onChange={handleChange}>
                                 {FEE_TYPES.map((t) => (
                                     <option key={t} value={t}>{t}</option>
@@ -606,7 +606,7 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "tournament_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Tournament</label>
+                                            <label className="form-label">Tournament <span className="text-danger ms-1">*</span></label>
                                             <select name="tournament_id" className="form-select" value={formData.tournament_id} onChange={handleChange} required>
                                                 <option value="">Choose Tournament</option>
                                                 {tournaments
@@ -622,7 +622,7 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "tournament_team_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Tournament Team</label>
+                                            <label className="form-label">Tournament Team <span className="text-danger ms-1">*</span></label>
                                             <select
                                                 name="tournament_team_id"
                                                 className="form-select"
@@ -662,7 +662,7 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "tournament_team_player_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Tournament Team Player</label>
+                                            <label className="form-label">Tournament Team Player <span className="text-danger ms-1">*</span></label>
                                             <select
                                                 name="tournament_team_player_id"
                                                 className="form-select"
@@ -710,7 +710,7 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "match_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Match</label>
+                                            <label className="form-label">Match <span className="text-danger ms-1">*</span></label>
                                             <select name="match_id" className="form-select" value={formData.match_id} onChange={handleChange} required>
                                                 <option value="">Choose Match</option>
                                                 {matches.map((m) => (
@@ -726,7 +726,7 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "match_team_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Match Team</label>
+                                            <label className="form-label">Match Team <span className="text-danger ms-1">*</span></label>
                                             <select
                                                 name="match_team_id"
                                                 className="form-select"
@@ -764,7 +764,7 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "match_player_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Match Player</label>
+                                            <label className="form-label">Match Player <span className="text-danger ms-1">*</span></label>
                                             <select
                                                 name="match_player_id"
                                                 className="form-select"
@@ -819,7 +819,7 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "ground_booking_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Ground Booking</label>
+                                            <label className="form-label">Ground Booking <span className="text-danger ms-1">*</span></label>
                                             <select
                                                 name="ground_booking_id"
                                                 className="form-select"
@@ -860,7 +860,7 @@ export default function FeeStatusForm({ id = null }) {
                         </div>
                         {formData.payer_type === "user_id" && (
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">User ID (optional)</label>
+                                <label className="form-label">User ID</label>
                                 <select
                                     name="payer_id"
                                     className="form-select"
@@ -894,7 +894,7 @@ export default function FeeStatusForm({ id = null }) {
                         )}
                         {formData.payer_type === "outside_player_id" && (
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">Outside Player ID (optional)</label>
+                                <label className="form-label">Outside Player ID</label>
                                 <select
                                     name="payer_id"
                                     className="form-select"
@@ -923,7 +923,7 @@ export default function FeeStatusForm({ id = null }) {
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Fee Amount (₹)</label>
+                            <label className="form-label">Fee Amount (₹) <span className="text-danger ms-1">*</span></label>
                             <input type="number" min="0" step="0.01" name="fee_amount" className="form-control" value={formData.fee_amount} onChange={handleChange} required />
                         </div>
                         <div className="col-md-4 mb-3">
@@ -943,7 +943,7 @@ export default function FeeStatusForm({ id = null }) {
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Remarks (optional)</label>
+                        <label className="form-label">Remarks</label>
                         <textarea name="remarks" rows="3" className="form-control" value={formData.remarks} onChange={handleChange} placeholder="Enter remarks" />
                     </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const emptyUserProgram = {
     user_id: "",
@@ -40,7 +41,7 @@ async function readJson(res) {
     try { return JSON.parse(text); } catch { return { message: text }; }
 }
 
-export default function UserProgramForm({ formId, values, onChange, onSubmit, error, loading = false }) {
+export default function UserProgramForm({ formId, values, onChange, onSubmit, error, fieldErrors = {}, onBlur = () => () => {}, loading = false }) {
     const [users, setUsers] = useState([]);
     const [programs, setPrograms] = useState([]);
     const [branches, setBranches] = useState([]);
@@ -118,49 +119,79 @@ export default function UserProgramForm({ formId, values, onChange, onSubmit, er
     };
 
     return (
-        <form id={formId} onSubmit={onSubmit}>
+        <form id={formId} onSubmit={onSubmit} noValidate>
             {error && <div className="alert alert-danger">{error}</div>}
             {optionsError && <div className="alert alert-warning">{optionsError}</div>}
             <div className="row g-3">
                 <div className="col-md-6">
-                    <label className="form-label">User</label>
-                    <select className="form-select" value={values.user_id} onChange={handleUserChange} disabled={loading}>
+                    <label className="form-label fw-semibold">User</label>
+                    <select name="user_id" className="form-select" value={values.user_id} onChange={handleUserChange} disabled={loading}>
                         <option value="">Select user</option>
                         {users.filter(u => u.user_type === "Player").map(u => <option key={u.id} value={u.id}>{[u.first_name, u.last_name].filter(Boolean).join(" ") || `User #${u.id}`} ({u.appointment_no || u.apointment_no || u.email || u.id})</option>)}
                     </select>
                 </div>
                 <div className="col-md-6">
-                    <label className="form-label">Admission Player <span className="text-danger">*</span></label>
-                    <select className="form-select" value={values.admission_players_id} onChange={handlePlayerChange} required disabled={loading}>
+                    <label className="form-label fw-semibold">
+                        Admission Player <span style={{ color: "#dc3545" }}>*</span>
+                    </label>
+                    <select
+                        name="admission_players_id"
+                        className={`form-select ${fieldErrors.admission_players_id ? "is-invalid border-danger" : ""}`}
+                        value={values.admission_players_id}
+                        onChange={handlePlayerChange}
+                        onBlur={onBlur("admission_players_id")}
+                        disabled={loading}
+                    >
                         <option value="">Select admission player</option>
                         {players.map(p => <option key={p.id} value={p.id}>{[p.first_name, p.last_name].filter(Boolean).join(" ") || p.name || `Player #${p.id}`} (#{p.id})</option>)}
                     </select>
+                    <FormError error={fieldErrors.admission_players_id} />
                 </div>
                 <div className="col-md-6">
-                    <label className="form-label">Program <span className="text-danger">*</span></label>
-                    <select className="form-select" value={values.program_id} onChange={change("program_id")} required disabled={loading}>
+                    <label className="form-label fw-semibold">
+                        Program <span style={{ color: "#dc3545" }}>*</span>
+                    </label>
+                    <select
+                        name="program_id"
+                        className={`form-select ${fieldErrors.program_id ? "is-invalid border-danger" : ""}`}
+                        value={values.program_id}
+                        onChange={change("program_id")}
+                        onBlur={onBlur("program_id")}
+                        disabled={loading}
+                    >
                         <option value="">Select program</option>
                         {programs.map(p => <option key={p.id} value={p.id}>{p.program_name || p.name || `Program #${p.id}`}</option>)}
                     </select>
+                    <FormError error={fieldErrors.program_id} />
                 </div>
                 <div className="col-md-6">
-                    <label className="form-label">Branch <span className="text-danger">*</span></label>
-                    <select className="form-select" value={values.branch_id} onChange={change("branch_id")} required disabled={loading}>
+                    <label className="form-label fw-semibold">
+                        Branch <span style={{ color: "#dc3545" }}>*</span>
+                    </label>
+                    <select
+                        name="branch_id"
+                        className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
+                        value={values.branch_id}
+                        onChange={change("branch_id")}
+                        onBlur={onBlur("branch_id")}
+                        disabled={loading}
+                    >
                         <option value="">Select branch</option>
                         {branches.map(b => <option key={b.id} value={b.id}>{b.branch_name} ({b.branch_code})</option>)}
                     </select>
+                    <FormError error={fieldErrors.branch_id} />
                 </div>
                 <div className="col-md-4">
-                    <label className="form-label">Start Date</label>
-                    <input type="date" className="form-control" value={values.start_date || ""} onChange={change("start_date")} disabled={loading} />
+                    <label className="form-label fw-semibold">Start Date</label>
+                    <input type="date" name="start_date" className="form-control" value={values.start_date || ""} onChange={change("start_date")} disabled={loading} />
                 </div>
                 <div className="col-md-4">
-                    <label className="form-label">End Date</label>
-                    <input type="date" className="form-control" value={values.end_date || ""} onChange={change("end_date")} disabled={loading} />
+                    <label className="form-label fw-semibold">End Date</label>
+                    <input type="date" name="end_date" className="form-control" value={values.end_date || ""} onChange={change("end_date")} disabled={loading} />
                 </div>
                 <div className="col-md-4">
-                    <label className="form-label">Status</label>
-                    <select className="form-select" value={values.status} onChange={change("status")} disabled={loading}>
+                    <label className="form-label fw-semibold">Status</label>
+                    <select name="status" className="form-select" value={values.status} onChange={change("status")} disabled={loading}>
                         <option value={1}>Active</option><option value={0}>Inactive</option>
                     </select>
                 </div>
@@ -176,7 +207,7 @@ export default function UserProgramForm({ formId, values, onChange, onSubmit, er
                     return (
                         <div className="col-12 mt-3">
                             <div className="card bg-light border-0 p-3">
-                                <h6 className="fw-bold mb-2">Program Fee & Initial Payment (Optional)</h6>
+                                <h6 className="fw-bold mb-2">Program Fee & Initial Payment</h6>
                                 {selProg ? (
                                     <div className="small text-muted mb-3 d-flex flex-wrap gap-3">
                                         <span>Program Fee: <strong>₹{feeAmt.toFixed(2)}</strong></span>

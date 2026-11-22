@@ -276,7 +276,7 @@ export default function RolePermissionForm({ id = null }) {
                 <form onSubmit={handleSubmit}>
                     {/* Role */}
                     <div className="mb-4" style={{ maxWidth: 420 }}>
-                        <label className="form-label fw-semibold">Role</label>
+                        <label className="form-label fw-semibold">Role <span className="text-danger ms-1">*</span></label>
                         <select
                             className="form-select"
                             value={roleId}
@@ -299,7 +299,7 @@ export default function RolePermissionForm({ id = null }) {
                     <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
                         <div>
                             <label className="form-label fw-semibold mb-0">
-                                Permissions{" "}
+                                Permissions <span className="text-danger ms-1">*</span>{" "}
                                 <span className="badge text-bg-primary ms-1">
                                     {selectedIds.length} selected
                                 </span>

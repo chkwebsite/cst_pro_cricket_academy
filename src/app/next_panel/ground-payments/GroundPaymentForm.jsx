@@ -180,7 +180,7 @@ export default function GroundPaymentForm({ id = null }) {
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Booking ID / Booking No.</label>
+                            <label className="form-label">Booking ID / Booking No. <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="booking_id"
                                 className="form-select"
@@ -210,7 +210,7 @@ export default function GroundPaymentForm({ id = null }) {
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Payment Date</label>
+                            <label className="form-label">Payment Date <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="date"
                                 name="payment_date"
@@ -224,7 +224,7 @@ export default function GroundPaymentForm({ id = null }) {
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Amount (₹)</label>
+                            <label className="form-label">Amount (₹) <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="number"
                                 min="0.01"
@@ -239,7 +239,7 @@ export default function GroundPaymentForm({ id = null }) {
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Payment Mode</label>
+                            <label className="form-label">Payment Mode <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="payment_mode"
                                 className="form-select"
@@ -254,7 +254,7 @@ export default function GroundPaymentForm({ id = null }) {
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Transaction No. (optional)</label>
+                        <label className="form-label">Transaction No.</label>
                         <input
                             type="text"
                             name="transaction_no"
@@ -266,7 +266,7 @@ export default function GroundPaymentForm({ id = null }) {
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Remarks (optional)</label>
+                        <label className="form-label">Remarks</label>
                         <textarea
                             name="remarks"
                             className="form-control"

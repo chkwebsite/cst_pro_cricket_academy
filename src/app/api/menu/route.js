@@ -417,31 +417,17 @@ export async function POST(request) {
         } = body;
 
         // Required validation
-        if (!menu_key) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "menu_key is required",
-                },
-                { status: 400 }
-            );
-        }
+        const errors = {};
+        if (!menu_key?.trim()) errors.menu_key = "Menu key is required.";
+        if (!menu_name?.trim()) errors.menu_name = "Menu name is required.";
+        if (!menu_title?.trim()) errors.menu_title = "Menu title is required.";
 
-        if (!menu_name) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "menu_name is required",
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!menu_title) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "menu_title is required",
+                    message: "Validation failed",
+                    errors,
                 },
                 { status: 400 }
             );
@@ -481,6 +467,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "menu_key already exists",
+                    errors: { menu_key: "Menu key already exists." },
                 },
                 { status: 409 }
             );

@@ -303,41 +303,18 @@ export async function POST(request) {
         // VALIDATION
         // ==========================================
 
-        if (!branch_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Branch ID is required"
-                },
-                { status: 400 }
-            );
-        }
+        const errors = {};
+        if (!branch_id) errors.branch_id = "Please select a branch.";
+        if (!tournament_name || !tournament_name.trim()) errors.tournament_name = "Tournament name is required.";
+        if (!tournament_code || !tournament_code.trim()) errors.tournament_code = "Tournament code is required.";
+        if (!start_date) errors.start_date = "Start date is required.";
 
-        if (!tournament_name || !tournament_name.trim()) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Tournament name is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!tournament_code || !tournament_code.trim()) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Tournament code is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!start_date) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Start date is required"
+                    message: "Validation failed",
+                    errors,
                 },
                 { status: 400 }
             );
@@ -446,7 +423,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Tournament code already exists"
+                    message: "Tournament code already exists",
+                    errors: { tournament_code: "Tournament code already exists in this academy." }
                 },
                 { status: 409 }
             );
@@ -460,7 +438,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "End date cannot be before start date"
+                    message: "End date cannot be before start date",
+                    errors: { end_date: "End date cannot be before start date." }
                 },
                 { status: 400 }
             );

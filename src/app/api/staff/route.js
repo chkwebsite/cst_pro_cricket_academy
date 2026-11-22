@@ -187,16 +187,43 @@ export async function POST(request) {
 
         // ---------------- VALIDATION ----------------
         if (!first_name || !String(first_name).trim()) {
-            return NextResponse.json({ success: false, message: "First name is required" }, { status: 400 });
+            return NextResponse.json({ success: false, message: "First name is required", errors: { first_name: "First name is required." } }, { status: 400 });
         }
         if (!academy_id) {
-            return NextResponse.json({ success: false, message: "Academy is required" }, { status: 400 });
+            return NextResponse.json({ success: false, message: "Academy is required", errors: { academy_id: "Please select an academy." } }, { status: 400 });
         }
         if (!branch_id) {
-            return NextResponse.json({ success: false, message: "Branch is required" }, { status: 400 });
+            return NextResponse.json({ success: false, message: "Branch is required", errors: { branch_id: "Please select a branch." } }, { status: 400 });
         }
         if (!role_id) {
-            return NextResponse.json({ success: false, message: "Role is required" }, { status: 400 });
+            return NextResponse.json({ success: false, message: "Role is required", errors: { role_id: "Please select a role." } }, { status: 400 });
+        }
+        if (!gender || !["male", "female", "other"].includes(String(gender).toLowerCase())) {
+            return NextResponse.json({ success: false, message: "Please select a gender", errors: { gender: "Please select a gender." } }, { status: 400 });
+        }
+        if (!dob || !String(dob).trim()) {
+            return NextResponse.json({ success: false, message: "Date of birth is required", errors: { dob: "Date of birth is required." } }, { status: 400 });
+        }
+        if (!speciality || !String(speciality).trim()) {
+            return NextResponse.json({ success: false, message: "Speciality is required", errors: { speciality: "Speciality is required." } }, { status: 400 });
+        }
+        if (experience === undefined || experience === null || String(experience).trim() === "") {
+            return NextResponse.json({ success: false, message: "Experience is required", errors: { experience: "Experience is required." } }, { status: 400 });
+        }
+        if (isNaN(Number(experience)) || Number(experience) < 0) {
+            return NextResponse.json({ success: false, message: "Experience must be a valid non-negative number", errors: { experience: "Experience must be a valid non-negative number." } }, { status: 400 });
+        }
+        if (last_salary === undefined || last_salary === null || String(last_salary).trim() === "") {
+            return NextResponse.json({ success: false, message: "Last salary is required", errors: { last_salary: "Last salary is required." } }, { status: 400 });
+        }
+        if (isNaN(Number(last_salary)) || Number(last_salary) < 0) {
+            return NextResponse.json({ success: false, message: "Last salary must be a valid non-negative number", errors: { last_salary: "Last salary must be a valid non-negative number." } }, { status: 400 });
+        }
+        if (!date_of_joining || !String(date_of_joining).trim()) {
+            return NextResponse.json({ success: false, message: "Date of joining is required", errors: { date_of_joining: "Date of joining is required." } }, { status: 400 });
+        }
+        if (!date_of_appointment || !String(date_of_appointment).trim()) {
+            return NextResponse.json({ success: false, message: "Date of appointment is required", errors: { date_of_appointment: "Date of appointment is required." } }, { status: 400 });
         }
 
         await connection.beginTransaction();
@@ -252,18 +279,18 @@ export async function POST(request) {
                 last_name || null,
                 father_name || null,
                 mother_name || null,
-                gender || null,
-                speciality || null,
-                toNumberOrNull(experience),
+                gender,
+                speciality.trim(),
+                Number(experience),
                 previous_academy || null,
                 toNumberOrNull(previous_academy_duration),
                 qualification || null,
                 achievement || null,
-                toNumberOrZero(last_salary),
+                Number(last_salary),
                 toNumberOrZero(current_salary),
-                dob || null,
-                date_of_joining || null,
-                date_of_appointment || null,
+                dob,
+                date_of_joining,
+                date_of_appointment,
                 status !== undefined && status !== null && status !== "" ? Number(status) : 1,
             ]
         );

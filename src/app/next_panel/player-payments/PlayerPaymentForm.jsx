@@ -454,7 +454,7 @@ export default function PlayerPaymentForm({
                                         className="form-control"
                                         placeholder={
                                             paymentMode === "Cash"
-                                                ? "Optional cash voucher / receipt #"
+                                                ? "Cash voucher / receipt #"
                                                 : "UPI Ref / UTR / Cheque No / Card Auth"
                                         }
                                         value={transactionNo}
@@ -468,7 +468,7 @@ export default function PlayerPaymentForm({
                                     <textarea
                                         rows="2"
                                         className="form-control"
-                                        placeholder="Optional notes or remarks..."
+                                        placeholder="Notes or remarks..."
                                         value={remarks}
                                         onChange={(e) => setRemarks(e.target.value)}
                                     />

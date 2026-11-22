@@ -221,13 +221,73 @@ export async function PUT(request, { params }) {
         const status = formData.get("status");
         const profileImage = formData.get("profile_image");
 
-        // REQUIRED PLAYER NAME
+        // REQUIRED FIELDS VALIDATION (player_name, date_of_birth, age_group_id, phone, email)
         if (!player_name || !player_name.toString().trim()) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Player name is required"
-                },
+                { success: false, message: "Player name is required", errors: { player_name: "Player name is required." } },
+                { status: 400 }
+            );
+        }
+
+        if (!date_of_birth || !date_of_birth.toString().trim()) {
+            return NextResponse.json(
+                { success: false, message: "Date of birth is required", errors: { date_of_birth: "Date of birth is required." } },
+                { status: 400 }
+            );
+        }
+
+        const dobStr = date_of_birth.toString().trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dobStr) || isNaN(Date.parse(dobStr))) {
+            return NextResponse.json(
+                { success: false, message: "Invalid date of birth format (must be YYYY-MM-DD)", errors: { date_of_birth: "Invalid date format (must be YYYY-MM-DD)." } },
+                { status: 400 }
+            );
+        }
+
+        if (!age_group_id || !age_group_id.toString().trim() || isNaN(Number(age_group_id)) || Number(age_group_id) <= 0) {
+            return NextResponse.json(
+                { success: false, message: "Age group is required", errors: { age_group_id: "Please select an age group." } },
+                { status: 400 }
+            );
+        }
+
+        const [ageGroupCheck] = await connection.query(
+            "SELECT id FROM cst_age_groups WHERE id = ? LIMIT 1",
+            [Number(age_group_id)]
+        );
+        if (ageGroupCheck.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "Invalid age group selected", errors: { age_group_id: "Invalid age group selected." } },
+                { status: 400 }
+            );
+        }
+
+        if (!phone || !phone.toString().trim()) {
+            return NextResponse.json(
+                { success: false, message: "Phone number is required", errors: { phone: "Phone number is required." } },
+                { status: 400 }
+            );
+        }
+
+        const cleanPhone = phone.toString().trim();
+        if (!/^\d{10,15}$/.test(cleanPhone.replace(/[\s+-]/g, ""))) {
+            return NextResponse.json(
+                { success: false, message: "Phone number must be between 10 and 15 digits", errors: { phone: "Please enter a valid phone number (10-15 digits)." } },
+                { status: 400 }
+            );
+        }
+
+        if (!email || !email.toString().trim()) {
+            return NextResponse.json(
+                { success: false, message: "Email is required", errors: { email: "Email is required." } },
+                { status: 400 }
+            );
+        }
+
+        const cleanEmail = email.toString().trim().toLowerCase();
+        if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+            return NextResponse.json(
+                { success: false, message: "Please enter a valid email address", errors: { email: "Please enter a valid email address." } },
                 { status: 400 }
             );
         }
@@ -300,33 +360,31 @@ export async function PUT(request, { params }) {
         }
 
         // CHECK EMAIL DUPLICATE WITHIN ACADEMY
-        if (email && email.toString().trim()) {
-            const [existingEmail] = await connection.query(
-                `
-                SELECT id
-                FROM cst_outside_players
-                WHERE email = ?
-                AND academy_id = ?
-                AND id != ?
-                AND is_deleted = 0
-                LIMIT 1
-                `,
-                [
-                    email.toString().trim(),
-                    targetAcademyId,
-                    playerId
-                ]
-            );
+        const [existingEmail] = await connection.query(
+            `
+            SELECT id
+            FROM cst_outside_players
+            WHERE LOWER(email) = LOWER(?)
+            AND academy_id = ?
+            AND id != ?
+            AND is_deleted = 0
+            LIMIT 1
+            `,
+            [
+                cleanEmail,
+                targetAcademyId,
+                playerId
+            ]
+        );
 
-            if (existingEmail.length > 0) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Email already exists in this academy"
-                    },
-                    { status: 409 }
-                );
-            }
+        if (existingEmail.length > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Email already exists in this academy"
+                },
+                { status: 409 }
+            );
         }
 
         let profileImagePath = existingPlayer.profile_image;
@@ -432,10 +490,10 @@ export async function PUT(request, { params }) {
                 targetAcademyId,
                 targetBranchId || null,
                 player_name.toString().trim(),
-                age_group_id || null,
-                phone ? phone.toString().trim() : null,
-                email ? email.toString().trim() : null,
-                date_of_birth || null,
+                Number(age_group_id),
+                cleanPhone,
+                cleanEmail,
+                dobStr,
                 gender ? gender.toString().trim() : null,
                 batting_style
                     ? batting_style.toString().trim()

@@ -180,15 +180,26 @@ export async function POST(request) {
             academy_id = 1;
         }
 
-        // Required fields
-        if (
-            !student_name?.trim() ||
-            !phone?.trim()
-        ) {
+        // Required fields and structured validation
+        const errors = {};
+        if (!student_name?.trim()) {
+            errors.student_name = "Student name is required.";
+        }
+        if (!phone?.trim()) {
+            errors.phone = "Phone number is required.";
+        } else if (!/^[0-9+\s\-()]{7,20}$/.test(phone.trim())) {
+            errors.phone = "Please enter a valid phone number.";
+        }
+        if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            errors.email = "Please enter a valid email address.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Student name and phone are required",
+                    message: "Validation failed",
+                    errors,
                 },
                 { status: 400 }
             );

@@ -738,7 +738,7 @@ export default function ProductsPage() {
                                     <div className="row g-3">
                                         {isSuperAdmin ? (
                                             <div className="col-12">
-                                                <label className="form-label small fw-semibold text-secondary">Academy *</label>
+                                                <label className="form-label small fw-semibold text-secondary">Academy <span className="text-danger ms-1">*</span></label>
                                                 <select
                                                     className="form-select"
                                                     required
@@ -762,7 +762,7 @@ export default function ProductsPage() {
                                         )}
 
                                         <div className="col-md-8">
-                                            <label className="form-label small fw-semibold text-secondary">Product Name *</label>
+                                            <label className="form-label small fw-semibold text-secondary">Product Name <span className="text-danger ms-1">*</span></label>
                                             <input
                                                 type="text"
                                                 className="form-control"
@@ -774,7 +774,7 @@ export default function ProductsPage() {
                                         </div>
 
                                         <div className="col-md-4">
-                                            <label className="form-label small fw-semibold text-secondary">Category *</label>
+                                            <label className="form-label small fw-semibold text-secondary">Category <span className="text-danger ms-1">*</span></label>
                                             <select
                                                 className="form-select"
                                                 required
@@ -800,7 +800,7 @@ export default function ProductsPage() {
                                         </div>
 
                                         <div className="col-md-6">
-                                            <label className="form-label small fw-semibold text-secondary">Slug (URL friendly) *</label>
+                                            <label className="form-label small fw-semibold text-secondary">Slug (URL friendly) <span className="text-danger ms-1">*</span></label>
                                             <input
                                                 type="text"
                                                 className="form-control"
@@ -811,7 +811,7 @@ export default function ProductsPage() {
                                         </div>
 
                                         <div className="col-md-4">
-                                            <label className="form-label small fw-semibold text-secondary">Regular Price (₹) *</label>
+                                            <label className="form-label small fw-semibold text-secondary">Regular Price (₹) <span className="text-danger ms-1">*</span></label>
                                             <input
                                                 type="number"
                                                 step="0.01"
@@ -825,7 +825,7 @@ export default function ProductsPage() {
                                         </div>
 
                                         <div className="col-md-4">
-                                            <label className="form-label small fw-semibold text-secondary">Sale Price (₹ optional)</label>
+                                            <label className="form-label small fw-semibold text-secondary">Sale Price (₹)</label>
                                             <input
                                                 type="number"
                                                 step="0.01"

@@ -342,7 +342,7 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
 
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Calendar size={15} /> End Date (Optional)
+                                <Calendar size={15} /> End Date
                             </label>
                             <input
                                 type="date"
@@ -362,7 +362,7 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
                         <textarea
                             className="form-control"
                             rows={3}
-                            placeholder="Optional notes regarding player progress, kit allotment, timing adjustment, or reason for transfer."
+                            placeholder="Notes regarding player progress, kit allotment, timing adjustment, or reason for transfer."
                             value={remarks}
                             onChange={(e) => setRemarks(e.target.value)}
                         />

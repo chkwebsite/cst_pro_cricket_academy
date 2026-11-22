@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     academy_id: "",
@@ -33,6 +34,7 @@ export default function ProgramForm({ id = null }) {
     const [fetching, setFetching] = useState(false);
     const [academiesLoading, setAcademiesLoading] = useState(true);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const isEdit = Boolean(id);
 
     // LOAD ACADEMIES (once)
@@ -131,6 +133,14 @@ export default function ProgramForm({ id = null }) {
     const handleChange = (e) => {
         const { name, value } = e.target;
 
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         if (name === "academy_id") {
             // changing academy invalidates the previously selected branch
             setFormData((prev) => ({
@@ -155,18 +165,77 @@ export default function ProgramForm({ id = null }) {
         }));
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "academy_id" && !formData.academy_id) err = "Please select an academy.";
+        if (field === "program_name" && !formData.program_name?.trim()) err = "Program name is required.";
+        if (field === "program_fee") {
+            if (formData.program_fee === "" || formData.program_fee === null || formData.program_fee === undefined) {
+                err = "Program fee is required.";
+            } else if (isNaN(Number(formData.program_fee))) {
+                err = "Program fee must be a valid number.";
+            } else if (Number(formData.program_fee) < 0) {
+                err = "Program fee cannot be negative.";
+            }
+        }
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        if (!formData.academy_id) errs.academy_id = "Please select an academy.";
+        if (!formData.program_name?.trim()) errs.program_name = "Program name is required.";
+        if (formData.program_fee === "" || formData.program_fee === null || formData.program_fee === undefined) {
+            errs.program_fee = "Program fee is required.";
+        } else if (isNaN(Number(formData.program_fee))) {
+            errs.program_fee = "Program fee must be a valid number.";
+        } else if (Number(formData.program_fee) < 0) {
+            errs.program_fee = "Program fee cannot be negative.";
+        }
+        if (formData.registration_fee !== "" && Number(formData.registration_fee) < 0) {
+            errs.registration_fee = "Fee cannot be negative.";
+        }
+        if (formData.daily_fee !== "" && Number(formData.daily_fee) < 0) {
+            errs.daily_fee = "Fee cannot be negative.";
+        }
+        if (formData.kit_fee !== "" && Number(formData.kit_fee) < 0) {
+            errs.kit_fee = "Fee cannot be negative.";
+        }
+
+        setFieldErrors(errs);
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     // HANDLE IMAGE PICK
     const handleImageChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
             const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
             if (!allowed.includes(file.type)) {
-                setError("Only JPG, JPEG, PNG, WEBP and GIF images are allowed");
+                setFieldErrors((prev) => ({ ...prev, program_image: "Only JPG, JPEG, PNG, WEBP and GIF images are allowed." }));
                 return;
             }
             if (file.size > 2 * 1024 * 1024) {
-                setError("Image size must be less than 2MB");
+                setFieldErrors((prev) => ({ ...prev, program_image: "Image size must be less than 2MB." }));
                 return;
+            }
+            if (fieldErrors.program_image) {
+                setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.program_image;
+                    return next;
+                });
             }
             setError("");
             setImageFile(file);
@@ -187,12 +256,7 @@ export default function ProgramForm({ id = null }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.academy_id) {
-            setError("Please select an academy");
-            return;
-        }
-        if (!formData.program_name.trim()) {
-            setError("Program name is required");
+        if (!validateAll()) {
             return;
         }
 
@@ -223,7 +287,7 @@ export default function ProgramForm({ id = null }) {
             if (formData.description && formData.description.trim()) {
                 payload.append("description", formData.description.trim());
             }
-            payload.append("program_fee", formData.program_fee === "" ? "0" : formData.program_fee);
+            payload.append("program_fee", formData.program_fee);
             payload.append("registration_fee", formData.registration_fee === "" ? "0" : formData.registration_fee);
             payload.append("daily_fee", formData.daily_fee === "" ? "0" : formData.daily_fee);
             payload.append("kit_fee", formData.kit_fee === "" ? "0" : formData.kit_fee);
@@ -244,6 +308,15 @@ export default function ProgramForm({ id = null }) {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -292,7 +365,7 @@ export default function ProgramForm({ id = null }) {
 
                     {/* Program Image */}
                     <div className="mb-4">
-                        <label className="form-label fw-semibold">Program Image (optional)</label>
+                        <label className="form-label fw-semibold">Program Image</label>
                         <div className="d-flex align-items-center gap-3">
                             <div
                                 className="d-flex align-items-center justify-content-center bg-light rounded-3 border overflow-hidden flex-shrink-0"
@@ -332,6 +405,7 @@ export default function ProgramForm({ id = null }) {
                                     )}
                                 </div>
                                 <small className="text-muted">JPG, PNG, WEBP or GIF. Max 2MB.</small>
+                                <FormError error={fieldErrors.program_image} />
                             </div>
                             <input
                                 ref={fileInputRef}
@@ -347,12 +421,13 @@ export default function ProgramForm({ id = null }) {
                     <div className="row">
                         {/* Academy */}
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Academy</label>
+                            <label className="form-label">Academy <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="academy_id"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.academy_id}
                                 onChange={handleChange}
+                                onBlur={handleBlur("academy_id")}
                                 required
                             >
                                 <option value="">Select Academy</option>
@@ -362,14 +437,15 @@ export default function ProgramForm({ id = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.academy_id} />
                         </div>
 
                         {/* Branch */}
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Branch (optional)</label>
+                            <label className="form-label">Branch</label>
                             <select
                                 name="branch_id"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.branch_id}
                                 onChange={handleChange}
                                 disabled={!formData.academy_id}
@@ -381,41 +457,45 @@ export default function ProgramForm({ id = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.branch_id} />
                         </div>
                     </div>
 
                     <div className="row">
                         {/* Program Name */}
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Program Name</label>
+                            <label className="form-label">Program Name <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="text"
                                 name="program_name"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.program_name ? "is-invalid border-danger" : ""}`}
                                 value={formData.program_name}
                                 onChange={handleChange}
+                                onBlur={handleBlur("program_name")}
                                 placeholder="Enter Program name"
                                 required
                             />
+                            <FormError error={fieldErrors.program_name} />
                         </div>
 
                         {/* Program Code */}
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Program Code (optional)</label>
+                            <label className="form-label">Program Code</label>
                             <input
                                 type="text"
                                 name="program_code"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.program_code ? "is-invalid border-danger" : ""}`}
                                 value={formData.program_code}
                                 onChange={handleChange}
                                 placeholder="Enter Program code"
                             />
+                            <FormError error={fieldErrors.program_code} />
                         </div>
                     </div>
 
                     {/* Program Features */}
                     <div className="mb-3">
-                        <label className="form-label">Program Features (optional)</label>
+                        <label className="form-label">Program Features</label>
                         <textarea
                             name="program_features"
                             className="form-control"
@@ -431,7 +511,7 @@ export default function ProgramForm({ id = null }) {
 
                     {/* Description */}
                     <div className="mb-3">
-                        <label className="form-label">Description (optional)</label>
+                        <label className="form-label">Description</label>
                         <textarea
                             name="description"
                             className="form-control"
@@ -445,17 +525,22 @@ export default function ProgramForm({ id = null }) {
                     <div className="row">
                         {/* Program Fee */}
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Program Fee</label>
+                            <label className="form-label">
+                                Program Fee <span className="text-danger ms-1">*</span>
+                            </label>
                             <input
                                 type="number"
                                 step="0.01"
                                 min="0"
                                 name="program_fee"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.program_fee ? "is-invalid border-danger" : ""}`}
                                 value={formData.program_fee}
                                 onChange={handleChange}
+                                onBlur={handleBlur("program_fee")}
                                 placeholder="0.00"
+                                required
                             />
+                            <FormError error={fieldErrors.program_fee} />
                         </div>
 
                         {/* Registration Fee */}
@@ -466,11 +551,12 @@ export default function ProgramForm({ id = null }) {
                                 step="0.01"
                                 min="0"
                                 name="registration_fee"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.registration_fee ? "is-invalid border-danger" : ""}`}
                                 value={formData.registration_fee}
                                 onChange={handleChange}
                                 placeholder="0.00"
                             />
+                            <FormError error={fieldErrors.registration_fee} />
                         </div>
 
                         {/* Daily Fee */}
@@ -481,11 +567,12 @@ export default function ProgramForm({ id = null }) {
                                 step="0.01"
                                 min="0"
                                 name="daily_fee"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.daily_fee ? "is-invalid border-danger" : ""}`}
                                 value={formData.daily_fee}
                                 onChange={handleChange}
                                 placeholder="0.00"
                             />
+                            <FormError error={fieldErrors.daily_fee} />
                         </div>
 
                         {/* Kit Fee */}
@@ -496,11 +583,12 @@ export default function ProgramForm({ id = null }) {
                                 step="0.01"
                                 min="0"
                                 name="kit_fee"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.kit_fee ? "is-invalid border-danger" : ""}`}
                                 value={formData.kit_fee}
                                 onChange={handleChange}
                                 placeholder="0.00"
                             />
+                            <FormError error={fieldErrors.kit_fee} />
                         </div>
                     </div>
 

@@ -248,7 +248,7 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                 </div>
 
                                 <div className="col-md-6">
-                                    <label className="form-label fw-semibold">Album (Optional)</label>
+                                    <label className="form-label fw-semibold">Album</label>
                                     <select
                                         className="form-select"
                                         value={formData.album_id}
@@ -284,7 +284,7 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                 </div>
 
                                 <div className="col-md-4">
-                                    <label className="form-label fw-semibold">Duration (Optional)</label>
+                                    <label className="form-label fw-semibold">Duration</label>
                                     <input
                                         type="text"
                                         className="form-control"
@@ -354,7 +354,7 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                 ) : (
                                     <div className="col-12">
                                         <label className="form-label fw-semibold">
-                                            {isEdit ? "Replace Video File (Optional)" : "Upload Video File (Max 20MB)"}
+                                            {isEdit ? "Replace Video File" : <>Upload Video File (Max 20MB) <span className="text-danger">*</span></>}
                                         </label>
                                         <input
                                             type="file"

@@ -424,7 +424,7 @@ export default function PlayerProgramFeeForm({ id = null }) {
                                         value={dueDate}
                                         onChange={(e) => setDueDate(e.target.value)}
                                     />
-                                    <div className="form-text">Optional deadline for paying this invoice.</div>
+                                    <div className="form-text">Deadline for paying this invoice.</div>
                                 </div>
 
                                 {isEdit && (
@@ -444,7 +444,7 @@ export default function PlayerProgramFeeForm({ id = null }) {
                                 )}
 
                                 <div className="col-12">
-                                    <label className="form-label fw-semibold">Remarks (optional)</label>
+                                    <label className="form-label fw-semibold">Remarks</label>
                                     <textarea
                                         rows="2"
                                         className="form-control"

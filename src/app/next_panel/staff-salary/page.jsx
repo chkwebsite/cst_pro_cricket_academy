@@ -816,7 +816,7 @@ export default function StaffSalaryStructurePage() {
                                 <div className="row g-3">
                                     {/* Staff Selection */}
                                     <div className="col-12">
-                                        <label className="form-label fw-bold small">Staff Member *</label>
+                                        <label className="form-label fw-bold small">Staff Member <span className="text-danger ms-1">*</span></label>
                                         <select
                                             className="form-select"
                                             value={formData.staff_id}
@@ -849,7 +849,7 @@ export default function StaffSalaryStructurePage() {
                                     <div className="col-12">
                                         <div className="p-3 bg-light border rounded-3">
                                             <label className="form-label fw-bold text-primary mb-1 d-flex align-items-center justify-content-between">
-                                                <span>Monthly Salary (Gross Package) *</span>
+                                                <span>Monthly Salary (Gross Package) <span className="text-danger ms-1">*</span></span>
                                                 <span className="badge bg-primary">Auto-Calculator</span>
                                             </label>
                                             <div className="input-group">
@@ -877,7 +877,7 @@ export default function StaffSalaryStructurePage() {
                                     </div>
 
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-semibold text-muted">Basic Salary (60%) *</label>
+                                        <label className="form-label small fw-semibold text-muted">Basic Salary (60%) <span className="text-danger ms-1">*</span></label>
                                         <div className="input-group input-group-sm">
                                             <span className="input-group-text">₹</span>
                                             <input
@@ -891,7 +891,7 @@ export default function StaffSalaryStructurePage() {
                                     </div>
 
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-semibold text-muted">HRA (20%) *</label>
+                                        <label className="form-label small fw-semibold text-muted">HRA (20%) <span className="text-danger ms-1">*</span></label>
                                         <div className="input-group input-group-sm">
                                             <span className="input-group-text">₹</span>
                                             <input
@@ -905,7 +905,7 @@ export default function StaffSalaryStructurePage() {
                                     </div>
 
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-semibold text-muted">Conveyance Allowance (8%) *</label>
+                                        <label className="form-label small fw-semibold text-muted">Conveyance Allowance (8%) <span className="text-danger ms-1">*</span></label>
                                         <div className="input-group input-group-sm">
                                             <span className="input-group-text">₹</span>
                                             <input
@@ -919,7 +919,7 @@ export default function StaffSalaryStructurePage() {
                                     </div>
 
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-semibold text-muted">Other Allowance (12%) *</label>
+                                        <label className="form-label small fw-semibold text-muted">Other Allowance (12%) <span className="text-danger ms-1">*</span></label>
                                         <div className="input-group input-group-sm">
                                             <span className="input-group-text">₹</span>
                                             <input
@@ -940,7 +940,7 @@ export default function StaffSalaryStructurePage() {
                                     </div>
 
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-semibold text-muted">PF Deduction (12% of Basic) *</label>
+                                        <label className="form-label small fw-semibold text-muted">PF Deduction (12% of Basic) <span className="text-danger ms-1">*</span></label>
                                         <div className="input-group input-group-sm">
                                             <span className="input-group-text">₹</span>
                                             <input
@@ -954,7 +954,7 @@ export default function StaffSalaryStructurePage() {
                                     </div>
 
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-semibold text-muted">Advance Deduction *</label>
+                                        <label className="form-label small fw-semibold text-muted">Advance Deduction</label>
                                         <div className="input-group input-group-sm">
                                             <span className="input-group-text">₹</span>
                                             <input
@@ -971,7 +971,7 @@ export default function StaffSalaryStructurePage() {
 
                                     {/* Effective Date & Status */}
                                     <div className="col-12 col-md-6">
-                                        <label className="form-label small fw-semibold text-muted">Effective Date</label>
+                                        <label className="form-label small fw-semibold text-muted">Effective Date <span className="text-danger ms-1">*</span></label>
                                         <input
                                             type="date"
                                             className="form-control form-control-sm"

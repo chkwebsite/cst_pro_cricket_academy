@@ -815,23 +815,24 @@ export async function PUT(request, { params }) {
             ]
         );
 
-        if (body.team_a_fee !== undefined && body.team_a_fee !== null && body.team_a_fee !== "") {
-            const feeA = Number(body.team_a_fee);
-            if (Number.isFinite(feeA) && feeA >= 0) {
-                await connection.execute(
-                    `UPDATE cst_match_teams SET match_fee = ? WHERE match_id = ? AND team_side = 'A'`,
-                    [feeA, matchId]
-                );
-            }
+        const effectiveFeeA = body.team_a_fee !== undefined && body.team_a_fee !== null && body.team_a_fee !== ""
+            ? Number(body.team_a_fee)
+            : (body.match_fee !== undefined && body.match_fee !== null && body.match_fee !== "" ? Number(body.match_fee) : null);
+        if (effectiveFeeA !== null && Number.isFinite(effectiveFeeA) && effectiveFeeA >= 0) {
+            await connection.execute(
+                `UPDATE cst_match_teams SET match_fee = ? WHERE match_id = ? AND team_side = 'A'`,
+                [effectiveFeeA, matchId]
+            );
         }
-        if (body.team_b_fee !== undefined && body.team_b_fee !== null && body.team_b_fee !== "") {
-            const feeB = Number(body.team_b_fee);
-            if (Number.isFinite(feeB) && feeB >= 0) {
-                await connection.execute(
-                    `UPDATE cst_match_teams SET match_fee = ? WHERE match_id = ? AND team_side = 'B'`,
-                    [feeB, matchId]
-                );
-            }
+
+        const effectiveFeeB = body.team_b_fee !== undefined && body.team_b_fee !== null && body.team_b_fee !== ""
+            ? Number(body.team_b_fee)
+            : (body.match_fee !== undefined && body.match_fee !== null && body.match_fee !== "" ? Number(body.match_fee) : null);
+        if (effectiveFeeB !== null && Number.isFinite(effectiveFeeB) && effectiveFeeB >= 0) {
+            await connection.execute(
+                `UPDATE cst_match_teams SET match_fee = ? WHERE match_id = ? AND team_side = 'B'`,
+                [effectiveFeeB, matchId]
+            );
         }
 
         const [updatedRows] = await connection.execute(

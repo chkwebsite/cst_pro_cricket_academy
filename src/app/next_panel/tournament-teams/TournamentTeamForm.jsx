@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 import useCurrentUser, { ROLES } from "../teams/useCurrentUser";
 import useTeamOptions from "./useTeamOptions";
 import useTournamentOptions from "./useTournamentOptions";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 // Same lists the API validates against
 export const PAYMENT_STATUSES = ["Pending", "Partial", "Paid", "Cancelled"];
@@ -45,6 +46,7 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
     const [fetching, setFetching] = useState(false);
     const [forbidden, setForbidden] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     // GET SINGLE REGISTRATION (edit mode)
     useEffect(() => {
@@ -110,6 +112,14 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
     const handleChange = (e) => {
         const { name, value } = e.target;
 
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         if (name === "tournament_id" && !isEdit) {
             const t = tournaments.find((x) => Number(x.id) === Number(value));
             const autoFee = t?.team_fee != null && Number(t.team_fee) > 0 ? String(Number(t.team_fee)) : "";
@@ -118,6 +128,19 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
         }
 
         setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        if (!isEdit && name === "tournament_id" && !value) {
+            setFieldErrors((prev) => ({ ...prev, tournament_id: "Please select a tournament." }));
+        }
+        if (!isEdit && name === "team_id" && !value) {
+            setFieldErrors((prev) => ({ ...prev, team_id: "Please select a team." }));
+        }
+        if (name === "team_fee" && value !== "" && (isNaN(Number(value)) || Number(value) < 0)) {
+            setFieldErrors((prev) => ({ ...prev, team_fee: "Team fee must be a non-negative number." }));
+        }
     };
 
     // ---------- dropdown options (create) ----------
@@ -160,18 +183,31 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        const errs = {};
         if (!isEdit) {
-            if (!formData.tournament_id) return setError("Please choose a tournament");
-            if (!formData.team_id) return setError("Please choose a team");
-            if (isFull) return setError("Maximum team registration limit reached for this tournament");
+            if (!formData.tournament_id) errs.tournament_id = "Please select a tournament.";
+            if (!formData.team_id) errs.team_id = "Please select a team.";
+            if (isFull) errs.tournament_id = "Maximum team registration limit reached for this tournament.";
         }
         if (formData.team_fee !== "" && (!Number.isFinite(Number(formData.team_fee)) || Number(formData.team_fee) < 0)) {
-            return setError("Team fee must be a valid amount");
+            errs.team_fee = "Team fee must be a non-negative number.";
+        }
+
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
         }
 
         try {
             setLoading(true);
             setError("");
+            setFieldErrors({});
 
             const common = {
                 payment_status: formData.payment_status,
@@ -204,6 +240,15 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -241,10 +286,12 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
             <div className="card-body">
                 {(error || loadError) && <div className="alert alert-danger">{error || loadError}</div>}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Tournament</label>
+                            <label className="form-label fw-semibold">
+                                Tournament <span style={{ color: "#dc3545" }}>*</span>
+                            </label>
                             {isEdit ? (
                                 <input
                                     type="text"
@@ -253,22 +300,25 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                                     value={`${current?.tournament_name || ""}${current?.tournament_code ? ` (${current.tournament_code})` : ""}`}
                                 />
                             ) : (
-                                <select
-                                    name="tournament_id"
-                                    className="form-select"
-                                    value={formData.tournament_id}
-                                    onChange={handleChange}
-                                    required
-                                >
-                                    <option value="">Choose Tournament</option>
-                                    {tournamentChoices.map((t) => (
-                                        <option key={t.id} value={t.id}>
-                                            {t.tournament_name}
-                                            {t.tournament_code ? ` (${t.tournament_code})` : ""}
-                                            {t.status && t.status !== "Registration Open" ? ` - [${t.status}]` : ""}
-                                        </option>
-                                    ))}
-                                </select>
+                                <>
+                                    <select
+                                        name="tournament_id"
+                                        className={`form-select ${fieldErrors.tournament_id ? "is-invalid border-danger" : ""}`}
+                                        value={formData.tournament_id}
+                                        onChange={handleChange}
+                                        onBlur={handleBlur}
+                                    >
+                                        <option value="">Choose Tournament</option>
+                                        {tournamentChoices.map((t) => (
+                                            <option key={t.id} value={t.id}>
+                                                {t.tournament_name}
+                                                {t.tournament_code ? ` (${t.tournament_code})` : ""}
+                                                {t.status && t.status !== "Registration Open" ? ` - [${t.status}]` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <FormError error={fieldErrors.tournament_id} />
+                                </>
                             )}
                             <div className="form-text">
                                 {isEdit
@@ -280,7 +330,9 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team</label>
+                            <label className="form-label fw-semibold">
+                                Team <span style={{ color: "#dc3545" }}>*</span>
+                            </label>
                             {isEdit ? (
                                 <input
                                     type="text"
@@ -289,17 +341,26 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                                     value={`${current?.team_name || ""}${current?.team_code ? ` (${current.team_code})` : ""}`}
                                 />
                             ) : (
-                                <select name="team_id" className="form-select" value={formData.team_id} onChange={handleChange} required>
-                                    <option value="">{tournament ? "Choose Team" : "Choose tournament first"}</option>
-                                    {teamChoices.map((t) => (
-                                        <option key={t.id} value={t.id}>
-                                            {t.team_name}
-                                            {t.team_code ? ` (${t.team_code})` : ""}
-                                            {t.branch_name ? ` — ${t.branch_name}` : ""}
-                                            {t.academy_name ? ` · ${t.academy_name}` : ""}
-                                        </option>
-                                    ))}
-                                </select>
+                                <>
+                                    <select
+                                        name="team_id"
+                                        className={`form-select ${fieldErrors.team_id ? "is-invalid border-danger" : ""}`}
+                                        value={formData.team_id}
+                                        onChange={handleChange}
+                                        onBlur={handleBlur}
+                                    >
+                                        <option value="">{tournament ? "Choose Team" : "Choose tournament first"}</option>
+                                        {teamChoices.map((t) => (
+                                            <option key={t.id} value={t.id}>
+                                                {t.team_name}
+                                                {t.team_code ? ` (${t.team_code})` : ""}
+                                                {t.branch_name ? ` — ${t.branch_name}` : ""}
+                                                {t.academy_name ? ` · ${t.academy_name}` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <FormError error={fieldErrors.team_id} />
+                                </>
                             )}
                             {!isEdit && tournament && (
                                 <div className={`form-text ${isFull ? "text-danger" : ""}`}>
@@ -314,7 +375,7 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Registration No (optional)</label>
+                            <label className="form-label fw-semibold">Registration No</label>
                             <div className="input-group">
                                 <input
                                     type="text"
@@ -338,7 +399,7 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Registered Date (optional)</label>
+                            <label className="form-label fw-semibold">Registered Date</label>
                             <input
                                 type="date"
                                 name="registered_date"
@@ -349,17 +410,19 @@ export default function TournamentTeamForm({ id = null, returnTo = "/next_panel/
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Team Fee (optional)</label>
+                            <label className="form-label fw-semibold">Team Fee</label>
                             <input
                                 type="number"
                                 name="team_fee"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.team_fee ? "is-invalid border-danger" : ""}`}
                                 min="0"
                                 step="0.01"
                                 value={formData.team_fee}
                                 onChange={handleChange}
+                                onBlur={handleBlur}
                                 placeholder="Auto-populated from tournament fee"
                             />
+                            <FormError error={fieldErrors.team_fee} />
                             {tournament?.team_fee != null && Number(tournament.team_fee) > 0 ? (
                                 <div className="form-text text-success">
                                     Tournament configured fee: ₹{Number(tournament.team_fee).toLocaleString("en-IN")}

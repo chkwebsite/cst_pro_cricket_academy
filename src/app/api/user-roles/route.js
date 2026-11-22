@@ -208,21 +208,16 @@ export async function POST(request) {
             role_id,
         } = body;
 
-        if (!user_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "user_id is required",
-                },
-                { status: 400 }
-            );
-        }
+        const errors = {};
+        if (!user_id) errors.user_id = "Please select a user.";
+        if (!role_id) errors.role_id = "Please select a role.";
 
-        if (!role_id) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "role_id is required",
+                    message: "Validation failed",
+                    errors,
                 },
                 { status: 400 }
             );
@@ -294,6 +289,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "This role is already assigned to the user",
+                    errors: { role_id: "This role is already assigned to this user." },
                 },
                 { status: 409 }
             );

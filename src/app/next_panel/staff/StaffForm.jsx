@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError } from "@/app/components/form";
 
 const EMPTY_FORM = {
     user_id: "",
@@ -43,6 +44,7 @@ export default function StaffForm({ id = null }) {
     const [fetching, setFetching] = useState(false);
     const [optionsLoading, setOptionsLoading] = useState(true);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [academies, setAcademies] = useState([]);
     const isEdit = Boolean(id);
     const hasSessionUser = Boolean(user);
@@ -175,6 +177,14 @@ export default function StaffForm({ id = null }) {
     const handleChange = (e) => {
         const { name, value } = e.target;
 
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         // Changing the academy must re-validate the branch: if the branch
         // currently selected doesn't belong to the newly chosen academy,
         // clear it so an invalid academy/branch pair can never be submitted.
@@ -209,35 +219,78 @@ export default function StaffForm({ id = null }) {
         }));
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "first_name" && !formData.first_name.trim()) err = "First name is required.";
+        if (field === "academy_id" && !formData.academy_id) err = "Please select an academy.";
+        if (field === "branch_id" && !formData.branch_id) err = "Please select a branch.";
+        if (field === "role_id" && !formData.role_id) err = "Please select a role.";
+        if (field === "gender" && !formData.gender) err = "Please select a gender.";
+        if (field === "dob" && !formData.dob) err = "Date of birth is required.";
+        if (field === "speciality" && !formData.speciality?.trim()) err = "Speciality is required.";
+        if (field === "experience") {
+            if (formData.experience === "" || formData.experience === null || formData.experience === undefined) {
+                err = "Experience is required.";
+            } else if (isNaN(Number(formData.experience)) || Number(formData.experience) < 0) {
+                err = "Experience must be a valid non-negative number.";
+            }
+        }
+        if (field === "last_salary") {
+            if (formData.last_salary === "" || formData.last_salary === null || formData.last_salary === undefined) {
+                err = "Last salary is required.";
+            } else if (isNaN(Number(formData.last_salary)) || Number(formData.last_salary) < 0) {
+                err = "Last salary must be a valid non-negative number.";
+            }
+        }
+        if (field === "date_of_joining" && !formData.date_of_joining) err = "Date of joining is required.";
+        if (field === "date_of_appointment" && !formData.date_of_appointment) err = "Date of appointment is required.";
+
+        if (err) setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.first_name.trim()) errors.first_name = "First name is required.";
+        if (!formData.academy_id) errors.academy_id = "Please select an academy.";
+        if (!formData.branch_id) errors.branch_id = "Please select a branch.";
+        if (!formData.role_id) errors.role_id = "Please select a role.";
+        if (!formData.gender) errors.gender = "Please select a gender.";
+        if (!formData.dob) errors.dob = "Date of birth is required.";
+        if (!formData.speciality?.trim()) errors.speciality = "Speciality is required.";
+
+        if (formData.experience === "" || formData.experience === null || formData.experience === undefined) {
+            errors.experience = "Experience is required.";
+        } else if (isNaN(Number(formData.experience)) || Number(formData.experience) < 0) {
+            errors.experience = "Experience must be a valid non-negative number.";
+        }
+
+        if (formData.last_salary === "" || formData.last_salary === null || formData.last_salary === undefined) {
+            errors.last_salary = "Last salary is required.";
+        } else if (isNaN(Number(formData.last_salary)) || Number(formData.last_salary) < 0) {
+            errors.last_salary = "Last salary must be a valid non-negative number.";
+        }
+
+        if (!formData.date_of_joining) errors.date_of_joining = "Date of joining is required.";
+        if (!formData.date_of_appointment) errors.date_of_appointment = "Date of appointment is required.";
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     // SUBMIT
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.first_name.trim()) {
-            setError("First name is required");
-            return;
-        }
-        // if (!formData.academy_id) {
-        //     setError("Please select a Academy");
-        //     return;
-        // }
-        // if (!formData.branch_id) {
-        //     setError("Please select a branch");
-        //     return;
-        // }
-        const branchBelongsToAcademy = branches.some(
-            (b) =>
-                Number(b.id) === Number(formData.branch_id) &&
-                Number(b.academy_id) === Number(formData.academy_id)
-        );
-        // if (!branchBelongsToAcademy) {
-        //     setError("Selected branch does not belong to the selected academy");
-        //     return;
-        // }
-        if (!formData.role_id) {
-            setError("Please select a role");
-            return;
-        }
+        if (!validateAll()) return;
 
         try {
             setLoading(true);
@@ -250,13 +303,14 @@ export default function StaffForm({ id = null }) {
             const payload = {
                 ...formData,
                 user_id: formData.user_id || null,
-                experience: formData.experience === "" ? null : Number(formData.experience),
+                speciality: formData.speciality.trim(),
+                experience: Number(formData.experience),
                 previous_academy_duration: formData.previous_academy_duration === "" ? null : Number(formData.previous_academy_duration),
-                last_salary: formData.last_salary === "" ? 0 : Number(formData.last_salary),
+                last_salary: Number(formData.last_salary),
                 current_salary: formData.current_salary === "" ? 0 : Number(formData.current_salary),
-                dob: formData.dob || null,
-                date_of_joining: formData.date_of_joining || null,
-                date_of_appointment: formData.date_of_appointment || null,
+                dob: formData.dob,
+                date_of_joining: formData.date_of_joining,
+                date_of_appointment: formData.date_of_appointment,
             };
 
             const res = await fetch(url, {
@@ -268,6 +322,15 @@ export default function StaffForm({ id = null }) {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -379,7 +442,7 @@ export default function StaffForm({ id = null }) {
                                 </div>
                             )}
                             <div className={isEdit ? "col-md-6 mb-3" : "col-md-12 mb-3"}>
-                                <label className="form-label">User ID (optional)</label>
+                                <label className="form-label">User ID</label>
                                 <input
                                     type="text"
                                     name="user_id"
@@ -401,15 +464,17 @@ export default function StaffForm({ id = null }) {
 
                         <div className="row">
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">First Name</label>
+                                <label className="form-label" htmlFor="first_name">First Name <span className="text-danger ms-1">*</span></label>
                                 <input
+                                    id="first_name"
                                     type="text"
                                     name="first_name"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.first_name ? "is-invalid border-danger" : ""}`}
                                     value={formData.first_name}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur("first_name")}
                                 />
+                                <FormError error={fieldErrors.first_name} />
                             </div>
                             <div className="col-md-6 mb-3">
                                 <label className="form-label">Last Name</label>
@@ -448,28 +513,36 @@ export default function StaffForm({ id = null }) {
 
                         <div className="row">
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">Gender</label>
+                                <label className="form-label" htmlFor="gender">Gender <span className="text-danger ms-1">*</span></label>
                                 <select
+                                    id="gender"
                                     name="gender"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.gender ? "is-invalid border-danger" : ""}`}
                                     value={formData.gender}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("gender")}
+                                    required
                                 >
                                     <option value="">Select Gender</option>
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
                                     <option value="other">Other</option>
                                 </select>
+                                <FormError error={fieldErrors.gender} />
                             </div>
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">Date of Birth</label>
+                                <label className="form-label" htmlFor="dob">Date of Birth <span className="text-danger ms-1">*</span></label>
                                 <input
+                                    id="dob"
                                     type="date"
                                     name="dob"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.dob ? "is-invalid border-danger" : ""}`}
                                     value={formData.dob}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("dob")}
+                                    required
                                 />
+                                <FormError error={fieldErrors.dob} />
                             </div>
                             <div className="col-md-4 mb-3">
                                 <label className="form-label">Status</label>
@@ -487,12 +560,14 @@ export default function StaffForm({ id = null }) {
 
                         <div className="row">
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Academy</label>
+                                <label className="form-label" htmlFor="academy_id">Academy <span className="text-danger ms-1">*</span></label>
                                 <select
+                                    id="academy_id"
                                     name="academy_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.academy_id}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("academy_id")}
                                     disabled={hasAssignedAcademy}
                                 >
                                     <option value="">Select Academy</option>
@@ -500,15 +575,17 @@ export default function StaffForm({ id = null }) {
                                         <option key={ac.id} value={ac.id}>{ac.academy_name}</option>
                                     ))}
                                 </select>
+                                <FormError error={fieldErrors.academy_id} />
                             </div>
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Branch</label>
+                                <label className="form-label" htmlFor="branch_id">Branch <span className="text-danger ms-1">*</span></label>
                                 <select
+                                    id="branch_id"
                                     name="branch_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.branch_id}
                                     onChange={handleChange}
-
+                                    onBlur={handleBlur("branch_id")}
                                     disabled={!formData.academy_id || isBranchRestricted}
                                 >
                                     <option value="">
@@ -518,6 +595,7 @@ export default function StaffForm({ id = null }) {
                                         <option key={b.id} value={b.id}>{b.branch_name}</option>
                                     ))}
                                 </select>
+                                <FormError error={fieldErrors.branch_id} />
                                 {formData.academy_id && filteredBranches.length === 0 && (
                                     <div className="form-text text-danger">
                                         No branches found for the selected academy.
@@ -525,19 +603,21 @@ export default function StaffForm({ id = null }) {
                                 )}
                             </div>
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Role</label>
+                                <label className="form-label" htmlFor="role_id">Role <span className="text-danger ms-1">*</span></label>
                                 <select
+                                    id="role_id"
                                     name="role_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.role_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.role_id}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur("role_id")}
                                 >
                                     <option value="">Select Role</option>
                                     {roles.map((r) => (
                                         <option key={r.id} value={r.id}>{r.role_name}</option>
                                     ))}
                                 </select>
+                                <FormError error={fieldErrors.role_id} />
                                 {Number(formData.role_id) === 5 && (
                                     <div className="form-text text-success">
                                         <i className="bi bi-info-circle me-1"></i>
@@ -549,26 +629,34 @@ export default function StaffForm({ id = null }) {
 
                         <div className="row">
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Speciality</label>
+                                <label className="form-label" htmlFor="speciality">Speciality <span className="text-danger ms-1">*</span></label>
                                 <input
+                                    id="speciality"
                                     type="text"
                                     name="speciality"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.speciality ? "is-invalid border-danger" : ""}`}
                                     value={formData.speciality}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("speciality")}
+                                    required
                                 />
+                                <FormError error={fieldErrors.speciality} />
                             </div>
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Experience (years)</label>
+                                <label className="form-label" htmlFor="experience">Experience (years) <span className="text-danger ms-1">*</span></label>
                                 <input
+                                    id="experience"
                                     type="number"
                                     min="0"
                                     step="0.1"
                                     name="experience"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.experience ? "is-invalid border-danger" : ""}`}
                                     value={formData.experience}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("experience")}
+                                    required
                                 />
+                                <FormError error={fieldErrors.experience} />
                             </div>
                         </div>
 
@@ -621,17 +709,21 @@ export default function StaffForm({ id = null }) {
 
                         <div className="row">
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Last Salary</label>
+                                <label className="form-label" htmlFor="last_salary">Last Salary <span className="text-danger ms-1">*</span></label>
                                 <input
+                                    id="last_salary"
                                     type="number"
                                     min="0"
                                     step="0.01"
                                     name="last_salary"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.last_salary ? "is-invalid border-danger" : ""}`}
                                     value={formData.last_salary}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("last_salary")}
                                     placeholder="0.00"
+                                    required
                                 />
+                                <FormError error={fieldErrors.last_salary} />
                             </div>
                             <div className="col-md-6 mb-3">
                                 <label className="form-label">Current Salary</label>
@@ -650,24 +742,32 @@ export default function StaffForm({ id = null }) {
 
                         <div className="row">
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Date of Joining</label>
+                                <label className="form-label" htmlFor="date_of_joining">Date of Joining <span className="text-danger ms-1">*</span></label>
                                 <input
+                                    id="date_of_joining"
                                     type="date"
                                     name="date_of_joining"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.date_of_joining ? "is-invalid border-danger" : ""}`}
                                     value={formData.date_of_joining}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("date_of_joining")}
+                                    required
                                 />
+                                <FormError error={fieldErrors.date_of_joining} />
                             </div>
                             <div className="col-md-6 mb-3">
-                                <label className="form-label">Date of Appointment</label>
+                                <label className="form-label" htmlFor="date_of_appointment">Date of Appointment <span className="text-danger ms-1">*</span></label>
                                 <input
+                                    id="date_of_appointment"
                                     type="date"
                                     name="date_of_appointment"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.date_of_appointment ? "is-invalid border-danger" : ""}`}
                                     value={formData.date_of_appointment}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("date_of_appointment")}
+                                    required
                                 />
+                                <FormError error={fieldErrors.date_of_appointment} />
                             </div>
                         </div>
 

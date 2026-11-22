@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import { FormError } from "@/app/components/form";
+import { validateEmail, validatePhone } from "@/app/components/form";
 
 const EMPTY_FORM = {
     user_id: "",
@@ -20,7 +22,7 @@ const EMPTY_FORM = {
     city: "",
     state: "",
     pin_code: "",
-    under_age: 0,
+    under_age: "",
     age_group_id: "",
     gender: "",
     aadhaar_no: "",
@@ -57,7 +59,7 @@ export default function AdmissionPlayerForm({ id = null }) {
     const [programsLoading, setProgramsLoading] = useState(false);
 
     const [error, setError] = useState("");
-
+    const [fieldErrors, setFieldErrors] = useState({});
     const isEdit = Boolean(id);
 
     const {user} = useUser();
@@ -299,6 +301,14 @@ export default function AdmissionPlayerForm({ id = null }) {
     const handleChange = (e) => {
         const { name, value } = e.target;
 
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         /* ---------------------------------------------
            BRANCH CHANGE
         --------------------------------------------- */
@@ -355,6 +365,88 @@ export default function AdmissionPlayerForm({ id = null }) {
         }));
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "first_name" && !formData.first_name?.trim()) err = "First name is required.";
+        if (field === "branch_id" && !formData.branch_id) err = "Please select a branch.";
+        if (field === "role_id" && !formData.role_id) err = "Please select a role.";
+        if (field === "program_id" && !formData.program_id) err = "Please select a program.";
+        if (field === "date_of_joining" && !formData.date_of_joining) err = "Date of Joining is required.";
+        if (field === "email") {
+            if (!formData.email?.trim()) err = "Email is required.";
+            else if (validateEmail(formData.email)) err = validateEmail(formData.email);
+        }
+        if (field === "phone") {
+            if (!formData.phone?.trim()) err = "Phone number is required.";
+            else if (validatePhone(formData.phone)) err = validatePhone(formData.phone);
+        }
+        if (field === "address" && !formData.address?.trim()) err = "Address is required.";
+        if (field === "under_age" && (formData.under_age === "" || formData.under_age === null || formData.under_age === undefined)) {
+            err = "Please select Under Age.";
+        }
+        if (field === "age_group_id" && !formData.age_group_id) err = "Please select an age group.";
+        if (field === "aadhaar_no" && !formData.aadhaar_no?.trim()) err = "Aadhaar number is required.";
+
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.first_name?.trim()) errors.first_name = "First name is required.";
+        if (!formData.branch_id) errors.branch_id = "Please select a branch.";
+        if (!formData.role_id) errors.role_id = "Please select a role.";
+        if (!formData.program_id) errors.program_id = "Please select a program.";
+        if (!formData.date_of_joining) errors.date_of_joining = "Date of Joining is required.";
+
+        if (!formData.email?.trim()) {
+            errors.email = "Email is required.";
+        } else if (validateEmail(formData.email)) {
+            errors.email = validateEmail(formData.email);
+        }
+
+        if (!formData.phone?.trim()) {
+            errors.phone = "Phone number is required.";
+        } else if (validatePhone(formData.phone)) {
+            errors.phone = validatePhone(formData.phone);
+        }
+
+        if (!formData.address?.trim()) {
+            errors.address = "Address is required.";
+        }
+
+        if (formData.under_age === "" || formData.under_age === null || formData.under_age === undefined) {
+            errors.under_age = "Please select Under Age.";
+        }
+
+        if (!formData.age_group_id) {
+            errors.age_group_id = "Please select an age group.";
+        }
+
+        if (!formData.aadhaar_no?.trim()) {
+            errors.aadhaar_no = "Aadhaar number is required.";
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     /* =====================================================
        FILE CHANGE
     ===================================================== */
@@ -364,12 +456,18 @@ export default function AdmissionPlayerForm({ id = null }) {
             e.target.files?.[0] || null;
 
         if (file && file.size > 2 * 1024 * 1024) {
-            setError("Aadhaar card file must be less than 2MB");
+            setFieldErrors((prev) => ({ ...prev, aadhaar_card: "Aadhaar card file must be less than 2MB." }));
             e.target.value = "";
             setAadhaarFile(null);
             return;
         }
-
+        if (fieldErrors.aadhaar_card) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.aadhaar_card;
+                return next;
+            });
+        }
         setAadhaarFile(file);
     };
 
@@ -380,49 +478,7 @@ export default function AdmissionPlayerForm({ id = null }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        setError("");
-
-        /* ---------------------------------------------
-           REQUIRED VALIDATION
-        --------------------------------------------- */
-
-        if (
-            !formData.first_name ||
-            !formData.first_name.trim()
-        ) {
-            setError(
-                "First name is required"
-            );
-            return;
-        }
-
-        if (!formData.branch_id) {
-            setError(
-                "Please select a branch"
-            );
-            return;
-        }
-
-        if (!formData.role_id) {
-            setError(
-                "Please select a role"
-            );
-            return;
-        }
-
-        if (!formData.program_id) {
-            setError(
-                "Please select a program"
-            );
-            return;
-        }
-
-        if (!formData.date_of_joining) {
-            setError(
-                "Date of Joining is required"
-            );
-            return;
-        }
+        if (!validateAll()) return;
 
         /* ---------------------------------------------
            SUBMIT
@@ -746,7 +802,7 @@ export default function AdmissionPlayerForm({ id = null }) {
                             >
 
                                 <label className="form-label">
-                                    User ID (optional)
+                                    User ID
                                 </label>
 
                                 <input
@@ -776,22 +832,24 @@ export default function AdmissionPlayerForm({ id = null }) {
 
                             <div className="col-md-3 mb-3">
 
-                                <label className="form-label">
-                                    First Name
+                                <label className="form-label" htmlFor="first_name">
+                                    First Name <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <input
+                                    id="first_name"
                                     type="text"
                                     name="first_name"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.first_name ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.first_name
                                     }
                                     onChange={
                                         handleChange
                                     }
-                                    required
+                                    onBlur={handleBlur("first_name")}
                                 />
+                                <FormError error={fieldErrors.first_name} />
 
                             </div>
 
@@ -856,54 +914,55 @@ export default function AdmissionPlayerForm({ id = null }) {
                             </div>
 
                             <div className="col-md-3 mb-3">
-
-                                <label className="form-label">
-                                    Email
+                                <label className="form-label" htmlFor="email">
+                                    Email <span className="text-danger ms-1">*</span>
                                 </label>
-
                                 <input
+                                    id="email"
                                     type="email"
                                     name="email"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.email ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.email
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("email")}
                                 />
-
+                                <FormError error={fieldErrors.email} />
                             </div>
 
                             <div className="col-md-3 mb-3">
-
-                                <label className="form-label">
-                                    Phone
+                                <label className="form-label" htmlFor="phone">
+                                    Phone <span className="text-danger ms-1">*</span>
                                 </label>
-
                                 <input
+                                    id="phone"
                                     type="text"
                                     name="phone"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.phone ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.phone
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("phone")}
                                 />
-
+                                <FormError error={fieldErrors.phone} />
                             </div>
 
                             <div className="col-md-6 mb-3">
 
-                                <label className="form-label">
-                                    Address
+                                <label className="form-label" htmlFor="address">
+                                    Address <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <textarea
+                                    id="address"
                                     name="address"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.address ? "is-invalid border-danger" : ""}`}
                                     rows={2}
                                     value={
                                         formData.address
@@ -911,7 +970,9 @@ export default function AdmissionPlayerForm({ id = null }) {
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("address")}
                                 />
+                                <FormError error={fieldErrors.address} />
 
                             </div>
 
@@ -1014,49 +1075,57 @@ export default function AdmissionPlayerForm({ id = null }) {
 
                             <div className="col-md-3 mb-3">
 
-                                <label className="form-label">
-                                    Under Age
+                                <label className="form-label" htmlFor="under_age">
+                                    Under Age <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <select
+                                    id="under_age"
                                     name="under_age"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.under_age ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.under_age
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("under_age")}
                                 >
 
-                                    <option value={0}>
-                                        No
+                                    <option value="">
+                                        Select Under Age
                                     </option>
 
                                     <option value={1}>
                                         Yes
                                     </option>
 
+                                    <option value={0}>
+                                        No
+                                    </option>
+
                                 </select>
+                                <FormError error={fieldErrors.under_age} />
 
                             </div>
 
                             <div className="col-md-3 mb-3">
 
-                                <label className="form-label">
-                                    Age Group
-                                    (optional)
+                                <label className="form-label" htmlFor="age_group_id">
+                                    Age Group <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <select
+                                    id="age_group_id"
                                     name="age_group_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.age_group_id ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.age_group_id
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("age_group_id")}
                                 >
 
                                     <option value="">
@@ -1081,6 +1150,7 @@ export default function AdmissionPlayerForm({ id = null }) {
                                     )}
 
                                 </select>
+                                <FormError error={fieldErrors.age_group_id} />
 
                             </div>
 
@@ -1116,18 +1186,19 @@ export default function AdmissionPlayerForm({ id = null }) {
                             <div className="col-md-3 mb-3">
 
                                 <label className="form-label">
-                                    Branch
+                                    Branch <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <select
                                     name="branch_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.branch_id
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("branch_id")}
                                     required
                                 >
 
@@ -1170,24 +1241,26 @@ export default function AdmissionPlayerForm({ id = null }) {
     ))}
 
                                 </select>
+                                <FormError error={fieldErrors.branch_id} />
 
                             </div>
 
                             <div className="col-md-3 mb-3">
 
                                 <label className="form-label">
-                                    Program
+                                    Program <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <select
                                     name="program_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.program_id ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.program_id
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("program_id")}
                                     required
                                     disabled={
                                         !formData.branch_id ||
@@ -1221,6 +1294,7 @@ export default function AdmissionPlayerForm({ id = null }) {
                                     )}
 
                                 </select>
+                                <FormError error={fieldErrors.program_id} />
 
                                 {String(formData.program_id) === "1" && (
                                     <div className="alert alert-info py-2 px-3 mt-2 mb-0 d-flex align-items-center gap-2 small">
@@ -1236,18 +1310,19 @@ export default function AdmissionPlayerForm({ id = null }) {
                             <div className="col-md-3 mb-3">
 
                                 <label className="form-label">
-                                    Role
+                                    Role <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <select
                                     name="role_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.role_id ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.role_id
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("role_id")}
                                     required
                                 >
 
@@ -1273,26 +1348,30 @@ export default function AdmissionPlayerForm({ id = null }) {
                                     )}
 
                                 </select>
+                                <FormError error={fieldErrors.role_id} />
 
                             </div>
 
                             <div className="col-md-3 mb-3">
 
-                                <label className="form-label">
-                                    Aadhaar No
+                                <label className="form-label" htmlFor="aadhaar_no">
+                                    Aadhaar No <span className="text-danger ms-1">*</span>
                                 </label>
 
                                 <input
+                                    id="aadhaar_no"
                                     type="text"
                                     name="aadhaar_no"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.aadhaar_no ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.aadhaar_no
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("aadhaar_no")}
                                 />
+                                <FormError error={fieldErrors.aadhaar_no} />
 
                             </div>
 
@@ -1325,15 +1404,17 @@ export default function AdmissionPlayerForm({ id = null }) {
                                 <input
                                     type="date"
                                     name="date_of_joining"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.date_of_joining ? "is-invalid border-danger" : ""}`}
                                     value={
                                         formData.date_of_joining
                                     }
                                     onChange={
                                         handleChange
                                     }
+                                    onBlur={handleBlur("date_of_joining")}
                                     required
                                 />
+                                <FormError error={fieldErrors.date_of_joining} />
 
                                 <div className="form-text">
                                     Monthly fee starts from this joining month.
@@ -1372,12 +1453,13 @@ export default function AdmissionPlayerForm({ id = null }) {
                                 <input
                                     type="file"
                                     name="aadhaar_card"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.aadhaar_card ? "is-invalid border-danger" : ""}`}
                                     accept=".jpg,.jpeg,.png,.webp,.pdf"
                                     onChange={
                                         handleFileChange
                                     }
                                 />
+                                <FormError error={fieldErrors.aadhaar_card} />
 
                                 {existingAadhaarUrl &&
                                     !aadhaarFile && (
@@ -1417,7 +1499,7 @@ export default function AdmissionPlayerForm({ id = null }) {
                                 return (
                                     <div className="col-md-12 mb-3">
                                         <div className="card bg-light border-0 p-3">
-                                            <h6 className="fw-bold mb-2">Program Fee & Initial Payment (Optional)</h6>
+                                            <h6 className="fw-bold mb-2">Program Fee & Initial Payment</h6>
                                             {selProg ? (
                                                 <div className="small text-muted mb-3 d-flex flex-wrap gap-3">
                                                     <span>Program Fee: <strong>₹{feeAmt.toFixed(2)}</strong></span>

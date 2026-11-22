@@ -592,7 +592,7 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
 
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Calendar size={15} /> End Date (Optional)
+                                <Calendar size={15} /> End Date
                             </label>
                             <input
                                 type="date"

@@ -201,7 +201,7 @@ export default function GroundSlotForm({ id = null }) {
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Ground</label>
+                            <label className="form-label">Ground <span className="text-danger ms-1">*</span></label>
                             <select
                                 name="ground_id"
                                 className="form-select"
@@ -223,7 +223,7 @@ export default function GroundSlotForm({ id = null }) {
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Slot Name</label>
+                            <label className="form-label">Slot Name <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="text"
                                 name="slot_name"
@@ -238,7 +238,7 @@ export default function GroundSlotForm({ id = null }) {
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Start Time</label>
+                            <label className="form-label">Start Time <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="time"
                                 name="start_time"
@@ -250,7 +250,7 @@ export default function GroundSlotForm({ id = null }) {
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">End Time</label>
+                            <label className="form-label">End Time <span className="text-danger ms-1">*</span></label>
                             <input
                                 type="time"
                                 name="end_time"

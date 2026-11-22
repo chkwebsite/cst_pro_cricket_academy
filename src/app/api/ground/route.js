@@ -248,53 +248,34 @@ export async function POST(request) {
         // ==========================================
 
         const academyId = Number(academy_id);
-
-        if (!academy_id || !Number.isInteger(academyId) || academyId <= 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Academy is required"
-                },
-                { status: 400 }
-            );
-        }
-
         const branchId = Number(branch_id);
+
+        const errors = {};
+        if (!academy_id || !Number.isInteger(academyId) || academyId <= 0) {
+            errors.academy_id = "Please select an academy.";
+        }
         if (!branch_id || !Number.isInteger(branchId) || branchId <= 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Branch is required"
-                },
-                { status: 400 }
-            );
+            errors.branch_id = "Please select a branch.";
         }
-
         if (!ground_name || !ground_name.trim()) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground name is required"
-                },
-                { status: 400 }
-            );
+            errors.ground_name = "Ground name is required.";
         }
-
         if (!ground_code || !ground_code.trim()) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground code is required"
-                },
-                { status: 400 }
-            );
+            errors.ground_code = "Ground code is required.";
+        }
+        if (!address || !address.trim()) {
+            errors.address = "Address is required.";
+        }
+        if (email && email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
+            errors.email = "Please enter a valid email address.";
         }
 
-        if (!address || !address.trim()) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Address is required"
+                    message: "Validation failed",
+                    errors,
                 },
                 { status: 400 }
             );
@@ -354,7 +335,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Ground code already exists"
+                    message: "Ground code already exists",
+                    errors: { ground_code: "Ground code already exists in this academy." }
                 },
                 { status: 409 }
             );
@@ -381,7 +363,8 @@ export async function POST(request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message: "Email already exists"
+                        message: "Email already exists",
+                        errors: { email: "Ground email already exists." }
                     },
                     { status: 409 }
                 );

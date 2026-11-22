@@ -33,6 +33,26 @@ export default function EditUserRolePage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const handleValuesChange = (newValues) => {
+        setFieldErrors((prev) => {
+            const next = { ...prev };
+            if (newValues.user_id && next.user_id) delete next.user_id;
+            if (newValues.role_id && next.role_id) delete next.role_id;
+            return next;
+        });
+        setValues(newValues);
+    };
+
+    const handleBlur = (field) => () => {
+        if (field === "user_id" && !values?.user_id) {
+            setFieldErrors((prev) => ({ ...prev, user_id: "Please select a user." }));
+        }
+        if (field === "role_id" && !values?.role_id) {
+            setFieldErrors((prev) => ({ ...prev, role_id: "Please select a role." }));
+        }
+    };
 
     // =====================================================
     // LOAD USER ROLE
@@ -75,6 +95,21 @@ export default function EditUserRolePage() {
     const submit = async (e) => {
         e.preventDefault();
 
+        const errs = {};
+        if (!values?.user_id) errs.user_id = "Please select a user.";
+        if (!values?.role_id) errs.role_id = "Please select a role.";
+
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
+        }
+
         setSaving(true);
         setError(null);
 
@@ -97,6 +132,15 @@ export default function EditUserRolePage() {
             const json = await readJson(res);
 
             if (!res.ok) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(
                     json.message ||
                     "Unable to update user role."
@@ -179,9 +223,11 @@ export default function EditUserRolePage() {
                             <UserRoleForm
                                 formId="userRoleEditForm"
                                 values={values}
-                                onChange={setValues}
+                                onChange={handleValuesChange}
                                 onSubmit={submit}
                                 error={error}
+                                fieldErrors={fieldErrors}
+                                onBlur={handleBlur}
                                 loading={saving}
                             />
                         ) : (

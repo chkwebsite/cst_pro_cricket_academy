@@ -311,7 +311,7 @@ export default function GalleryCategoryForm({ id = null }) {
 
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Academy {isAcademyAdmin ? <span className="text-danger">*</span> : "(Optional)"}
+                                        Academy {isAcademyAdmin && <span className="text-danger">*</span>}
                                     </label>
                                     {isAcademyAdmin ? (
                                         <div>

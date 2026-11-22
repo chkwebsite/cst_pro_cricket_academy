@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { RefreshCw, Building2, GitBranch } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useCurrentUser, { ROLES } from "./useCurrentUser";
 import useOrgOptions, { inAcademy } from "./useOrgOptions";
+import { FormError } from "@/app/components/form";
 
 export const TEAM_TYPES = ["Academy", "External", "Club", "School", "Corporate", "Other"];
 const TEAM_CODE_PREFIX = "TEAM-CODE-";
@@ -33,11 +34,52 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
 
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [ageGroups, setAgeGroups] = useState([]);
+    const [existingTeams, setExistingTeams] = useState([]);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [generatingCode, setGeneratingCode] = useState(false);
     const [forbidden, setForbidden] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const currentAcademyId = isSuper ? formData.academy_id : me.academyId;
+    const currentBranchId = isBranchAdmin ? me.branchId : (formData.branch_id || null);
+
+    // Fetch existing teams in academy to check duplicates in real-time
+    useEffect(() => {
+        if (!currentAcademyId) {
+            setExistingTeams([]);
+            return;
+        }
+        const controller = new AbortController();
+        (async () => {
+            try {
+                const res = await fetch(`/api/teams?academy_id=${currentAcademyId}`, {
+                    signal: controller.signal,
+                });
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    setExistingTeams(json.data || []);
+                }
+            } catch {
+                /* ignore */
+            }
+        })();
+        return () => controller.abort();
+    }, [currentAcademyId]);
+
+    const isDuplicateTeamName = useMemo(() => {
+        const trimmed = formData.team_name.trim().toLowerCase();
+        if (!trimmed) return false;
+        const currentBranch = String(currentBranchId || "");
+        return existingTeams.some((t) => {
+            if (id && Number(t.id) === Number(id)) return false;
+            const sameName = String(t.team_name || "").trim().toLowerCase() === trimmed;
+            const tBranch = String(t.branch_id || "");
+            const sameBranch = (tBranch === "" && currentBranch === "") || tBranch === currentBranch;
+            return sameName && sameBranch;
+        });
+    }, [formData.team_name, currentBranchId, existingTeams, id]);
 
     // Age-group suggestions (optional - teams.age_group is free text)
     useEffect(() => {
@@ -111,6 +153,51 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
             [name]: name === "status" ? Number(value) : value,
             ...(name === "academy_id" ? { branch_id: "" } : {}),
         }));
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "team_name") {
+            if (!formData.team_name.trim()) err = "Team name is required.";
+            else if (isDuplicateTeamName) err = "A team with this name already exists in the selected academy and branch.";
+        }
+        if (field === "academy_id" && isSuper && !formData.academy_id) err = "Please select an academy.";
+        if (field === "team_type" && !formData.team_type) err = "Please select a team type.";
+        if (err) setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.team_name.trim()) errors.team_name = "Team name is required.";
+        if (isDuplicateTeamName) {
+            errors.team_name = "A team with this name already exists in the selected academy and branch.";
+        }
+        const effectiveAcademyId = isSuper ? formData.academy_id : me.academyId;
+        if (!effectiveAcademyId && isSuper) {
+            errors.academy_id = "Please select an academy.";
+        }
+        if (!formData.team_type) {
+            errors.team_type = "Please select a team type.";
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
     };
 
     const handleGenerateCode = async () => {
@@ -151,14 +238,10 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.team_name.trim()) return setError("Team name is required");
+        if (!validateAll()) return;
 
         const effectiveAcademyId = isSuper ? formData.academy_id : me.academyId;
         const effectiveBranchId = isBranchAdmin ? me.branchId : (formData.branch_id || null);
-
-        if (!effectiveAcademyId && isSuper) {
-            return setError("Please select an academy");
-        }
 
         try {
             setLoading(true);
@@ -183,6 +266,9 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -209,7 +295,6 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
         return <div className="alert alert-danger">You do not have access to this team.</div>;
     }
 
-    const currentAcademyId = isSuper ? formData.academy_id : me.academyId;
     const branchOptions = currentAcademyId
         ? branches.filter((b) => inAcademy(b, currentAcademyId))
         : [];
@@ -233,22 +318,23 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
             <div className="card-body">
                 {(error || orgError) && <div className="alert alert-danger">{error || orgError}</div>}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     {/* Academy & Branch Selection / Auto-filled Display */}
                     <div className="row mb-3 p-3 bg-light rounded-3 border">
                         {isSuper ? (
                             <>
                                 <div className="col-md-6 mb-2 mb-md-0">
-                                    <label className="form-label fw-semibold">
+                                    <label className="form-label fw-semibold" htmlFor="academy_id">
                                         <Building2 size={16} className="me-1 text-primary" />
-                                        Academy <span className="text-danger">*</span>
+                                        Academy <span className="text-danger ms-1">*</span>
                                     </label>
                                     <select
+                                        id="academy_id"
                                         name="academy_id"
-                                        className="form-select"
+                                        className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                         value={formData.academy_id}
                                         onChange={handleChange}
-                                        required
+                                        onBlur={handleBlur("academy_id")}
                                     >
                                         <option value="">Select Academy</option>
                                         {academies.map((a) => (
@@ -257,12 +343,13 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                                             </option>
                                         ))}
                                     </select>
+                                    <FormError error={fieldErrors.academy_id} />
                                 </div>
 
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
                                         <GitBranch size={16} className="me-1 text-primary" />
-                                        Branch (optional)
+                                        Branch
                                     </label>
                                     <select
                                         name="branch_id"
@@ -302,7 +389,7 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
                                         <GitBranch size={16} className="me-1 text-primary" />
-                                        Branch (optional)
+                                        Branch
                                     </label>
                                     <select
                                         name="branch_id"
@@ -357,20 +444,22 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team Name <span className="text-danger">*</span></label>
+                            <label className="form-label" htmlFor="team_name">Team Name <span className="text-danger ms-1">*</span></label>
                             <input
+                                id="team_name"
                                 type="text"
                                 name="team_name"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.team_name || isDuplicateTeamName ? "is-invalid border-danger" : ""}`}
                                 value={formData.team_name}
                                 onChange={handleChange}
+                                onBlur={handleBlur("team_name")}
                                 placeholder="Enter team name"
-                                required
                             />
+                            <FormError error={fieldErrors.team_name || (isDuplicateTeamName ? "A team with this name already exists in the selected academy and branch." : null)} />
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team Code (optional)</label>
+                            <label className="form-label">Team Code</label>
                             <div className="input-group">
                                 <input
                                     type="text"
@@ -405,7 +494,7 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Category (optional)</label>
+                            <label className="form-label">Category</label>
                             <input
                                 type="text"
                                 name="category"
@@ -417,7 +506,7 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Age Group (optional)</label>
+                            <label className="form-label">Age Group</label>
                             <input
                                 type="text"
                                 name="age_group"
@@ -446,7 +535,7 @@ export default function TeamForm({ id = null, returnTo = "/next_panel/teams" }) 
                     </div>
 
                     <div className="d-flex gap-2">
-                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                        <button type="submit" className="btn btn-primary" disabled={loading || isDuplicateTeamName}>
                             {loading ? "Saving..." : isEdit ? "Update Team" : "Add Team"}
                         </button>
                         <button
