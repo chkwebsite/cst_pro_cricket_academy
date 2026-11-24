@@ -87,31 +87,19 @@ export async function PUT(request, { params }) {
         const trimmedModule = typeof module_name === "string" ? module_name.trim() : "";
         const trimmedPermission = typeof permission_name === "string" ? permission_name.trim() : "";
 
-        if (!trimmedModule) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Module name is required",
-                },
-                { status: 400 }
-            );
+        const errors = {};
+        if (!trimmedModule) errors.module_name = "Module name is required.";
+        if (!trimmedPermission) errors.permission_name = "Permission name is required.";
+        if (status !== 0 && status !== 1 && status !== "0" && status !== "1") {
+            errors.status = "Status must be Active or Inactive.";
         }
 
-        if (!trimmedPermission) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Permission name is required",
-                },
-                { status: 400 }
-            );
-        }
-
-        if (status !== 0 && status !== 1) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Status must be 0 or 1",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -128,6 +116,9 @@ export async function PUT(request, { params }) {
                 {
                     success: false,
                     message: "Permission name already exists",
+                    errors: {
+                        permission_name: "Permission name already exists",
+                    },
                 },
                 { status: 409 }
             );

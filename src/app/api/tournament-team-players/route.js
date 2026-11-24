@@ -276,22 +276,6 @@ export async function POST(request) {
         const playerFee = Number(player_fee);
         const paidAmount = Number(paid_amount);
 
-        if (
-            !Number.isInteger(tournamentTeamId) ||
-            tournamentTeamId <= 0 ||
-            !Number.isInteger(teamId) ||
-            teamId <= 0
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Valid tournament_team_id and team_id are required",
-                },
-                { status: 400 }
-            );
-        }
-
-        // Exactly one player source must be provided
         const hasUser = user_id !== undefined &&
             user_id !== null &&
             user_id !== "";
@@ -300,11 +284,29 @@ export async function POST(request) {
             outside_player_id !== null &&
             outside_player_id !== "";
 
+        const errors = {};
+        if (!tournament_id || Number(tournament_id) <= 0) {
+            errors.tournament_id = "Please choose a tournament.";
+        }
+        if (!Number.isInteger(tournamentTeamId) || tournamentTeamId <= 0) {
+            errors.tournament_team_id = "Please choose a tournament team.";
+        }
         if (hasUser === hasOutsidePlayer) {
+            errors.player_id = "Please select either an academy player or an outside player.";
+        }
+        if (!Number.isFinite(playerFee) || playerFee < 0) {
+            errors.player_fee = "Player tournament fee must be zero or greater.";
+        }
+        if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > playerFee) {
+            errors.paid_amount = "Paid amount must be between 0 and player fee.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Provide either user_id or outside_player_id, not both",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );

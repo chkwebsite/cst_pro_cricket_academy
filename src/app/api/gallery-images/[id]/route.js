@@ -75,6 +75,25 @@ export async function PUT(request, { params }) {
             }, { status: 403 });
         }
         const targetAlbumId = album_id || currentRecord.album_id;
+        const errors = {};
+
+        if (album_id !== undefined && !album_id) {
+            errors.album_id = "Album ID cannot be empty.";
+        }
+
+        const ALLOWED_TYPES = {
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+        };
+
+        if (imageFile && typeof imageFile.arrayBuffer === "function" && imageFile.size > 0) {
+            if (!ALLOWED_TYPES[imageFile.type]) {
+                errors.image = "Only JPG, PNG and WEBP images are allowed.";
+            } else if (imageFile.size > 2 * 1024 * 1024) {
+                errors.image = "Image must not exceed 2MB.";
+            }
+        }
 
         if (album_id) {
             const [albumRows] = await connection.execute(
@@ -82,22 +101,19 @@ export async function PUT(request, { params }) {
                 [targetAlbumId]
             );
             if (!albumRows.length) {
-                return NextResponse.json({ success: false, message: "Gallery album not found" }, { status: 404 });
+                errors.album_id = "Selected gallery album does not exist.";
             }
         }
 
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json({
+                success: false,
+                message: Object.values(errors)[0],
+                errors
+            }, { status: 400 });
+        }
+
         if (imageFile && typeof imageFile.arrayBuffer === "function" && imageFile.size > 0) {
-            const ALLOWED_TYPES = {
-                "image/jpeg": ".jpg",
-                "image/png": ".png",
-                "image/webp": ".webp",
-            };
-            if (!ALLOWED_TYPES[imageFile.type]) {
-                return NextResponse.json({ success: false, message: "Only JPG, PNG and WEBP images are allowed" }, { status: 400 });
-            }
-            if (imageFile.size > 2 * 1024 * 1024) {
-                return NextResponse.json({ success: false, message: "Image must not exceed 2MB" }, { status: 400 });
-            }
             const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "gallery-images");
             await fs.mkdir(uploadDir, { recursive: true });
             const fileName = `gallery-${Date.now()}-${crypto.randomUUID()}${ALLOWED_TYPES[imageFile.type]}`;

@@ -198,6 +198,7 @@ export async function PUT(request, context) {
             );
         }
 
+        const errors = {};
         const allowedStatuses = [
             "Pending",
             "Partial",
@@ -209,27 +210,16 @@ export async function PUT(request, context) {
             payment_status !== undefined &&
             !allowedStatuses.includes(payment_status)
         ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid payment_status."
-                },
-                { status: 400 }
-            );
+            errors.payment_status = "Invalid payment status.";
         }
 
         if (
             due_date !== undefined &&
             due_date !== null &&
+            due_date !== "" &&
             !isValidDate(due_date)
         ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid due_date. Use YYYY-MM-DD."
-                },
-                { status: 400 }
-            );
+            errors.due_date = "Invalid due date. Use YYYY-MM-DD.";
         }
 
         const amountFields = {
@@ -242,15 +232,20 @@ export async function PUT(request, context) {
         };
 
         for (const [key, value] of Object.entries(amountFields)) {
-            if (value !== undefined && !isValidAmount(value)) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: `${key} must be a valid non-negative amount.`
-                    },
-                    { status: 400 }
-                );
+            if (value !== undefined && value !== null && value !== "" && !isValidAmount(value)) {
+                errors[key] = `${key.replace(/_/g, ' ')} must be a valid non-negative amount.`;
             }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: Object.values(errors)[0],
+                    errors,
+                },
+                { status: 400 }
+            );
         }
 
         connection = await pool.getConnection();

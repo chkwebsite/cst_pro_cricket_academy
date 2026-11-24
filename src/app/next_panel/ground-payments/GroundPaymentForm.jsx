@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const PAYMENT_MODES = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
 
@@ -24,6 +25,68 @@ export default function GroundPaymentForm({ id = null }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        let err = "";
+        const val = typeof value === "string" ? value.trim() : value;
+        switch (name) {
+            case "booking_id":
+                if (!val || Number(val) <= 0) err = "Please choose a valid booking.";
+                break;
+            case "payment_date":
+                if (!val) err = "Payment date is required.";
+                break;
+            case "amount":
+                if (val === "" || val === undefined || val === null) err = "Payment amount is required.";
+                else if (Number(val) <= 0) err = "Payment amount must be greater than zero.";
+                break;
+            case "payment_mode":
+                if (!val) err = "Payment mode is required.";
+                break;
+            default:
+                break;
+        }
+        return err;
+    };
+
+    const handleBlur = (field) => {
+        const err = validateField(field, formData[field]);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        for (const f of ["booking_id", "payment_date", "amount", "payment_mode"]) {
+            const err = validateField(f, formData[f]);
+            if (err) errors[f] = err;
+        }
+
+        setFieldErrors(errors);
+
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
     const [bookings, setBookings] = useState([]);
     const [bookingsLoading, setBookingsLoading] = useState(true);
     const [bookingsError, setBookingsError] = useState("");
@@ -103,8 +166,10 @@ export default function GroundPaymentForm({ id = null }) {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        clearError(name);
 
         if (name === "booking_id") {
+            clearError("amount");
             const selectedBooking = bookings.find((booking) => Number(booking.id) === Number(value));
             return setFormData((prev) => ({
                 ...prev,
@@ -122,13 +187,13 @@ export default function GroundPaymentForm({ id = null }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError("");
 
-        // Mirrors the API's required-field validation
+        if (!validateAll()) {
+            return;
+        }
+
         const bookingId = Number(formData.booking_id);
-        if (!Number.isInteger(bookingId) || bookingId <= 0) return setError("Please choose a valid booking");
-        if (!formData.payment_date) return setError("Payment date is required");
-        if (!(Number(formData.amount) > 0)) return setError("Payment amount must be greater than zero");
-        if (!formData.payment_mode) return setError("Payment mode is required");
 
         try {
             setLoading(true);
@@ -150,6 +215,15 @@ export default function GroundPaymentForm({ id = null }) {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 throw new Error(data.error || data.message || "Something went wrong");
             }
 
@@ -180,13 +254,13 @@ export default function GroundPaymentForm({ id = null }) {
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Booking ID / Booking No. <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Booking ID / Booking No. <RequiredLabel /></label>
                             <select
                                 name="booking_id"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.booking_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.booking_id}
                                 onChange={handleChange}
-                                required
+                                onBlur={() => handleBlur("booking_id")}
                                 disabled={bookingsLoading || !isEdit && Boolean(bookingsError)}
                             >
                                 <option value="">
@@ -203,6 +277,7 @@ export default function GroundPaymentForm({ id = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.booking_id} />
                             {bookingsError && <div className="form-text text-danger">{bookingsError}</div>}
                             {!bookingsLoading && !bookingsError && bookings.length === 0 && (
                                 <div className="form-text">No bookings with balance are available.</div>
@@ -210,46 +285,50 @@ export default function GroundPaymentForm({ id = null }) {
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Payment Date <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Payment Date <RequiredLabel /></label>
                             <input
                                 type="date"
                                 name="payment_date"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.payment_date ? "is-invalid border-danger" : ""}`}
                                 value={formData.payment_date}
                                 onChange={handleChange}
-                                required
+                                onBlur={() => handleBlur("payment_date")}
                             />
+                            <FormError error={fieldErrors.payment_date} />
                         </div>
                     </div>
 
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Amount (₹) <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Amount (₹) <RequiredLabel /></label>
                             <input
                                 type="number"
                                 min="0.01"
                                 step="0.01"
                                 name="amount"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.amount ? "is-invalid border-danger" : ""}`}
                                 value={formData.amount}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("amount")}
                                 placeholder="Enter amount"
-                                required
                             />
+                            <FormError error={fieldErrors.amount} />
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Payment Mode <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Payment Mode <RequiredLabel /></label>
                             <select
                                 name="payment_mode"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.payment_mode ? "is-invalid border-danger" : ""}`}
                                 value={formData.payment_mode}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("payment_mode")}
                             >
                                 {PAYMENT_MODES.map((m) => (
                                     <option key={m} value={m}>{m}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.payment_mode} />
                         </div>
                     </div>
 

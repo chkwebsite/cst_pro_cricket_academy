@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     academy_id: "",
@@ -54,7 +55,18 @@ export default function GalleryCategoryForm({ id = null }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
 
     // Load Academies
     useEffect(() => {
@@ -131,15 +143,20 @@ export default function GalleryCategoryForm({ id = null }) {
 
     const handleNameChange = (e) => {
         const val = e.target.value;
+        clearError("category_name");
         setFormData((prev) => ({
             ...prev,
             category_name: val,
             slug: !isEdit && !prev.slug_manually_edited ? slugify(val) : prev.slug,
         }));
+        if (!isEdit && !formData.slug_manually_edited && val) {
+            clearError("slug");
+        }
     };
 
     const handleAutoSlug = () => {
         if (formData.category_name) {
+            clearError("slug");
             setFormData((prev) => ({
                 ...prev,
                 slug: slugify(prev.category_name),
@@ -147,16 +164,51 @@ export default function GalleryCategoryForm({ id = null }) {
         }
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "category_name" && !formData.category_name.trim()) {
+            err = "Category name is required.";
+        }
+        if (field === "slug" && !formData.slug.trim()) {
+            err = "Slug is required.";
+        }
+
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            clearError(field);
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.category_name.trim()) errors.category_name = "Category name is required.";
+        if (!formData.slug.trim()) errors.slug = "Slug is required.";
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleImageChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 2 * 1024 * 1024) {
-                setError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                setFieldErrors((prev) => ({ ...prev, featured_image: `"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.` }));
                 e.target.value = "";
                 setImageFile(null);
                 setImagePreview(null);
                 return;
             }
+            clearError("featured_image");
             setImageFile(file);
             setImagePreview(URL.createObjectURL(file));
         }
@@ -167,14 +219,7 @@ export default function GalleryCategoryForm({ id = null }) {
         setError("");
         setSuccessMsg("");
 
-        if (!formData.category_name.trim()) {
-            setError("Category name is required.");
-            return;
-        }
-        if (!formData.slug.trim()) {
-            setError("Slug is required.");
-            return;
-        }
+        if (!validateAll()) return;
 
         try {
             setLoading(true);
@@ -204,6 +249,15 @@ export default function GalleryCategoryForm({ id = null }) {
             const json = await res.json();
 
             if (!res.ok || !json.success) {
+                if (json.errors && typeof json.errors === "object") {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save gallery category.");
             }
 
@@ -264,38 +318,44 @@ export default function GalleryCategoryForm({ id = null }) {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleSubmit} noValidate>
                         <div className="card border-0 shadow-sm rounded-4 p-4 mb-4">
                             <h5 className="mb-3 text-secondary">Basic Information</h5>
                             <div className="row g-3">
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Category Name <span className="text-danger">*</span>
+                                        <RequiredLabel>Category Name</RequiredLabel>
                                     </label>
                                     <input
                                         type="text"
-                                        className="form-control"
+                                        name="category_name"
+                                        id="category_name"
+                                        className={`form-control ${fieldErrors.category_name ? "is-invalid border-danger" : ""}`}
                                         placeholder="e.g. Tournaments, Practice Matches, Annual Camp"
                                         value={formData.category_name}
                                         onChange={handleNameChange}
-                                        required
+                                        onBlur={handleBlur("category_name")}
                                     />
+                                    <FormError error={fieldErrors.category_name} />
                                 </div>
 
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Slug <span className="text-danger">*</span>
+                                        <RequiredLabel>Slug</RequiredLabel>
                                     </label>
                                     <div className="input-group">
                                         <input
                                             type="text"
-                                            className="form-control"
+                                            name="slug"
+                                            id="slug"
+                                            className={`form-control ${fieldErrors.slug ? "is-invalid border-danger" : ""}`}
                                             placeholder="e.g. tournaments"
                                             value={formData.slug}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, slug: e.target.value })
-                                            }
-                                            required
+                                            onChange={(e) => {
+                                                clearError("slug");
+                                                setFormData({ ...formData, slug: e.target.value, slug_manually_edited: true });
+                                            }}
+                                            onBlur={handleBlur("slug")}
                                         />
                                         <button
                                             type="button"
@@ -306,6 +366,7 @@ export default function GalleryCategoryForm({ id = null }) {
                                             <Sparkles size={16} className="me-1" /> Auto
                                         </button>
                                     </div>
+                                    <FormError error={fieldErrors.slug} />
                                     <small className="text-muted">Unique URL identifier</small>
                                 </div>
 
@@ -333,11 +394,14 @@ export default function GalleryCategoryForm({ id = null }) {
                                     ) : (
                                         <div>
                                             <select
-                                                className="form-select"
+                                                name="academy_id"
+                                                id="academy_id"
+                                                className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                                 value={formData.academy_id}
-                                                onChange={(e) =>
-                                                    setFormData({ ...formData, academy_id: e.target.value })
-                                                }
+                                                onChange={(e) => {
+                                                    clearError("academy_id");
+                                                    setFormData({ ...formData, academy_id: e.target.value });
+                                                }}
                                             >
                                                 <option value="">All Academies (Global)</option>
                                                 {academiesLoading && visibleAcademies.length === 0 && (
@@ -352,6 +416,7 @@ export default function GalleryCategoryForm({ id = null }) {
                                                     </option>
                                                 ))}
                                             </select>
+                                            <FormError error={fieldErrors.academy_id} />
                                             <small className="text-muted d-block mt-1">
                                                 Super Admin: select an academy or leave Global.
                                             </small>
@@ -438,10 +503,13 @@ export default function GalleryCategoryForm({ id = null }) {
                                     </label>
                                     <input
                                         type="file"
-                                        className="form-control"
+                                        name="featured_image"
+                                        id="featured_image"
+                                        className={`form-control ${fieldErrors.featured_image ? "is-invalid border-danger" : ""}`}
                                         accept="image/jpeg,image/png,image/webp,image/jpg"
                                         onChange={handleImageChange}
                                     />
+                                    <FormError error={fieldErrors.featured_image} />
                                     <small className="text-muted d-block mt-1">
                                         Allowed types: JPG, PNG, WEBP.
                                     </small>

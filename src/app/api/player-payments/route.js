@@ -408,14 +408,12 @@ export async function POST(request) {
         } = body;
         const received_by = Number(authUser.id);
 
-        if (!player_program_fee_id || !isValidAmount(paid_amount)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "player_program_fee_id and a positive paid_amount are required."
-                },
-                { status: 400 }
-            );
+        const errors = {};
+        if (!player_program_fee_id) {
+            errors.player_program_fee_id = "Please select a fee invoice to pay.";
+        }
+        if (!isValidAmount(paid_amount)) {
+            errors.paid_amount = "Please enter a valid payment amount greater than zero.";
         }
 
         const allowedModes = [
@@ -426,27 +424,26 @@ export async function POST(request) {
             "Cheque"
         ];
 
-        if (!allowedModes.includes(payment_mode)) {
+        if (payment_mode && !allowedModes.includes(payment_mode)) {
+            errors.payment_mode = "Invalid payment mode selected.";
+        }
+
+        if (!payment_date) {
+            errors.payment_date = "Payment date is required.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Invalid payment_mode."
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
         }
 
         const amount = Number(Number(paid_amount).toFixed(2));
-
-        if (!Number.isFinite(amount) || amount <= 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "paid_amount must be greater than zero."
-                },
-                { status: 400 }
-            );
-        }
 
         connection = await pool.getConnection();
 
@@ -527,7 +524,10 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Payment amount cannot exceed the outstanding balance.",
+                    message: `Payment amount (₹${amount}) cannot exceed the remaining balance due of ₹${currentDue}.`,
+                    errors: {
+                        paid_amount: `Payment amount cannot exceed the remaining balance due of ₹${currentDue}.`,
+                    },
                     total_amount: totalAmount,
                     paid_amount: alreadyPaid,
                     due_amount: currentDue

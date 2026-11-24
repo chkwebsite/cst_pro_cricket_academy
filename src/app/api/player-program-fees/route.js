@@ -364,34 +364,17 @@ export async function POST(request) {
             remarks = null
         } = body;
 
-        if (!user_program_id || !fee_month || fee_amount === undefined) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "user_program_id, fee_month and fee_amount are required."
-                },
-                { status: 400 }
-            );
+        const errors = {};
+        if (!user_program_id) errors.user_program_id = "Please select a player enrollment.";
+        if (!fee_month) errors.fee_month = "Fee month is required.";
+        else if (!isValidDate(fee_month) || fee_month.slice(-2) !== "01") {
+            errors.fee_month = "Fee month must be the first day of a month (YYYY-MM-01).";
         }
-
-        if (!isValidDate(fee_month) || fee_month.slice(-2) !== "01") {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "fee_month must be the first day of a month, e.g. 2026-10-01."
-                },
-                { status: 400 }
-            );
+        if (fee_amount === undefined || fee_amount === "" || !isValidAmount(fee_amount)) {
+            errors.fee_amount = "Fee amount must be a valid non-negative number.";
         }
-
-        if (due_date !== null && !isValidDate(due_date)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid due_date. Use YYYY-MM-DD."
-                },
-                { status: 400 }
-            );
+        if (due_date && !isValidDate(due_date)) {
+            errors.due_date = "Invalid due date format. Use YYYY-MM-DD.";
         }
 
         const amounts = {
@@ -404,24 +387,22 @@ export async function POST(request) {
         };
 
         for (const [key, value] of Object.entries(amounts)) {
-            if (!isValidAmount(value)) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: `${key} must be a valid non - negative amount.`
-                    },
-                    { status: 400 }
-                );
+            if (value !== undefined && value !== "" && !isValidAmount(value)) {
+                errors[key] = `${key.replace(/_/g, ' ')} must be a valid non-negative amount.`;
             }
         }
 
         const calculated = calculateFeeAmounts(amounts);
+        if (!calculated && !errors.discount_amount) {
+            errors.discount_amount = "Discount cannot exceed the fee subtotal.";
+        }
 
-        if (!calculated) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Discount cannot exceed the fee subtotal."
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -545,7 +526,10 @@ up.id AS user_program_id,
                 {
                     success: false,
                     message: "Fee invoice already exists for this enrollment and month.",
-                    fee_id: existing[0].id
+                    fee_id: existing[0].id,
+                    errors: {
+                        fee_month: "A fee invoice already exists for this enrollment and month.",
+                    },
                 },
                 { status: 409 }
             );

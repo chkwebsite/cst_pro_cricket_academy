@@ -5,7 +5,8 @@ import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/t
 // GET: All order items with filters
 export async function GET(request) {
     try {
-        const authUser = await getAuthenticatedUser(request);
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const { searchParams } = new URL(request.url);
 
         const order_id = searchParams.get("order_id");
@@ -241,12 +242,14 @@ export async function POST(request) {
             );
         }
 
-        // Tax is calculated after discount.
-        const taxableAmount = Number((grossAmount - discount).toFixed(2));
-        const taxAmount = Number(
-            (taxableAmount * taxPercent / 100).toFixed(2)
+        // Flipkart / Amazon Model: Product price is inclusive of all taxes & GST.
+        // lineTotal is the final customer price after discount.
+        // taxableAmount (base price) and taxAmount are derived from lineTotal.
+        const lineTotal = Number((grossAmount - discount).toFixed(2));
+        const taxableAmount = Number(
+            (taxPercent > 0 ? lineTotal / (1 + taxPercent / 100) : lineTotal).toFixed(2)
         );
-        const lineTotal = Number((taxableAmount + taxAmount).toFixed(2));
+        const taxAmount = Number((lineTotal - taxableAmount).toFixed(2));
 
         connection = await db.getConnection();
         await connection.beginTransaction();

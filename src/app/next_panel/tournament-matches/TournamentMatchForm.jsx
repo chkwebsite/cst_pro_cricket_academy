@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import useCurrentUser, { ROLES } from "../teams/useCurrentUser";
 import useTeamOptions from "../team-players/useTeamOptions";
 import useTournamentOptions from "../tournament-teams/useTournamentOptions";
@@ -72,6 +73,76 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        switch (name) {
+            case "tournament_id":
+                return !value ? "Please choose a tournament." : "";
+            case "match_no": {
+                const num = Number(value);
+                if (!value || !Number.isInteger(num) || num <= 0) {
+                    return "Match number must be a positive integer.";
+                }
+                return "";
+            }
+            case "team_b_id":
+                if (value && formData.team_a_id && Number(value) === Number(formData.team_a_id)) {
+                    return "Team A and Team B must be different teams.";
+                }
+                return "";
+            case "team_a_id":
+                if (value && formData.team_b_id && Number(value) === Number(formData.team_b_id)) {
+                    return "Team A and Team B must be different teams.";
+                }
+                return "";
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        const tErr = validateField("tournament_id", formData.tournament_id);
+        if (tErr) errs.tournament_id = tErr;
+
+        const mErr = validateField("match_no", formData.match_no);
+        if (mErr) errs.match_no = mErr;
+
+        const bErr = validateField("team_b_id", formData.team_b_id);
+        if (bErr) errs.team_b_id = bErr;
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // Fetch tournament teams for the selected tournament to know their assigned groups
     useEffect(() => {
@@ -329,6 +400,11 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        clearError(name);
+        if (name === "team_a_id" || name === "team_b_id") {
+            clearError("team_a_id");
+            clearError("team_b_id");
+        }
         setFormData((prev) => {
             const next = { ...prev, [name]: value };
             if (name === "tournament_id" && value) {
@@ -390,15 +466,20 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        if (!validateAll()) {
+            return;
+        }
+
         const tournamentId = Number(formData.tournament_id);
         const matchNo = Number(formData.match_no);
         const a = optionalId(formData.team_a_id);
         const b = optionalId(formData.team_b_id);
         const winner = optionalId(formData.winner_team_id);
 
-        if (!Number.isInteger(tournamentId) || tournamentId <= 0) return setError("Please choose a tournament");
-        if (!Number.isInteger(matchNo) || matchNo <= 0) return setError("Match number must be a positive integer");
-        if (a !== null && a === b) return setError("Team A and Team B must be different");
+        if (a !== null && a === b) {
+            setFieldErrors((prev) => ({ ...prev, team_b_id: "Team A and Team B must be different teams." }));
+            return setError("Team A and Team B must be different");
+        }
         if (winner !== null && winner !== a && winner !== b) return setError("Winner must be Team A or Team B");
 
         let submitStatus = formData.status;
@@ -440,7 +521,20 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                 }),
             });
             const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.message || "Something went wrong");
+            if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    if (firstKey) {
+                        const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
+                }
+                throw new Error(data.message || "Something went wrong");
+            }
 
             alert(isEdit ? "Tournament match updated successfully" : "Tournament match created successfully");
             router.push(returnTo);
@@ -475,8 +569,15 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Tournament <span className="text-danger ms-1">*</span></label>
-                            <select name="tournament_id" className="form-select" value={formData.tournament_id} onChange={handleChange} required>
+                            <label className="form-label">Tournament <RequiredLabel /></label>
+                            <select
+                                name="tournament_id"
+                                id="tournament_id"
+                                className={`form-select ${fieldErrors.tournament_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.tournament_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                            >
                                 <option value="">Choose Tournament</option>
                                 {tournaments.map((t) => (
                                     <option key={t.id} value={t.id}>
@@ -484,11 +585,22 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.tournament_id} />
                         </div>
 
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Match No. <span className="text-danger ms-1">*</span></label>
-                            <input type="number" min="1" name="match_no" className="form-control" value={formData.match_no} onChange={handleChange} required />
+                            <label className="form-label">Match No. <RequiredLabel /></label>
+                            <input
+                                type="number"
+                                min="1"
+                                name="match_no"
+                                id="match_no"
+                                className={`form-control ${fieldErrors.match_no ? "is-invalid border-danger" : ""}`}
+                                value={formData.match_no}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                            />
+                            <FormError error={fieldErrors.match_no} />
                             <div className="form-text">Unique within the tournament.</div>
                         </div>
 
@@ -548,12 +660,20 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                     <div className="row">
                         <div className="col-md-6 mb-3">
                             <label className="form-label">Team A</label>
-                            <select name="team_a_id" className="form-select" value={formData.team_a_id} onChange={handleChange}>
+                            <select
+                                name="team_a_id"
+                                id="team_a_id"
+                                className={`form-select ${fieldErrors.team_a_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.team_a_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                            >
                                 <option value="">TBD</option>
                                 {teamOptions.map((t) => (
                                     <option key={t.id} value={t.id}>{teamLabel(t)}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.team_a_id} />
                             {formData.group_name && (
                                 <div className="form-text text-muted">
                                     {formData.group_name} teams are listed first with their group tag.
@@ -562,12 +682,20 @@ export default function TournamentMatchForm({ id = null, returnTo = "/next_panel
                         </div>
                         <div className="col-md-6 mb-3">
                             <label className="form-label">Team B</label>
-                            <select name="team_b_id" className="form-select" value={formData.team_b_id} onChange={handleChange}>
+                            <select
+                                name="team_b_id"
+                                id="team_b_id"
+                                className={`form-select ${fieldErrors.team_b_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.team_b_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                            >
                                 <option value="">TBD</option>
                                 {teamBOptions.map((t) => (
                                     <option key={t.id} value={t.id}>{teamLabel(t)}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.team_b_id} />
                             {formData.group_name && (
                                 <div className="form-text text-muted">
                                     {formData.group_name} teams are listed first with their group tag.

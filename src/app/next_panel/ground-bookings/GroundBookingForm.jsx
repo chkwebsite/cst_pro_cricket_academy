@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarCheck, UserCheck, Search, X, Check, AlertCircle } from "lucide-react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import {
     BOOKING_STATUSES,
     PAYMENT_MODES,
@@ -119,6 +120,93 @@ export default function GroundBookingForm({
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        let err = "";
+        const val = typeof value === "string" ? value.trim() : value;
+        switch (name) {
+            case "ground_id":
+                if (!val) err = "Please select a ground.";
+                break;
+            case "slot_id":
+                if (!val) err = "Please select a slot.";
+                break;
+            case "booking_date":
+                if (!val) err = "Booking date is required.";
+                break;
+            case "customer_name":
+                if (!val) err = "Customer name is required.";
+                else if (val.length < 2) err = "Customer name must be at least 2 characters.";
+                break;
+            case "customer_email":
+                if (val && !/^\S+@\S+\.\S+$/.test(val)) {
+                    err = "Please enter a valid email address.";
+                }
+                break;
+            case "customer_phone":
+                if (val && !/^[0-9+\-\s()]{7,20}$/.test(val)) {
+                    err = "Please enter a valid phone number.";
+                }
+                break;
+            case "purpose":
+                if (!val) err = "Purpose is required.";
+                break;
+            case "total_amount":
+                if (Number(value) < 0) err = "Total amount cannot be negative.";
+                break;
+            case "paid_amount":
+                if (Number(value) < 0) err = "Paid amount cannot be negative.";
+                else if (Number(value) > Number(formData.total_amount)) err = "Paid amount cannot exceed total amount.";
+                break;
+            case "payment_mode":
+                if (Number(formData.paid_amount) > 0 && !val) {
+                    err = "Payment mode is required when paid amount > 0.";
+                }
+                break;
+            default:
+                break;
+        }
+        return err;
+    };
+
+    const handleBlur = (field) => {
+        const err = validateField(field, formData[field]);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        for (const f of ["ground_id", "slot_id", "booking_date", "customer_name", "purpose", "total_amount", "paid_amount", "customer_email", "customer_phone", "payment_mode"]) {
+            const err = validateField(f, formData[f]);
+            if (err) errors[f] = err;
+        }
+
+        setFieldErrors(errors);
+
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // Umpire modal state
     const [showUmpireModal, setShowUmpireModal] = useState(false);
@@ -478,42 +566,42 @@ export default function GroundBookingForm({
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        clearError(name);
 
         setFormData((prev) => {
             const next = { ...prev, [name]: value };
 
             // Changing ground invalidates the chosen slot
-            if (name === "ground_id") next.slot_id = "";
+            if (name === "ground_id") {
+                next.slot_id = "";
+                clearError("slot_id");
+            }
 
             // Picking a slot pre-fills the amount from the slot price (create only)
             if (name === "slot_id" && !isEdit) {
                 const slot = slots.find((s) => String(s.id) === String(value));
                 if (slot) next.total_amount = Number(slot.price) || 0;
             }
+
+            if (name === "total_amount" || name === "paid_amount") {
+                clearError("paid_amount");
+                clearError("payment_mode");
+            }
+
             return next;
         });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError("");
+
+        if (!validateAll()) {
+            return;
+        }
 
         const total = Number(formData.total_amount) || 0;
         const paid = Number(formData.paid_amount) || 0;
-
-        // Mirrors the API validation
-        if (!formData.ground_id) return setError("Please select a ground");
-        if (!formData.slot_id) return setError("Please select a slot");
-        if (!formData.booking_date) return setError("Booking date is required");
-        if (!formData.customer_name.trim()) return setError("Customer name is required");
-        if (!formData.purpose.trim()) return setError("Purpose is required");
-        if (total < 0 || paid < 0) return setError("Amount cannot be negative");
-        if (paid > total) return setError("Paid amount cannot be greater than total amount");
-        if (paid > 0 && !formData.payment_mode) {
-            return setError("Payment mode is required when paid amount is greater than 0");
-        }
-        if (formData.customer_email.trim() && !/^\S+@\S+\.\S+$/.test(formData.customer_email.trim())) {
-            return setError("Please enter a valid email address");
-        }
 
         // academy / branch come from the slot (create) or the URL (edit)
         const slot = slots.find((s) => String(s.id) === String(formData.slot_id));
@@ -562,6 +650,15 @@ export default function GroundBookingForm({
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 // 409 includes the booking that already holds this slot/date
                 const clash = data.booking_no ? ` (${data.booking_no})` : "";
                 throw new Error((data.message || "Something went wrong") + clash);
@@ -638,30 +735,31 @@ export default function GroundBookingForm({
                     {/* Ground / slot / date */}
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Ground <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Ground <RequiredLabel /></label>
                             <select
                                 name="ground_id"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.ground_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.ground_id}
                                 onChange={handleChange}
-                                required
+                                onBlur={() => handleBlur("ground_id")}
                             >
                                 <option value="">Select ground</option>
                                 {grounds.map((g) => (
                                     <option key={g.id} value={g.id}>{g.ground_name} ({g.ground_code})</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.ground_id} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Slot <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Slot <RequiredLabel /></label>
                             <select
                                 name="slot_id"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.slot_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.slot_id}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("slot_id")}
                                 disabled={!formData.ground_id}
-                                required
                             >
                                 <option value="">
                                     {formData.ground_id
@@ -674,34 +772,37 @@ export default function GroundBookingForm({
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.slot_id} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Booking Date <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Booking Date <RequiredLabel /></label>
                             <input
                                 type="date"
                                 name="booking_date"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.booking_date ? "is-invalid border-danger" : ""}`}
                                 value={formData.booking_date}
                                 onChange={handleChange}
-                                required
+                                onBlur={() => handleBlur("booking_date")}
                             />
+                            <FormError error={fieldErrors.booking_date} />
                         </div>
                     </div>
 
                     {/* Customer */}
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Customer Name <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Customer Name <RequiredLabel /></label>
                             <input
                                 type="text"
                                 name="customer_name"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.customer_name ? "is-invalid border-danger" : ""}`}
                                 value={formData.customer_name}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("customer_name")}
                                 placeholder="Enter customer name"
-                                required
                             />
+                            <FormError error={fieldErrors.customer_name} />
                         </div>
 
                         <div className="col-md-4 mb-3">
@@ -709,11 +810,13 @@ export default function GroundBookingForm({
                             <input
                                 type="tel"
                                 name="customer_phone"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.customer_phone ? "is-invalid border-danger" : ""}`}
                                 value={formData.customer_phone}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("customer_phone")}
                                 placeholder="Enter phone number"
                             />
+                            <FormError error={fieldErrors.customer_phone} />
                         </div>
 
                         <div className="col-md-4 mb-3">
@@ -721,29 +824,32 @@ export default function GroundBookingForm({
                             <input
                                 type="email"
                                 name="customer_email"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.customer_email ? "is-invalid border-danger" : ""}`}
                                 value={formData.customer_email}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("customer_email")}
                                 placeholder="Enter email"
                             />
+                            <FormError error={fieldErrors.customer_email} />
                         </div>
                     </div>
 
                     {/* Purpose / links */}
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Purpose <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Purpose <RequiredLabel /></label>
                             <select
                                 name="purpose"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.purpose ? "is-invalid border-danger" : ""}`}
                                 value={formData.purpose}
                                 onChange={handleChange}
-                                required
+                                onBlur={() => handleBlur("purpose")}
                             >
                                 {PURPOSES.map((purpose) => (
                                     <option key={purpose} value={purpose}>{purpose}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.purpose} />
                         </div>
 
                         <div className="col-md-4 mb-3">
@@ -857,16 +963,18 @@ export default function GroundBookingForm({
                     {/* Payment */}
                     <div className="row">
                         <div className="col-md-3 mb-3">
-                            <label className="form-label">Total Amount (₹) <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Total Amount (₹) <RequiredLabel /></label>
                             <input
                                 type="number"
                                 name="total_amount"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.total_amount ? "is-invalid border-danger" : ""}`}
                                 min="0"
                                 step="0.01"
                                 value={formData.total_amount}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("total_amount")}
                             />
+                            <FormError error={fieldErrors.total_amount} />
                         </div>
 
                         <div className="col-md-3 mb-3">
@@ -874,12 +982,14 @@ export default function GroundBookingForm({
                             <input
                                 type="number"
                                 name="paid_amount"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.paid_amount ? "is-invalid border-danger" : ""}`}
                                 min="0"
                                 step="0.01"
                                 value={formData.paid_amount}
                                 onChange={handleChange}
+                                onBlur={() => handleBlur("paid_amount")}
                             />
+                            <FormError error={fieldErrors.paid_amount} />
                         </div>
 
                         <div className="col-md-3 mb-3">
@@ -908,17 +1018,18 @@ export default function GroundBookingForm({
                     {Number(formData.paid_amount) > 0 && (
                         <div className="row">
                             <div className="col-md-4 mb-3">
-                                <label className="form-label">Payment Mode <span className="text-danger ms-1">*</span></label>
+                                <label className="form-label">Payment Mode <RequiredLabel /></label>
                                 <select
                                     name="payment_mode"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.payment_mode ? "is-invalid border-danger" : ""}`}
                                     value={formData.payment_mode}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={() => handleBlur("payment_mode")}
                                 >
                                     <option value="">Select mode</option>
                                     {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
                                 </select>
+                                <FormError error={fieldErrors.payment_mode} />
                             </div>
 
                             <div className="col-md-4 mb-3">

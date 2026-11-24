@@ -238,11 +238,30 @@ export async function POST(request) {
             status
         } = body;
 
+        const errors = {};
         if (!team_id || isNaN(Number(team_id))) {
+            errors.team_id = "Please choose a valid team.";
+        }
+
+        const hasUser = user_id !== null && user_id !== undefined && user_id !== "";
+        const hasOutsidePlayer = outside_player_id !== null && outside_player_id !== undefined && outside_player_id !== "";
+
+        if (!hasUser && !hasOutsidePlayer) {
+            errors.player_id = "Please choose a player.";
+        } else if (hasUser && hasOutsidePlayer) {
+            errors.player_id = "Only one of user or outside player can be selected.";
+        }
+
+        if (joined_date && left_date && left_date < joined_date) {
+            errors.left_date = "Left date cannot be before joined date.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Valid team_id is required"
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -263,7 +282,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Team not found"
+                    message: "Team not found",
+                    errors: { team_id: "Team not found." },
                 },
                 { status: 404 }
             );
@@ -271,31 +291,8 @@ export async function POST(request) {
 
         if (!isTeamAuthorized(teamRows[0], authUser)) {
             return NextResponse.json(
-                { success: false, message: "Access denied: Unauthorized to manage this team" },
+                { success: false, message: "Access denied: Unauthorized to manage this team", errors: { team_id: "Unauthorized to manage this team." } },
                 { status: 403 }
-            );
-        }
-
-        const hasUser = user_id !== null && user_id !== undefined && user_id !== "";
-        const hasOutsidePlayer = outside_player_id !== null && outside_player_id !== undefined && outside_player_id !== "";
-
-        if (!hasUser && !hasOutsidePlayer) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Either user_id or outside_player_id is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (hasUser && hasOutsidePlayer) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Only one of user_id or outside_player_id can be selected"
-                },
-                { status: 400 }
             );
         }
 
@@ -398,7 +395,10 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Player already active in this team"
+                    message: "Player already active in this team",
+                    errors: {
+                        player_id: "Player is already active in this team.",
+                    },
                 },
                 { status: 409 }
             );

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import OutsidePlayerForm from "../outside-players/OutsidePlayerForm";
 import useCurrentUser, { ROLES } from "../teams/useCurrentUser";
 import useTeamOptions from "./useTeamOptions";
@@ -46,6 +47,66 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
     const [fetching, setFetching] = useState(false);
     const [forbidden, setForbidden] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        switch (name) {
+            case "team_id":
+                return !value ? "Please choose a team." : "";
+            case "player_id":
+                return !value ? "Please choose a player." : "";
+            case "left_date":
+                if (value && formData.joined_date && value < formData.joined_date) {
+                    return "Left date cannot be before joined date.";
+                }
+                return "";
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (name, value) => {
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        const teamErr = validateField("team_id", formData.team_id);
+        if (teamErr) errs.team_id = teamErr;
+
+        const selPlayerId = isUserSource ? formData.user_id : formData.outside_player_id;
+        const playerErr = validateField("player_id", selPlayerId);
+        if (playerErr) errs.player_id = playerErr;
+
+        const leftErr = validateField("left_date", formData.left_date);
+        if (leftErr) errs.left_date = leftErr;
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // GET SINGLE TEAM PLAYER (edit mode)
     useEffect(() => {
@@ -93,11 +154,16 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: name === "status" ? Number(value) : value }));
+        clearError(name);
+        if (name === "user_id" || name === "outside_player_id") {
+            clearError("player_id");
+        }
     };
 
     const setSource = (source) => {
         setPlayerSearch("");
         setFormData((prev) => ({ ...prev, source, user_id: "", outside_player_id: "" }));
+        clearError("player_id");
     };
 
     // ---------- dropdown options ----------
@@ -135,10 +201,8 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.team_id) return setError("Please choose a team");
-        if (!selectedPlayerId) return setError("Please choose a player");
-        if (formData.joined_date && formData.left_date && formData.left_date < formData.joined_date) {
-            return setError("Left date cannot be before joined date");
+        if (!validateAll()) {
+            return;
         }
 
         try {
@@ -165,6 +229,17 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    if (firstKey) {
+                        const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -205,8 +280,15 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
 
                 <form onSubmit={handleSubmit}>
                     <div className="mb-3">
-                        <label className="form-label">Team <span className="text-danger ms-1">*</span></label>
-                        <select name="team_id" className="form-select" value={formData.team_id} onChange={handleChange} required>
+                        <label className="form-label">Team <RequiredLabel /></label>
+                        <select
+                            name="team_id"
+                            id="team_id"
+                            className={`form-select ${fieldErrors.team_id ? "is-invalid border-danger" : ""}`}
+                            value={formData.team_id}
+                            onChange={handleChange}
+                            onBlur={(e) => handleBlur("team_id", e.target.value)}
+                        >
                             <option value="">Choose Team</option>
                             {teamChoices.map((t) => (
                                 <option key={t.id} value={t.id}>
@@ -217,6 +299,7 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                                 </option>
                             ))}
                         </select>
+                        <FormError error={fieldErrors.team_id} />
                         {isBranchAdmin && <div className="form-text">All teams in your academy, including external teams, are listed.</div>}
                     </div>
 
@@ -246,7 +329,7 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Player <span className="text-danger ms-1">*</span></label>
+                        <label className="form-label">Player <RequiredLabel /></label>
                         <div className="row">
                             <div className="col-md-4 mb-2 mb-md-0">
                                 <input
@@ -261,10 +344,11 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                                 <div className="d-flex flex-column flex-sm-row gap-2">
                                     <select
                                         name={isUserSource ? "user_id" : "outside_player_id"}
-                                        className="form-select flex-grow-1"
+                                        id="player_id"
+                                        className={`form-select flex-grow-1 ${fieldErrors.player_id ? "is-invalid border-danger" : ""}`}
                                         value={isUserSource ? formData.user_id : formData.outside_player_id}
                                         onChange={handleChange}
-                                        required
+                                        onBlur={(e) => handleBlur("player_id", e.target.value)}
                                     >
                                         <option value="">{isUserSource ? "Choose Academy Player" : "Choose Outside Player"}</option>
                                         {playerChoices.map((p) => (
@@ -284,6 +368,7 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                                         </button>
                                     )}
                                 </div>
+                                <FormError error={fieldErrors.player_id} />
                             </div>
                         </div>
                     </div>
@@ -336,11 +421,14 @@ export default function TeamPlayerForm({ id = null, returnTo = "/next_panel/team
                             <input
                                 type="date"
                                 name="left_date"
-                                className="form-control"
+                                id="left_date"
+                                className={`form-control ${fieldErrors.left_date ? "is-invalid border-danger" : ""}`}
                                 value={formData.left_date}
                                 min={formData.joined_date || undefined}
                                 onChange={handleChange}
+                                onBlur={(e) => handleBlur("left_date", e.target.value)}
                             />
+                            <FormError error={fieldErrors.left_date} />
                         </div>
                     </div>
 

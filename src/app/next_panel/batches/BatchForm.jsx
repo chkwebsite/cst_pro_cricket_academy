@@ -524,6 +524,7 @@ export default function BatchForm({ id = null, initialData = null }) {
                                 }}
                                 onBlur={handleBlur("batch_name")}
                                 required
+                                maxLength="50"
                             />
                             <FormError error={fieldErrors.batch_name} />
                         </div>

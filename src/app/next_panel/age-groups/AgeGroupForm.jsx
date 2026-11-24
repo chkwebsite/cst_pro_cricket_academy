@@ -57,8 +57,9 @@ export default function AgeGroupForm({ id = null }) {
             setFieldErrors((prev) => {
                 const next = { ...prev };
                 delete next[name];
-                if ((name === "min_age" || name === "max_age") && next.min_age === "Minimum age cannot be greater than maximum age.") {
+                if ((name === "min_age" || name === "max_age") && (next.min_age === "Minimum age cannot be greater than maximum age." || next.max_age === "Maximum age cannot be less than minimum age.")) {
                     delete next.min_age;
+                    delete next.max_age;
                 }
                 return next;
             });
@@ -86,8 +87,12 @@ export default function AgeGroupForm({ id = null }) {
         if (name === "min_age") {
             if (value === "" || value === null || value === undefined) {
                 setFieldErrors((prev) => ({ ...prev, min_age: "Minimum age is required." }));
-            } else if (Number(value) < 0) {
-                setFieldErrors((prev) => ({ ...prev, min_age: "Minimum age cannot be negative." }));
+            } else if (isNaN(Number(value))) {
+                setFieldErrors((prev) => ({ ...prev, min_age: "Minimum age must be a valid number." }));
+            } else if (Number(value) < 6) {
+                setFieldErrors((prev) => ({ ...prev, min_age: "Minimum age cannot be less than 6." }));
+            } else if (Number(value) > 60) {
+                setFieldErrors((prev) => ({ ...prev, min_age: "Minimum age cannot be greater than 60." }));
             } else if (
                 formData.max_age !== "" &&
                 formData.max_age !== null &&
@@ -99,6 +104,7 @@ export default function AgeGroupForm({ id = null }) {
                 setFieldErrors((prev) => {
                     const next = { ...prev };
                     if (next.min_age) delete next.min_age;
+                    if (next.max_age === "Maximum age cannot be less than minimum age.") delete next.max_age;
                     return next;
                 });
             }
@@ -106,15 +112,19 @@ export default function AgeGroupForm({ id = null }) {
         if (name === "max_age") {
             if (value === "" || value === null || value === undefined) {
                 setFieldErrors((prev) => ({ ...prev, max_age: "Maximum age is required." }));
-            } else if (Number(value) < 0) {
-                setFieldErrors((prev) => ({ ...prev, max_age: "Maximum age cannot be negative." }));
+            } else if (isNaN(Number(value))) {
+                setFieldErrors((prev) => ({ ...prev, max_age: "Maximum age must be a valid number." }));
+            } else if (Number(value) < 6) {
+                setFieldErrors((prev) => ({ ...prev, max_age: "Maximum age cannot be less than 6." }));
+            } else if (Number(value) > 60) {
+                setFieldErrors((prev) => ({ ...prev, max_age: "Maximum age cannot be greater than 60." }));
             } else if (
                 formData.min_age !== "" &&
                 formData.min_age !== null &&
                 formData.min_age !== undefined &&
                 Number(formData.min_age) > Number(value)
             ) {
-                setFieldErrors((prev) => ({ ...prev, min_age: "Minimum age cannot be greater than maximum age." }));
+                setFieldErrors((prev) => ({ ...prev, max_age: "Maximum age cannot be less than minimum age." }));
             } else {
                 setFieldErrors((prev) => {
                     const next = { ...prev };
@@ -139,14 +149,22 @@ export default function AgeGroupForm({ id = null }) {
 
         if (formData.min_age === "" || formData.min_age === null || formData.min_age === undefined) {
             errs.min_age = "Minimum age is required.";
-        } else if (Number(formData.min_age) < 0) {
-            errs.min_age = "Minimum age cannot be negative.";
+        } else if (isNaN(Number(formData.min_age))) {
+            errs.min_age = "Minimum age must be a valid number.";
+        } else if (Number(formData.min_age) < 6) {
+            errs.min_age = "Minimum age cannot be less than 6.";
+        } else if (Number(formData.min_age) > 60) {
+            errs.min_age = "Minimum age cannot be greater than 60.";
         }
 
         if (formData.max_age === "" || formData.max_age === null || formData.max_age === undefined) {
             errs.max_age = "Maximum age is required.";
-        } else if (Number(formData.max_age) < 0) {
-            errs.max_age = "Maximum age cannot be negative.";
+        } else if (isNaN(Number(formData.max_age))) {
+            errs.max_age = "Maximum age must be a valid number.";
+        } else if (Number(formData.max_age) < 6) {
+            errs.max_age = "Maximum age cannot be less than 6.";
+        } else if (Number(formData.max_age) > 60) {
+            errs.max_age = "Maximum age cannot be greater than 60.";
         }
 
         if (!errs.min_age && !errs.max_age && Number(formData.min_age) > Number(formData.max_age)) {
@@ -273,14 +291,16 @@ export default function AgeGroupForm({ id = null }) {
                             </label>
                             <input
                                 type="number"
-                                min="0"
+                                min="6"
+                                max="60"
                                 name="min_age"
                                 className={`form-control ${fieldErrors.min_age ? "is-invalid border-danger" : ""}`}
                                 value={formData.min_age}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                placeholder="e.g. 3"
+                                placeholder="e.g. 6 (min 6)"
                             />
+                            <div className="form-text text-muted">Minimum age allowed is 6 years.</div>
                             <FormError error={fieldErrors.min_age} />
                         </div>
 
@@ -291,14 +311,16 @@ export default function AgeGroupForm({ id = null }) {
                             </label>
                             <input
                                 type="number"
-                                min="0"
+                                min="6"
+                                max="60"
                                 name="max_age"
                                 className={`form-control ${fieldErrors.max_age ? "is-invalid border-danger" : ""}`}
                                 value={formData.max_age}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                placeholder="e.g. 6"
+                                placeholder="e.g. 60 (max 60)"
                             />
+                            <div className="form-text text-muted">Maximum age allowed is 60 years.</div>
                             <FormError error={fieldErrors.max_age} />
                         </div>
                     </div>

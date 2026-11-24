@@ -12,7 +12,9 @@ export async function GET(request) {
         const fulfillment_branch_id = searchParams.get("fulfillment_branch_id");
         const customer_user_id = searchParams.get("customer_user_id");
         const customer_email = searchParams.get("customer_email");
+        const customer_phone = searchParams.get("customer_phone");
         const public_user_id = searchParams.get("public_user_id");
+        const order_nos = searchParams.get("order_nos");
 
         const fulfillment_type = searchParams.get("fulfillment_type");
         const order_status = searchParams.get("order_status");
@@ -65,55 +67,84 @@ SELECT
                     values.push(fulfillment_branch_id);
                 }
             } else if (authUser.isAcademyAdmin) {
-                // Academy Admin: strictly own academy
-                sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
-                values.push(authUser.academy_id, authUser.academy_id);
-                if (fulfillment_branch_id !== null && fulfillment_branch_id !== "" && fulfillment_branch_id !== undefined) {
-                    sql += " AND o.fulfillment_branch_id = ?";
-                    values.push(fulfillment_branch_id);
-                }
-            } else if (authUser.isBranchAdmin) {
-                // Branch Admin: strictly own branch
-                sql += " AND o.fulfillment_branch_id = ?";
-                values.push(authUser.branch_id);
-            } else {
-                // Branch staff / coaches
-                if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
-                    const placeholders = authUser.accessibleBranchIds.map(() => "?").join(", ");
-                    sql += ` AND o.fulfillment_branch_id IN (${placeholders})`;
-                    values.push(...authUser.accessibleBranchIds);
-                } else if (authUser.branch_id) {
-                    sql += " AND o.fulfillment_branch_id = ?";
-                    values.push(authUser.branch_id);
-                } else if (authUser.academy_id) {
+                // If not querying specifically for customer's own order, isolate to academy
+                if (!customer_user_id && !public_user_id) {
                     sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
                     values.push(authUser.academy_id, authUser.academy_id);
+                    if (fulfillment_branch_id !== null && fulfillment_branch_id !== "" && fulfillment_branch_id !== undefined) {
+                        sql += " AND o.fulfillment_branch_id = ?";
+                        values.push(fulfillment_branch_id);
+                    }
+                }
+            } else if (authUser.isBranchAdmin) {
+                if (!customer_user_id && !public_user_id) {
+                    sql += " AND o.fulfillment_branch_id = ?";
+                    values.push(authUser.branch_id);
+                }
+            } else {
+                if (!customer_user_id && !public_user_id) {
+                    if (authUser.accessibleBranchIds && authUser.accessibleBranchIds.length > 0) {
+                        const placeholders = authUser.accessibleBranchIds.map(() => "?").join(", ");
+                        sql += ` AND o.fulfillment_branch_id IN (${placeholders})`;
+                        values.push(...authUser.accessibleBranchIds);
+                    } else if (authUser.branch_id) {
+                        sql += " AND o.fulfillment_branch_id = ?";
+                        values.push(authUser.branch_id);
+                    } else if (authUser.academy_id) {
+                        sql += " AND (o.academy_id = ? OR b.academy_id = ?)";
+                        values.push(authUser.academy_id, authUser.academy_id);
+                    }
                 }
             }
         } else {
-            // Unauthenticated lookup: must provide order_no AND (customer_email OR customer_phone)
-            if (!order_no || (!customer_email && !searchParams.get("customer_phone"))) {
+            // Unauthenticated website customer lookup:
+            // Allow looking up orders if any identifier filter is provided
+            const hasLookupFilter =
+                Boolean(order_no?.trim()) ||
+                Boolean(order_nos?.trim()) ||
+                Boolean(customer_email?.trim()) ||
+                Boolean(customer_phone?.trim()) ||
+                Boolean(customer_user_id) ||
+                Boolean(public_user_id) ||
+                Boolean(search?.trim());
+
+            if (!hasLookupFilter) {
                 return NextResponse.json(
-                    { success: false, message: "Unauthorized. Authentication required to view orders." },
+                    { success: false, message: "Unauthorized. Authentication or order lookup identifier required." },
                     { status: 401 }
                 );
             }
         }
 
-        if (customer_user_id && customer_email) {
-            sql += " AND (o.customer_user_id = ? OR LOWER(o.customer_email) = LOWER(?))";
-            values.push(customer_user_id, customer_email);
+        if (customer_user_id && public_user_id) {
+            sql += " AND (o.customer_user_id = ? OR o.public_user_id = ?)";
+            values.push(customer_user_id, public_user_id);
         } else if (customer_user_id !== null && customer_user_id !== "" && customer_user_id !== undefined) {
             sql += " AND o.customer_user_id = ?";
             values.push(customer_user_id);
-        } else if (customer_email) {
-            sql += " AND LOWER(o.customer_email) = LOWER(?)";
-            values.push(customer_email);
-        }
-
-        if (public_user_id !== null && public_user_id !== "" && public_user_id !== undefined) {
+        } else if (public_user_id !== null && public_user_id !== "" && public_user_id !== undefined) {
             sql += " AND o.public_user_id = ?";
             values.push(public_user_id);
+        }
+
+        if (customer_phone && customer_email) {
+            sql += " AND (o.customer_phone = ? OR LOWER(o.customer_email) = LOWER(?))";
+            values.push(customer_phone.trim(), customer_email.trim());
+        } else if (customer_phone) {
+            sql += " AND o.customer_phone = ?";
+            values.push(customer_phone.trim());
+        } else if (customer_email) {
+            sql += " AND LOWER(o.customer_email) = LOWER(?)";
+            values.push(customer_email.trim());
+        }
+
+        if (order_nos) {
+            const nos = order_nos.split(",").map((n) => n.trim()).filter(Boolean);
+            if (nos.length > 0) {
+                const placeholders = nos.map(() => "?").join(", ");
+                sql += ` AND o.order_no IN (${placeholders})`;
+                values.push(...nos);
+            }
         }
 
         // Enum filters
@@ -209,7 +240,8 @@ export async function POST(request) {
     let connection;
 
     try {
-        const authUser = await getAuthenticatedUser(request);
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const body = await request.json();
 
         let {
@@ -235,16 +267,21 @@ export async function POST(request) {
 
             payment_method = "COD",
             payment_status = "Pending",
-            order_status = "Pending",
+            order_status = "Processing",
             notes = null,
             estimated_delivery_date = null,
         } = body;
+
+        // When order is created and order number generated, default status to Processing
+        if (!body.order_status || body.order_status === "Pending") {
+            order_status = "Processing";
+        }
 
         if (authUser) {
             if (authUser.isPlayer) {
                 customer_user_id = authUser.id;
                 public_user_id = null;
-            } else if (Number(authUser.role_id) === 3 && authUser.branch_id) {
+            } else if (!fulfillment_branch_id && Number(authUser.role_id) === 3 && authUser.branch_id) {
                 fulfillment_branch_id = authUser.branch_id;
             }
         }
@@ -408,17 +445,7 @@ export async function POST(request) {
             if (bRows.length > 0 && bRows[0].academy_id) {
                 resolvedAcademyId = bRows[0].academy_id;
             } else {
-                resolvedAcademyId = 1;
-            }
-
-            if (authUser && !authUser.isSuperAdmin) {
-                if (Number(resolvedAcademyId) !== Number(authUser.academy_id)) {
-                    await connection.rollback();
-                    return NextResponse.json(
-                        { success: false, message: "Forbidden. Fulfillment branch belongs to another academy." },
-                        { status: 403 }
-                    );
-                }
+                resolvedAcademyId = resolvedAcademyId || 1;
             }
         }
 

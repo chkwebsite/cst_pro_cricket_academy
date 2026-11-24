@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     academy_id: "",
@@ -64,7 +65,67 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        let err = "";
+        const val = typeof value === "string" ? value.trim() : value;
+        switch (name) {
+            case "album_title":
+                if (!val) err = "Album title is required.";
+                else if (val.length < 2) err = "Album title must be at least 2 characters.";
+                break;
+            case "slug":
+                if (!val) err = "Slug is required.";
+                else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(val)) {
+                    err = "Slug must contain only lowercase letters, numbers, and hyphens.";
+                }
+                break;
+            default:
+                break;
+        }
+        return err;
+    };
+
+    const handleBlur = (field) => {
+        const err = validateField(field, formData[field]);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        const titleErr = validateField("album_title", formData.album_title);
+        if (titleErr) errors.album_title = titleErr;
+
+        const slugErr = validateField("slug", formData.slug);
+        if (slugErr) errors.slug = slugErr;
+
+        setFieldErrors(errors);
+
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // Visible academies based on user role
     const visibleAcademies = useMemo(() => {
@@ -165,6 +226,10 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
 
     const handleTitleChange = (e) => {
         const val = e.target.value;
+        clearError("album_title");
+        if (!isEdit && !formData.slug_manually_edited) {
+            clearError("slug");
+        }
         setFormData((prev) => ({
             ...prev,
             album_title: val,
@@ -174,6 +239,7 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
 
     const handleAutoSlug = () => {
         if (formData.album_title) {
+            clearError("slug");
             setFormData((prev) => ({
                 ...prev,
                 slug: slugify(prev.album_title),
@@ -185,12 +251,16 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 2 * 1024 * 1024) {
-                setError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                const msg = `"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`;
+                setFieldErrors((prev) => ({ ...prev, cover_image: msg }));
+                setError(msg);
                 e.target.value = "";
                 setImageFile(null);
                 setImagePreview(null);
                 return;
             }
+            clearError("cover_image");
+            setError("");
             setImageFile(file);
             setImagePreview(URL.createObjectURL(file));
         }
@@ -201,12 +271,7 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
         setError("");
         setSuccessMsg("");
 
-        if (!formData.album_title.trim()) {
-            setError("Album title is required.");
-            return;
-        }
-        if (!formData.slug.trim()) {
-            setError("Album slug is required.");
+        if (!validateAll()) {
             return;
         }
 
@@ -243,6 +308,15 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
             const json = await res.json();
 
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 throw new Error(json.message || "Failed to save gallery album.");
             }
 
@@ -309,32 +383,36 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                             <div className="row g-3">
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Album Title <span className="text-danger">*</span>
+                                        Album Title <RequiredLabel />
                                     </label>
                                     <input
                                         type="text"
-                                        className="form-control"
+                                        name="album_title"
+                                        className={`form-control ${fieldErrors.album_title ? "is-invalid border-danger" : ""}`}
                                         placeholder="e.g. Under-16 State Championship Final"
                                         value={formData.album_title}
                                         onChange={handleTitleChange}
-                                        required
+                                        onBlur={() => handleBlur("album_title")}
                                     />
+                                    <FormError error={fieldErrors.album_title} />
                                 </div>
 
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Slug <span className="text-danger">*</span>
+                                        Slug <RequiredLabel />
                                     </label>
                                     <div className="input-group">
                                         <input
                                             type="text"
-                                            className="form-control"
+                                            name="slug"
+                                            className={`form-control ${fieldErrors.slug ? "is-invalid border-danger" : ""}`}
                                             placeholder="e.g. u16-championship-final"
                                             value={formData.slug}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, slug: e.target.value })
-                                            }
-                                            required
+                                            onChange={(e) => {
+                                                clearError("slug");
+                                                setFormData({ ...formData, slug: e.target.value, slug_manually_edited: true });
+                                            }}
+                                            onBlur={() => handleBlur("slug")}
                                         />
                                         <button
                                             type="button"
@@ -345,16 +423,19 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                             <Sparkles size={16} className="me-1" /> Auto
                                         </button>
                                     </div>
+                                    <FormError error={fieldErrors.slug} />
                                 </div>
 
                                 <div className="col-md-4">
                                     <label className="form-label fw-semibold">Category</label>
                                     <select
-                                        className="form-select"
+                                        name="category_id"
+                                        className={`form-select ${fieldErrors.category_id ? "is-invalid border-danger" : ""}`}
                                         value={formData.category_id}
-                                        onChange={(e) =>
-                                            setFormData({ ...formData, category_id: e.target.value })
-                                        }
+                                        onChange={(e) => {
+                                            clearError("category_id");
+                                            setFormData({ ...formData, category_id: e.target.value });
+                                        }}
                                     >
                                         <option value="">Select Category</option>
                                         {categories.map((c) => (
@@ -363,6 +444,7 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                             </option>
                                         ))}
                                     </select>
+                                    <FormError error={fieldErrors.category_id} />
                                 </div>
 
                                 <div className="col-md-4">
@@ -371,7 +453,8 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                     </label>
                                     {isAcademyAdmin ? (
                                         <select
-                                            className="form-select bg-light"
+                                            name="academy_id"
+                                            className={`form-select bg-light ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                             value={userAcademyId}
                                             disabled
                                         >
@@ -383,11 +466,13 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                         </select>
                                     ) : (
                                         <select
-                                            className="form-select"
+                                            name="academy_id"
+                                            className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                             value={formData.academy_id}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, academy_id: e.target.value })
-                                            }
+                                            onChange={(e) => {
+                                                clearError("academy_id");
+                                                setFormData({ ...formData, academy_id: e.target.value });
+                                            }}
                                         >
                                             <option value="">All Academies (Global)</option>
                                             {visibleAcademies.map((ac) => (
@@ -397,16 +482,19 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                             ))}
                                         </select>
                                     )}
+                                    <FormError error={fieldErrors.academy_id} />
                                 </div>
 
                                 <div className="col-md-4">
                                     <label className="form-label fw-semibold">Branch</label>
                                     <select
-                                        className="form-select"
+                                        name="branch_id"
+                                        className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                         value={formData.branch_id}
-                                        onChange={(e) =>
-                                            setFormData({ ...formData, branch_id: e.target.value })
-                                        }
+                                        onChange={(e) => {
+                                            clearError("branch_id");
+                                            setFormData({ ...formData, branch_id: e.target.value });
+                                        }}
                                     >
                                         <option value="">Select Branch</option>
                                         {filteredBranches.map((b) => (
@@ -415,6 +503,7 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                             </option>
                                         ))}
                                     </select>
+                                    <FormError error={fieldErrors.branch_id} />
                                 </div>
 
                                 <div className="col-md-4">
@@ -540,10 +629,12 @@ export default function GalleryAlbumForm({ id = null, defaultCategoryId = "" }) 
                                     </label>
                                     <input
                                         type="file"
-                                        className="form-control"
+                                        name="cover_image"
+                                        className={`form-control ${fieldErrors.cover_image ? "is-invalid border-danger" : ""}`}
                                         accept="image/jpeg,image/png,image/webp,image/jpg"
                                         onChange={handleImageChange}
                                     />
+                                    <FormError error={fieldErrors.cover_image} />
                                     <small className="text-muted d-block mt-1">
                                         High resolution landscape photo recommended (16:9 or 4:3).
                                     </small>

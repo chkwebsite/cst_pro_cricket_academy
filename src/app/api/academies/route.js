@@ -121,20 +121,60 @@ export async function POST(request) {
 
         const logo = formData.get("logo"); 
 
+        const errors = {};
+
         if (!academy_name || !academy_name.trim()) {
-            return NextResponse.json({
-                success: false,
-                message: "Academy name is required"
-            }, { status: 400 })
+            errors.academy_name = "Academy name is required.";
         }
 
         if (!academy_code || !academy_code.trim()) {
+            errors.academy_code = "Academy code is required.";
+        }
 
+        if (!contact_person || !contact_person.trim()) {
+            errors.contact_person = "Contact person is required.";
+        }
+
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!email || !email.trim()) {
+            errors.email = "Email is required.";
+        } else if (!emailRegex.test(email.trim())) {
+            errors.email = "Please enter a valid email address.";
+        }
+
+        if (!phone || !phone.trim()) {
+            errors.phone = "Phone number is required.";
+        } else {
+            const digits = String(phone).replace(/\D/g, "");
+            if (digits.length < 10 || digits.length > 15) {
+                errors.phone = "Please enter a valid phone number (at least 10 digits).";
+            }
+        }
+
+        if (!address || !address.trim()) {
+            errors.address = "Address is required.";
+        }
+
+        if (!city || !city.trim()) {
+            errors.city = "City is required.";
+        }
+
+        if (!state || !state.trim()) {
+            errors.state = "State is required.";
+        }
+
+        if (pin_code && pin_code.trim()) {
+            if (!/^\d{6}$/.test(pin_code.trim())) {
+                errors.pin_code = "Please enter a valid 6-digit pin code.";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Academy code is required",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -148,7 +188,7 @@ export async function POST(request) {
                 WHERE academy_code = ?
                 LIMIT 1
                 `,
-                [academy_code]
+                [academy_code.trim()]
             );
 
 
@@ -159,6 +199,7 @@ export async function POST(request) {
                     success: false,
                     message:
                         "Academy code already exists",
+                    errors: { academy_code: "Academy code already exists." },
                 },
                 { status: 409 }
             );
@@ -220,18 +261,18 @@ export async function POST(request) {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,[
             academy_name.trim(),
-            academy_code || null,
-            contact_person || null,
+            academy_code.trim(),
+            contact_person.trim(),
             logoName,
-            email || null,
-            phone || null,
-            website || null,
-            address || null,
-            city || null,
-            state || null,
-            pin_code || null,
-            gst_no || null, 
-            pan_no || null,
+            email.trim(),
+            phone.trim(),
+            website?.trim() || null,
+            address.trim(),
+            city.trim(),
+            state.trim(),
+            pin_code?.trim() || null,
+            gst_no?.trim() || null, 
+            pan_no?.trim() || null,
             status,
             ]);
 

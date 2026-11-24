@@ -104,6 +104,7 @@ export default function EditBranchPage() {
                                 error={error}
                                 loading={saving}
                                 isEdit={true}
+                                branchId={params.id}
                             />
                         )}
                     </div>

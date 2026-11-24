@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const FEE_TYPES = ["Tournament Team", "Tournament Player", "Match Team", "Match Player", "Ground Booking", "Other"];
 
@@ -106,6 +107,7 @@ export default function FeeStatusForm({ id = null }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const academyValue = formData.academy_id || (hasAssignedAcademy ? String(userAcademyId) : "");
     const required = REQUIRED_REFS[formData.fee_type] || [];
@@ -400,6 +402,15 @@ export default function FeeStatusForm({ id = null }) {
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
+
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         setFormData((prev) => {
             const next = { ...prev, [name]: type === "checkbox" ? checked : value };
 
@@ -488,26 +499,101 @@ export default function FeeStatusForm({ id = null }) {
         });
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "academy_id" && !academyValue) {
+            err = "Please select an academy.";
+        }
+        if (field === "fee_type" && !formData.fee_type) {
+            err = "Please select a fee type.";
+        }
+        if (field === "fee_amount") {
+            const feeAmount = Number(formData.fee_amount);
+            if (formData.fee_amount === "" || !Number.isFinite(feeAmount) || feeAmount < 0) {
+                err = "Fee amount must be a non-negative number.";
+            }
+        }
+        if (field === "paid_amount") {
+            const paidAmount = Number(formData.paid_amount || 0);
+            const feeAmount = Number(formData.fee_amount || 0);
+            if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+                err = "Paid amount must be a non-negative number.";
+            } else if (paidAmount > feeAmount) {
+                err = "Paid amount cannot exceed fee amount.";
+            }
+        }
+        if (required.includes(field)) {
+            const val = optionalId(formData[field]);
+            if (!val) {
+                err = `${REF_LABELS[field] || field} is required.`;
+            }
+        }
 
-        if (!academyValue) return setError("Please select an academy");
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!academyValue) errors.academy_id = "Please select an academy.";
+        if (!formData.fee_type) errors.fee_type = "Please select a fee type.";
 
         const feeAmount = Number(formData.fee_amount);
         const paidAmount = Number(formData.paid_amount || 0);
-        if (!Number.isFinite(feeAmount) || feeAmount < 0) return setError("Fee amount must be a non-negative number");
-        if (!Number.isFinite(paidAmount) || paidAmount < 0) return setError("Paid amount must be a non-negative number");
-        if (paidAmount > feeAmount) return setError("Paid amount cannot exceed fee amount");
+        if (formData.fee_amount === "" || !Number.isFinite(feeAmount) || feeAmount < 0) {
+            errors.fee_amount = "Fee amount must be a non-negative number.";
+        }
+        if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+            errors.paid_amount = "Paid amount must be a non-negative number.";
+        } else if (paidAmount > feeAmount) {
+            errors.paid_amount = "Paid amount cannot exceed fee amount.";
+        }
 
         for (const field of required) {
             const n = optionalId(formData[field]);
-            if (n === null || !Number.isInteger(n) || n <= 0) return setError(`${REF_LABELS[field]} is required for ${formData.fee_type} fees`);
+            if (n === null || !Number.isInteger(n) || n <= 0) {
+                errors[field] = `${REF_LABELS[field] || field} is required for ${formData.fee_type} fees.`;
+            }
         }
+
+        if (formData.payer_type !== "none" && String(formData.payer_id).trim() !== "") {
+            const payerId = Number(formData.payer_id);
+            if (!Number.isInteger(payerId) || payerId <= 0) {
+                errors.payer_id = "Payer must be a valid selection.";
+            }
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!validateAll()) return;
+
+        const feeAmount = Number(formData.fee_amount);
+        const paidAmount = Number(formData.paid_amount || 0);
 
         let payerId = null;
         if (formData.payer_type !== "none" && String(formData.payer_id).trim() !== "") {
             payerId = Number(formData.payer_id);
-            if (!Number.isInteger(payerId) || payerId <= 0) return setError("Payer ID must be a positive integer");
         }
 
         // Always send every reference (null when unused) so PUT clears stale ones
@@ -538,7 +624,18 @@ export default function FeeStatusForm({ id = null }) {
                 }),
             });
             const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.message || "Something went wrong");
+            if (!res.ok || !data.success) {
+                if (data.errors && typeof data.errors === "object") {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
+                throw new Error(data.message || "Something went wrong");
+            }
 
             alert(isEdit ? "Fee record updated successfully" : "Fee record created successfully");
             router.push("/next_panel/fee-status");
@@ -554,8 +651,18 @@ export default function FeeStatusForm({ id = null }) {
 
     const idInput = (name) => (
         <div className="col-md-4 mb-3" key={name}>
-            <label className="form-label">{REF_LABELS[name]} <span className="text-danger ms-1">*</span></label>
-            <input type="number" min="1" name={name} className="form-control" value={formData[name]} onChange={handleChange} required />
+            <label className="form-label"><RequiredLabel>{REF_LABELS[name] || name}</RequiredLabel></label>
+            <input
+                type="number"
+                min="1"
+                name={name}
+                id={name}
+                className={`form-control ${fieldErrors[name] ? "is-invalid border-danger" : ""}`}
+                value={formData[name]}
+                onChange={handleChange}
+                onBlur={handleBlur(name)}
+            />
+            <FormError error={fieldErrors[name]} />
         </div>
     );
 
@@ -568,35 +675,61 @@ export default function FeeStatusForm({ id = null }) {
             <div className="card-body">
                 {error && <div className="alert alert-danger">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Academy <span className="text-danger ms-1">*</span></label>
-                            <select name="academy_id" className="form-select" value={academyValue} onChange={handleChange} disabled={hasAssignedAcademy} required>
+                            <label className="form-label"><RequiredLabel>Academy</RequiredLabel></label>
+                            <select
+                                name="academy_id"
+                                id="academy_id"
+                                className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
+                                value={academyValue}
+                                onChange={handleChange}
+                                onBlur={handleBlur("academy_id")}
+                                disabled={hasAssignedAcademy}
+                            >
                                 <option value="">Select Academy</option>
                                 {academies.map((a) => (
                                     <option key={a.id} value={a.id}>{a.academy_name}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.academy_id} />
                         </div>
 
                         <div className="col-md-4 mb-3">
                             <label className="form-label">Branch</label>
-                            <select name="branch_id" className="form-select" value={formData.branch_id} onChange={handleChange} disabled={!academyValue}>
+                            <select
+                                name="branch_id"
+                                id="branch_id"
+                                className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.branch_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur("branch_id")}
+                                disabled={!academyValue}
+                            >
                                 <option value="">{academyValue ? "Select Branch" : "Select an academy first"}</option>
                                 {branches.map((b) => (
                                     <option key={b.id} value={b.id}>{b.branch_name}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.branch_id} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Fee Type <span className="text-danger ms-1">*</span></label>
-                            <select name="fee_type" className="form-select" value={formData.fee_type} onChange={handleChange}>
+                            <label className="form-label"><RequiredLabel>Fee Type</RequiredLabel></label>
+                            <select
+                                name="fee_type"
+                                id="fee_type"
+                                className={`form-select ${fieldErrors.fee_type ? "is-invalid border-danger" : ""}`}
+                                value={formData.fee_type}
+                                onChange={handleChange}
+                                onBlur={handleBlur("fee_type")}
+                            >
                                 {FEE_TYPES.map((t) => (
                                     <option key={t} value={t}>{t}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.fee_type} />
                         </div>
                     </div>
 
@@ -606,8 +739,15 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "tournament_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Tournament <span className="text-danger ms-1">*</span></label>
-                                            <select name="tournament_id" className="form-select" value={formData.tournament_id} onChange={handleChange} required>
+                                            <label className="form-label"><RequiredLabel>Tournament</RequiredLabel></label>
+                                            <select
+                                                name="tournament_id"
+                                                id="tournament_id"
+                                                className={`form-select ${fieldErrors.tournament_id ? "is-invalid border-danger" : ""}`}
+                                                value={formData.tournament_id}
+                                                onChange={handleChange}
+                                                onBlur={handleBlur("tournament_id")}
+                                            >
                                                 <option value="">Choose Tournament</option>
                                                 {tournaments
                                                     .filter((t) => !academyValue || t.academy_id == null || Number(t.academy_id) === Number(academyValue))
@@ -615,6 +755,7 @@ export default function FeeStatusForm({ id = null }) {
                                                         <option key={t.id} value={t.id}>{t.tournament_name}</option>
                                                     ))}
                                             </select>
+                                            <FormError error={fieldErrors.tournament_id} />
                                         </div>
                                     );
                                 }
@@ -622,14 +763,15 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "tournament_team_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Tournament Team <span className="text-danger ms-1">*</span></label>
+                                            <label className="form-label"><RequiredLabel>Tournament Team</RequiredLabel></label>
                                             <select
                                                 name="tournament_team_id"
-                                                className="form-select"
+                                                id="tournament_team_id"
+                                                className={`form-select ${fieldErrors.tournament_team_id ? "is-invalid border-danger" : ""}`}
                                                 value={formData.tournament_team_id}
                                                 onChange={handleChange}
+                                                onBlur={handleBlur("tournament_team_id")}
                                                 disabled={!formData.tournament_id}
-                                                required
                                             >
                                                 <option value="">
                                                     {!formData.tournament_id
@@ -650,6 +792,7 @@ export default function FeeStatusForm({ id = null }) {
                                                         </option>
                                                     )}
                                             </select>
+                                            <FormError error={fieldErrors.tournament_team_id} />
                                             <div className="form-text">
                                                 {!formData.tournament_id
                                                     ? "Choose a tournament first to see registered teams"
@@ -662,14 +805,15 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "tournament_team_player_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Tournament Team Player <span className="text-danger ms-1">*</span></label>
+                                            <label className="form-label"><RequiredLabel>Tournament Team Player</RequiredLabel></label>
                                             <select
                                                 name="tournament_team_player_id"
-                                                className="form-select"
+                                                id="tournament_team_player_id"
+                                                className={`form-select ${fieldErrors.tournament_team_player_id ? "is-invalid border-danger" : ""}`}
                                                 value={formData.tournament_team_player_id}
                                                 onChange={handleChange}
+                                                onBlur={handleBlur("tournament_team_player_id")}
                                                 disabled={!formData.tournament_id}
-                                                required
                                             >
                                                 <option value="">
                                                     {!formData.tournament_id
@@ -698,6 +842,7 @@ export default function FeeStatusForm({ id = null }) {
                                                         </option>
                                                     )}
                                             </select>
+                                            <FormError error={fieldErrors.tournament_team_player_id} />
                                             <div className="form-text">
                                                 {!formData.tournament_id
                                                     ? "Choose a tournament first to see its players"
@@ -710,8 +855,15 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "match_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Match <span className="text-danger ms-1">*</span></label>
-                                            <select name="match_id" className="form-select" value={formData.match_id} onChange={handleChange} required>
+                                            <label className="form-label"><RequiredLabel>Match</RequiredLabel></label>
+                                            <select
+                                                name="match_id"
+                                                id="match_id"
+                                                className={`form-select ${fieldErrors.match_id ? "is-invalid border-danger" : ""}`}
+                                                value={formData.match_id}
+                                                onChange={handleChange}
+                                                onBlur={handleBlur("match_id")}
+                                            >
                                                 <option value="">Choose Match</option>
                                                 {matches.map((m) => (
                                                     <option key={m.id} value={m.id}>
@@ -719,6 +871,7 @@ export default function FeeStatusForm({ id = null }) {
                                                     </option>
                                                 ))}
                                             </select>
+                                            <FormError error={fieldErrors.match_id} />
                                         </div>
                                     );
                                 }
@@ -726,14 +879,15 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "match_team_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Match Team <span className="text-danger ms-1">*</span></label>
+                                            <label className="form-label"><RequiredLabel>Match Team</RequiredLabel></label>
                                             <select
                                                 name="match_team_id"
-                                                className="form-select"
+                                                id="match_team_id"
+                                                className={`form-select ${fieldErrors.match_team_id ? "is-invalid border-danger" : ""}`}
                                                 value={formData.match_team_id}
                                                 onChange={handleChange}
+                                                onBlur={handleBlur("match_team_id")}
                                                 disabled={!formData.match_id}
-                                                required
                                             >
                                                 <option value="">
                                                     {!formData.match_id
@@ -754,6 +908,7 @@ export default function FeeStatusForm({ id = null }) {
                                                         </option>
                                                     )}
                                             </select>
+                                            <FormError error={fieldErrors.match_team_id} />
                                             <div className="form-text">
                                                 {!formData.match_id ? "Choose a match first to select a participating team" : "Teams playing in this match"}
                                             </div>
@@ -764,14 +919,15 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "match_player_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Match Player <span className="text-danger ms-1">*</span></label>
+                                            <label className="form-label"><RequiredLabel>Match Player</RequiredLabel></label>
                                             <select
                                                 name="match_player_id"
-                                                className="form-select"
+                                                id="match_player_id"
+                                                className={`form-select ${fieldErrors.match_player_id ? "is-invalid border-danger" : ""}`}
                                                 value={formData.match_player_id}
                                                 onChange={handleChange}
+                                                onBlur={handleBlur("match_player_id")}
                                                 disabled={!formData.match_id}
-                                                required
                                             >
                                                 <option value="">
                                                     {!formData.match_id
@@ -807,6 +963,7 @@ export default function FeeStatusForm({ id = null }) {
                                                         </option>
                                                     )}
                                             </select>
+                                            <FormError error={fieldErrors.match_player_id} />
                                             <div className="form-text">
                                                 {!formData.match_id
                                                     ? "Choose a match first to select a player"
@@ -819,13 +976,14 @@ export default function FeeStatusForm({ id = null }) {
                                 if (field === "ground_booking_id") {
                                     return (
                                         <div className="col-md-4 mb-3" key={field}>
-                                            <label className="form-label">Ground Booking <span className="text-danger ms-1">*</span></label>
+                                            <label className="form-label"><RequiredLabel>Ground Booking</RequiredLabel></label>
                                             <select
                                                 name="ground_booking_id"
-                                                className="form-select"
+                                                id="ground_booking_id"
+                                                className={`form-select ${fieldErrors.ground_booking_id ? "is-invalid border-danger" : ""}`}
                                                 value={formData.ground_booking_id}
                                                 onChange={handleChange}
-                                                required
+                                                onBlur={handleBlur("ground_booking_id")}
                                             >
                                                 <option value="">{loadingGroundBookings ? "Loading bookings..." : "Choose Ground Booking"}</option>
                                                 {groundBookings.map((b) => (
@@ -840,6 +998,7 @@ export default function FeeStatusForm({ id = null }) {
                                                         </option>
                                                     )}
                                             </select>
+                                            <FormError error={fieldErrors.ground_booking_id} />
                                         </div>
                                     );
                                 }
@@ -852,7 +1011,7 @@ export default function FeeStatusForm({ id = null }) {
                     <div className="row">
                         <div className="col-md-4 mb-3">
                             <label className="form-label">Payer Type</label>
-                            <select name="payer_type" className="form-select" value={formData.payer_type} onChange={handleChange}>
+                            <select name="payer_type" id="payer_type" className="form-select" value={formData.payer_type} onChange={handleChange}>
                                 <option value="user_id">Registered user</option>
                                 <option value="outside_player_id">Outside player</option>
                                 <option value="none">Not applicable</option>
@@ -863,9 +1022,11 @@ export default function FeeStatusForm({ id = null }) {
                                 <label className="form-label">User ID</label>
                                 <select
                                     name="payer_id"
-                                    className="form-select"
+                                    id="payer_id"
+                                    className={`form-select ${fieldErrors.payer_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.payer_id}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("payer_id")}
                                 >
                                     <option value="">{loadingUsers ? "Loading players..." : "Choose Player"}</option>
                                     {users
@@ -889,6 +1050,7 @@ export default function FeeStatusForm({ id = null }) {
                                         </option>
                                     )}
                                 </select>
+                                <FormError error={fieldErrors.payer_id} />
                                 <div className="form-text">Only registered players</div>
                             </div>
                         )}
@@ -897,9 +1059,11 @@ export default function FeeStatusForm({ id = null }) {
                                 <label className="form-label">Outside Player ID</label>
                                 <select
                                     name="payer_id"
-                                    className="form-select"
+                                    id="payer_id"
+                                    className={`form-select ${fieldErrors.payer_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.payer_id}
                                     onChange={handleChange}
+                                    onBlur={handleBlur("payer_id")}
                                 >
                                     <option value="">{loadingOutsidePlayers ? "Loading players..." : "Choose Outside Player"}</option>
                                     {outsidePlayers.map((op) => {
@@ -916,6 +1080,7 @@ export default function FeeStatusForm({ id = null }) {
                                         </option>
                                     )}
                                 </select>
+                                <FormError error={fieldErrors.payer_id} />
                                 <div className="form-text">Select outside player paying the fee</div>
                             </div>
                         )}
@@ -923,12 +1088,34 @@ export default function FeeStatusForm({ id = null }) {
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Fee Amount (₹) <span className="text-danger ms-1">*</span></label>
-                            <input type="number" min="0" step="0.01" name="fee_amount" className="form-control" value={formData.fee_amount} onChange={handleChange} required />
+                            <label className="form-label"><RequiredLabel>Fee Amount (₹)</RequiredLabel></label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                name="fee_amount"
+                                id="fee_amount"
+                                className={`form-control ${fieldErrors.fee_amount ? "is-invalid border-danger" : ""}`}
+                                value={formData.fee_amount}
+                                onChange={handleChange}
+                                onBlur={handleBlur("fee_amount")}
+                            />
+                            <FormError error={fieldErrors.fee_amount} />
                         </div>
                         <div className="col-md-4 mb-3">
                             <label className="form-label">Paid Amount (₹)</label>
-                            <input type="number" min="0" step="0.01" name="paid_amount" className="form-control" value={formData.paid_amount} onChange={handleChange} />
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                name="paid_amount"
+                                id="paid_amount"
+                                className={`form-control ${fieldErrors.paid_amount ? "is-invalid border-danger" : ""}`}
+                                value={formData.paid_amount}
+                                onChange={handleChange}
+                                onBlur={handleBlur("paid_amount")}
+                            />
+                            <FormError error={fieldErrors.paid_amount} />
                             <div className="form-text">Due: ₹{due.toFixed(2)}</div>
                         </div>
                         <div className="col-md-4 mb-3">

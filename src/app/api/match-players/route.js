@@ -441,46 +441,38 @@ export async function POST(request) {
         const matchId = Number(body.match_id);
         const teamId = Number(body.team_id);
 
-        if (!isPositiveInt(matchId) || !isPositiveInt(teamId)) {
+        const errors = {};
+        if (!isPositiveInt(matchId)) errors.match_id = "Please choose a match.";
+        if (!isPositiveInt(teamId)) errors.team_id = "Please choose a team.";
+
+        const player = getPlayerReference(body);
+        if (!player.valid) {
+            errors.player_ref = player.message;
+        }
+
+        const playerFee = body.player_fee === undefined ? 0 : Number(body.player_fee);
+        const paidAmount = body.paid_amount === undefined ? 0 : Number(body.paid_amount);
+
+        if (!Number.isFinite(playerFee) || playerFee < 0) {
+            errors.player_fee = "Player fee must be zero or greater.";
+        }
+
+        if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > playerFee) {
+            errors.paid_amount = "Paid amount must be between zero and player fee.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Valid match_id and team_id are required.",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
         }
 
-        const player = getPlayerReference(body);
-
-        if (!player.valid) {
-            return NextResponse.json(
-                { success: false, message: player.message },
-                { status: 400 }
-            );
-        }
-
-        const playerFee = body.player_fee === undefined ? 0 : Number(body.player_fee);
-        const paidAmount = body.paid_amount === undefined ? 0 : Number(body.paid_amount);
         const paymentMode = body.payment_mode || "Cash";
-        const requestedAcademyId = body.academy_id === undefined || body.academy_id === null || body.academy_id === ""
-            ? null
-            : Number(body.academy_id);
-        const createdBy = Number(authUser.id);
-
-        if (!Number.isFinite(playerFee) || playerFee < 0) {
-            return NextResponse.json(
-                { success: false, message: "player_fee must be zero or greater." },
-                { status: 400 }
-            );
-        }
-
-        if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > playerFee) {
-            return NextResponse.json(
-                { success: false, message: "paid_amount must be between zero and player_fee." },
-                { status: 400 }
-            );
-        }
 
         if (paidAmount > 0 && !PAYMENT_MODES.includes(paymentMode)) {
             return NextResponse.json(

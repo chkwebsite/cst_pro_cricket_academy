@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 export default function RolePermissionForm({ id = null }) {
     const router = useRouter();
@@ -19,6 +20,16 @@ export default function RolePermissionForm({ id = null }) {
     const [fetching, setFetching] = useState(false);
     const [optionsLoading, setOptionsLoading] = useState(true);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (fieldName) => {
+        setFieldErrors((prev) => {
+            if (!prev[fieldName]) return prev;
+            const updated = { ...prev };
+            delete updated[fieldName];
+            return updated;
+        });
+    };
 
     // LOAD ROLES + PERMISSIONS
     useEffect(() => {
@@ -134,6 +145,7 @@ export default function RolePermissionForm({ id = null }) {
     const togglePermission = (pid) => {
         pid = Number(pid);
         if (isAssigned(pid)) return;
+        clearError("permission_id");
         if (isEdit) {
             // edit = one record, so single select
             setSelectedIds([pid]);
@@ -146,6 +158,7 @@ export default function RolePermissionForm({ id = null }) {
 
     const toggleModule = (list) => {
         const ids = selectableIds(list);
+        clearError("permission_id");
         const allSelected = ids.length > 0 && ids.every((pid) => selectedIds.includes(pid));
         setSelectedIds((prev) =>
             allSelected
@@ -161,6 +174,7 @@ export default function RolePermissionForm({ id = null }) {
         visibleSelectableIds.every((pid) => selectedIds.includes(pid));
 
     const toggleAllVisible = () => {
+        clearError("permission_id");
         setSelectedIds((prev) =>
             allVisibleSelected
                 ? prev.filter((pid) => !visibleSelectableIds.includes(pid))
@@ -171,13 +185,19 @@ export default function RolePermissionForm({ id = null }) {
     // SUBMIT
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError("");
 
-        if (!roleId) {
-            setError("Please select a role");
-            return;
-        }
-        if (selectedIds.length === 0) {
-            setError("Please select at least one permission");
+        const errs = {};
+        if (!roleId) errs.role_id = "Please select a role.";
+        if (selectedIds.length === 0) errs.permission_id = "Please select at least one permission.";
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
             return;
         }
 
@@ -197,6 +217,7 @@ export default function RolePermissionForm({ id = null }) {
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) {
+                    if (data.errors) setFieldErrors(data.errors);
                     throw new Error(data.message || "Something went wrong");
                 }
                 alert("Role permission updated successfully");
@@ -273,18 +294,22 @@ export default function RolePermissionForm({ id = null }) {
             <div className="card-body">
                 {error && <div className="alert alert-danger">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     {/* Role */}
                     <div className="mb-4" style={{ maxWidth: 420 }}>
-                        <label className="form-label fw-semibold">Role <span className="text-danger ms-1">*</span></label>
+                        <label className="form-label fw-semibold">
+                            Role <RequiredLabel />
+                        </label>
                         <select
-                            className="form-select"
+                            name="role_id"
+                            id="role_id"
+                            className={`form-select ${fieldErrors.role_id ? "is-invalid border-danger" : ""}`}
                             value={roleId}
                             onChange={(e) => {
+                                clearError("role_id");
                                 setRoleId(e.target.value === "" ? "" : Number(e.target.value));
                                 if (!isEdit) setSelectedIds([]);
                             }}
-                            required
                         >
                             <option value="">Select Role</option>
                             {roles.map((role) => (
@@ -293,17 +318,19 @@ export default function RolePermissionForm({ id = null }) {
                                 </option>
                             ))}
                         </select>
+                        <FormError error={fieldErrors.role_id} />
                     </div>
 
                     {/* Permissions toolbar */}
                     <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
                         <div>
-                            <label className="form-label fw-semibold mb-0">
-                                Permissions <span className="text-danger ms-1">*</span>{" "}
+                            <label className="form-label fw-semibold mb-0" id="permission_id">
+                                Permissions <RequiredLabel />{" "}
                                 <span className="badge text-bg-primary ms-1">
                                     {selectedIds.length} selected
                                 </span>
                             </label>
+                            <FormError error={fieldErrors.permission_id} />
                             {!isEdit && !roleId && (
                                 <div className="form-text">Pehle role select karein, phir permissions choose karein.</div>
                             )}

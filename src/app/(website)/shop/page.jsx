@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+    Bolt,
     Check,
     MapPin,
     Package,
@@ -17,6 +19,7 @@ import {
 import { useCart } from "../components/cart/CartContext";
 
 export default function ShopPage() {
+    const router = useRouter();
     const { addToCart } = useCart();
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -127,6 +130,16 @@ export default function ShopPage() {
         }
     };
 
+    // Handle instant Buy Now (Flipkart style direct to checkout)
+    const handleQuickBuy = (p, e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const success = addToCart(p, 1);
+        if (success) {
+            router.push("/checkout");
+        }
+    };
+
     // Product Card Component
     const renderProductCard = (p) => {
         const regularPrice = Number(p.price || 0);
@@ -214,44 +227,68 @@ export default function ShopPage() {
                             </div>
                         )}
 
-                        {/* Pricing & Add to Cart button */}
-                        <div className="mt-auto pt-2 border-top d-flex align-items-center justify-content-between">
-                            <div>
-                                <div className="fw-bold text-dark fs-5 font-oswald">
+                        {/* Pricing & Flipkart-style Action Buttons */}
+                        <div className="mt-auto pt-2 border-top">
+                            <div className="d-flex align-items-baseline gap-2 flex-wrap mb-1">
+                                <span className="fw-bold text-dark fs-5 font-oswald">
                                     ₹{effectivePrice.toLocaleString("en-IN")}
-                                </div>
+                                </span>
                                 {hasDiscount && (
-                                    <div className="text-muted small text-decoration-line-through">
-                                        ₹{regularPrice.toLocaleString("en-IN")}
-                                    </div>
+                                    <>
+                                        <span className="text-muted small text-decoration-line-through">
+                                            ₹{regularPrice.toLocaleString("en-IN")}
+                                        </span>
+                                        <span className="text-success extra-small fw-bold">
+                                            {discountPercent}% off
+                                        </span>
+                                    </>
                                 )}
                             </div>
+                            <div className="extra-small text-muted mb-2.5" style={{ fontSize: "0.7rem" }}>
+                                Incl. of all taxes • Free Branch Pickup
+                            </div>
 
-                            {isOutOfStock ? (
-                                <span className="badge bg-secondary-subtle text-muted rounded-pill px-3 py-1.5 small">
-                                    Sold Out
-                                </span>
-                            ) : (
-                                <button
-                                    type="button"
-                                    className={`btn btn-sm d-flex align-items-center gap-1 rounded-pill px-3 shadow-sm transition ${
-                                        isAdded ? "btn-success" : "btn-dark"
-                                    }`}
-                                    onClick={(e) => handleQuickAdd(p, e)}
-                                >
-                                    {isAdded ? (
-                                        <>
-                                            <Check size={14} />
-                                            <span>Added</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <ShoppingCart size={14} />
-                                            <span>Add</span>
-                                        </>
-                                    )}
-                                </button>
-                            )}
+                            <div className="d-flex align-items-center gap-1.5">
+                                {isOutOfStock ? (
+                                    <span className="badge bg-secondary-subtle text-muted rounded-pill px-3 py-2 small w-100 text-center">
+                                        Sold Out
+                                    </span>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className={`btn btn-sm d-flex align-items-center justify-content-center gap-1 rounded-pill flex-grow-1 py-1.5 shadow-sm transition ${
+                                                isAdded ? "btn-success" : "btn-outline-dark"
+                                            }`}
+                                            style={{ fontSize: "0.78rem" }}
+                                            onClick={(e) => handleQuickAdd(p, e)}
+                                            title="Add to Cart"
+                                        >
+                                            {isAdded ? (
+                                                <>
+                                                    <Check size={13} />
+                                                    <span>Added</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ShoppingCart size={13} />
+                                                    <span>Add to Cart</span>
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-navy text-white rounded-pill flex-grow-1 py-1.5 fw-semibold d-flex align-items-center justify-content-center gap-1 shadow-sm"
+                                            style={{ fontSize: "0.78rem", background: "#062f38", borderColor: "#062f38" }}
+                                            onClick={(e) => handleQuickBuy(p, e)}
+                                            title="Instant Checkout"
+                                        >
+                                            <Bolt size={13} className="text-lime" />
+                                            <span>Buy Now</span>
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -290,7 +327,7 @@ export default function ShopPage() {
                                 <ShoppingBag size={32} style={{ color: "var(--lime)" }} />
                                 <div className="text-start">
                                     <div className="fw-bold text-white fs-6">100% Genuine Gear</div>
-                                    <div className="text-white-50 small">Academy Pickup & Delivery</div>
+                                    <div className="text-white-50 small">Free Academy Branch Pickup</div>
                                 </div>
                             </div>
                         </div>

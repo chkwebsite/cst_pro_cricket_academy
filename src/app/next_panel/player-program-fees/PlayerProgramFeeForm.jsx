@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import { Calculator, Calendar, DollarSign, User, AlertCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -28,6 +29,7 @@ export default function PlayerProgramFeeForm({ id = null }) {
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
     const [existingRecord, setExistingRecord] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
 
     // Form state
     const [userProgramId, setUserProgramId] = useState("");
@@ -41,6 +43,16 @@ export default function PlayerProgramFeeForm({ id = null }) {
     const [dueDate, setDueDate] = useState("");
     const [remarks, setRemarks] = useState("");
     const [paymentStatus, setPaymentStatus] = useState("Pending");
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
 
     // Fetch enrollments
     useEffect(() => {
@@ -135,18 +147,72 @@ export default function PlayerProgramFeeForm({ id = null }) {
         };
     }, [feeAmount, registrationFee, dailyFee, kitFee, discountAmount, lateFee, existingRecord]);
 
+    const validateField = (name, value) => {
+        switch (name) {
+            case "userProgramId":
+                return !value ? "Please select a player enrollment." : "";
+            case "yearMonth":
+                return !value ? "Please select a fee month." : "";
+            case "feeAmount":
+                return value === "" || isNaN(Number(value)) || Number(value) < 0
+                    ? "Program fee must be a valid non-negative amount."
+                    : "";
+            case "discountAmount": {
+                const subtotal =
+                    (Number(feeAmount) || 0) +
+                    (Number(registrationFee) || 0) +
+                    (Number(dailyFee) || 0) +
+                    (Number(kitFee) || 0);
+                if (Number(value) > subtotal) {
+                    return `Discount amount cannot exceed the subtotal (₹${subtotal.toFixed(2)}).`;
+                }
+                return "";
+            }
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (field, value) => {
+        const err = validateField(field, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        if (!isEdit) {
+            const enrollErr = validateField("userProgramId", userProgramId);
+            if (enrollErr) errs.userProgramId = enrollErr;
+            const ymErr = validateField("yearMonth", yearMonth);
+            if (ymErr) errs.yearMonth = ymErr;
+        }
+        const feeErr = validateField("feeAmount", feeAmount);
+        if (feeErr) errs.feeAmount = feeErr;
+        const discErr = validateField("discountAmount", discountAmount);
+        if (discErr) errs.discountAmount = discErr;
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
 
-        if (!userProgramId) {
-            return setError("Please select a player enrollment.");
-        }
-        if (!yearMonth) {
-            return setError("Please select a fee month.");
-        }
-        if (calculation.isDiscountInvalid) {
-            return setError("Discount amount cannot exceed the subtotal fees.");
+        if (!validateAll()) {
+            return;
         }
 
         const fee_month = `${yearMonth}-01`;
@@ -174,7 +240,17 @@ export default function PlayerProgramFeeForm({ id = null }) {
                     body: JSON.stringify(payload),
                 });
                 const json = await res.json();
-                if (!res.ok || !json.success) throw new Error(json.message || "Failed to update monthly fee invoice.");
+                if (!res.ok || !json.success) {
+                    if (json.errors) {
+                        const mapped = {};
+                        if (json.errors.fee_amount) mapped.feeAmount = json.errors.fee_amount;
+                        if (json.errors.discount_amount) mapped.discountAmount = json.errors.discount_amount;
+                        if (json.errors.payment_status) mapped.paymentStatus = json.errors.payment_status;
+                        if (json.errors.due_date) mapped.dueDate = json.errors.due_date;
+                        setFieldErrors(mapped);
+                    }
+                    throw new Error(json.message || "Failed to update monthly fee invoice.");
+                }
 
                 alert("Fee invoice updated successfully.");
                 router.push(`/next_panel/player-program-fees/${id}`);
@@ -200,6 +276,22 @@ export default function PlayerProgramFeeForm({ id = null }) {
                 });
                 const json = await res.json();
                 if (!res.ok || !json.success) {
+                    if (json.errors) {
+                        const mapped = {};
+                        if (json.errors.user_program_id) mapped.userProgramId = json.errors.user_program_id;
+                        if (json.errors.fee_month) mapped.yearMonth = json.errors.fee_month;
+                        if (json.errors.fee_amount) mapped.feeAmount = json.errors.fee_amount;
+                        if (json.errors.discount_amount) mapped.discountAmount = json.errors.discount_amount;
+                        setFieldErrors(mapped);
+                        const firstKey = Object.keys(mapped)[0];
+                        if (firstKey) {
+                            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                            if (el) {
+                                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                el.focus();
+                            }
+                        }
+                    }
                     if (res.status === 409 && json.fee_id) {
                         if (confirm(`${json.message} Would you like to view this existing invoice?`)) {
                             return router.push(`/next_panel/player-program-fees/${json.fee_id}`);
@@ -264,7 +356,7 @@ export default function PlayerProgramFeeForm({ id = null }) {
                     <div className="row g-3 mb-4">
                         <div className="col-md-7">
                             <label className="form-label fw-semibold">
-                                Player Enrollment <span className="text-danger">*</span>
+                                Player Enrollment <RequiredLabel />
                             </label>
                             {isEdit ? (
                                 <input
@@ -278,30 +370,38 @@ export default function PlayerProgramFeeForm({ id = null }) {
                                     readOnly
                                 />
                             ) : (
-                                <select
-                                    className="form-select"
-                                    value={userProgramId}
-                                    onChange={handleEnrollmentChange}
-                                    required
-                                >
-                                    <option value="">
-                                        {loadingEnrollments ? "Loading player enrollments..." : "Choose Player & Program"}
-                                    </option>
-                                    {enrollments.map((item) => {
-                                        const pName =
-                                            item.player_name ||
-                                            [item.player_first_name, item.player_last_name].filter(Boolean).join(" ") ||
-                                            [item.first_name, item.last_name].filter(Boolean).join(" ") ||
-                                            `Player #${item.admission_players_id || item.user_id}`;
-                                        const adm = item.admission_no ? `[${item.admission_no}]` : "";
-                                        const prog = item.program_name || `Program #${item.program_id}`;
-                                        return (
-                                            <option key={item.id} value={item.id}>
-                                                {pName} {adm} — {prog}
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+                                <>
+                                    <select
+                                        name="userProgramId"
+                                        id="userProgramId"
+                                        className={`form-select ${fieldErrors.userProgramId ? "is-invalid border-danger" : ""}`}
+                                        value={userProgramId}
+                                        onChange={(e) => {
+                                            handleEnrollmentChange(e);
+                                            clearError("userProgramId");
+                                        }}
+                                        onBlur={(e) => handleBlur("userProgramId", e.target.value)}
+                                    >
+                                        <option value="">
+                                            {loadingEnrollments ? "Loading player enrollments..." : "Choose Player & Program"}
+                                        </option>
+                                        {enrollments.map((item) => {
+                                            const pName =
+                                                item.player_name ||
+                                                [item.player_first_name, item.player_last_name].filter(Boolean).join(" ") ||
+                                                [item.first_name, item.last_name].filter(Boolean).join(" ") ||
+                                                `Player #${item.admission_players_id || item.user_id}`;
+                                            const adm = item.admission_no ? `[${item.admission_no}]` : "";
+                                            const prog = item.program_name || `Program #${item.program_id}`;
+                                            return (
+                                                <option key={item.id} value={item.id}>
+                                                    {pName} {adm} — {prog}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    <FormError error={fieldErrors.userProgramId} />
+                                </>
                             )}
                             <div className="form-text">
                                 {selectedEnrollment
@@ -312,16 +412,22 @@ export default function PlayerProgramFeeForm({ id = null }) {
 
                         <div className="col-md-5">
                             <label className="form-label fw-semibold">
-                                Fee Month <span className="text-danger">*</span>
+                                Fee Month <RequiredLabel />
                             </label>
                             <input
                                 type="month"
-                                className="form-control"
+                                name="yearMonth"
+                                id="yearMonth"
+                                className={`form-control ${fieldErrors.yearMonth ? "is-invalid border-danger" : ""}`}
                                 value={yearMonth}
-                                onChange={(e) => setYearMonth(e.target.value)}
+                                onChange={(e) => {
+                                    setYearMonth(e.target.value);
+                                    clearError("yearMonth");
+                                }}
+                                onBlur={(e) => handleBlur("yearMonth", e.target.value)}
                                 disabled={isEdit}
-                                required
                             />
+                            <FormError error={fieldErrors.yearMonth} />
                             <div className="form-text">Invoice billing month (e.g. {yearMonth}-01)</div>
                         </div>
                     </div>
@@ -337,17 +443,23 @@ export default function PlayerProgramFeeForm({ id = null }) {
                                 <div className="row g-3">
                                     <div className="col-md-6">
                                         <label className="form-label">
-                                            Program Fee (₹) <span className="text-danger">*</span>
+                                            Program Fee (₹) <RequiredLabel />
                                         </label>
                                         <input
                                             type="number"
+                                            name="feeAmount"
+                                            id="feeAmount"
                                             step="0.01"
                                             min="0"
-                                            className="form-control"
+                                            className={`form-control ${fieldErrors.feeAmount ? "is-invalid border-danger" : ""}`}
                                             value={feeAmount}
-                                            onChange={(e) => setFeeAmount(e.target.value)}
-                                            required
+                                            onChange={(e) => {
+                                                setFeeAmount(e.target.value);
+                                                clearError("feeAmount");
+                                            }}
+                                            onBlur={(e) => handleBlur("feeAmount", e.target.value)}
                                         />
+                                        <FormError error={fieldErrors.feeAmount} />
                                     </div>
 
                                     <div className="col-md-6">
@@ -390,14 +502,21 @@ export default function PlayerProgramFeeForm({ id = null }) {
                                         <label className="form-label text-success fw-semibold">Discount Amount (₹)</label>
                                         <input
                                             type="number"
+                                            name="discountAmount"
+                                            id="discountAmount"
                                             step="0.01"
                                             min="0"
-                                            className={`form-control ${calculation.isDiscountInvalid ? "is-invalid" : ""}`}
+                                            className={`form-control ${calculation.isDiscountInvalid || fieldErrors.discountAmount ? "is-invalid border-danger" : ""}`}
                                             value={discountAmount}
-                                            onChange={(e) => setDiscountAmount(e.target.value)}
+                                            onChange={(e) => {
+                                                setDiscountAmount(e.target.value);
+                                                clearError("discountAmount");
+                                            }}
+                                            onBlur={(e) => handleBlur("discountAmount", e.target.value)}
                                         />
-                                        {calculation.isDiscountInvalid && (
-                                            <div className="invalid-feedback">Cannot exceed subtotal ₹{calculation.subtotal.toFixed(2)}</div>
+                                        <FormError error={fieldErrors.discountAmount} />
+                                        {calculation.isDiscountInvalid && !fieldErrors.discountAmount && (
+                                            <div className="invalid-feedback d-block">Cannot exceed subtotal ₹{calculation.subtotal.toFixed(2)}</div>
                                         )}
                                     </div>
 

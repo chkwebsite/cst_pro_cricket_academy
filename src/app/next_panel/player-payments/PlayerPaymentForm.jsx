@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import {
     AlertCircle,
     ArrowLeft,
@@ -47,6 +48,7 @@ export default function PlayerPaymentForm({
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
     const [existingRecord, setExistingRecord] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
 
     // Form fields
     const [feeId, setFeeId] = useState(defaultFeeId ? String(defaultFeeId) : "");
@@ -55,6 +57,16 @@ export default function PlayerPaymentForm({
     const [transactionNo, setTransactionNo] = useState("");
     const [paymentDate, setPaymentDate] = useState(today());
     const [remarks, setRemarks] = useState("");
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
 
     // Fetch pending/partial invoices to pay
     useEffect(() => {
@@ -193,6 +205,8 @@ export default function PlayerPaymentForm({
     const handleInvoiceChange = (e) => {
         const val = e.target.value;
         setFeeId(val);
+        clearError("feeId");
+        clearError("paidAmount");
         const inv = invoices.find((item) => String(item.id) === String(val));
         if (inv) {
             const due = Number(inv.due_amount) || 0;
@@ -205,25 +219,75 @@ export default function PlayerPaymentForm({
         ? existingRecord
         : invoices.find((item) => String(item.id) === String(feeId));
 
+    const validateField = (name, value) => {
+        switch (name) {
+            case "feeId":
+                return !value ? "Please select a fee invoice to pay." : "";
+            case "paidAmount": {
+                const amt = Number(value);
+                if (!value || isNaN(amt) || amt <= 0) {
+                    return "Please enter a valid payment amount greater than zero.";
+                }
+                if (!isEdit && selectedInvoice) {
+                    const maxDue = Number(selectedInvoice.due_amount);
+                    if (amt > maxDue) {
+                        return `Payment amount (₹${amt}) cannot exceed remaining balance due (₹${maxDue.toFixed(2)}).`;
+                    }
+                }
+                return "";
+            }
+            case "paymentDate":
+                return !value ? "Payment date is required." : "";
+            case "paymentMode":
+                return !value ? "Payment mode is required." : "";
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (field, value) => {
+        const err = validateField(field, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        if (!isEdit) {
+            const feeErr = validateField("feeId", feeId);
+            if (feeErr) errs.feeId = feeErr;
+            const amtErr = validateField("paidAmount", paidAmount);
+            if (amtErr) errs.paidAmount = amtErr;
+        }
+        const dateErr = validateField("paymentDate", paymentDate);
+        if (dateErr) errs.paymentDate = dateErr;
+        const modeErr = validateField("paymentMode", paymentMode);
+        if (modeErr) errs.paymentMode = modeErr;
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
 
-        if (!feeId) {
-            return setError("Please select a fee invoice to pay.");
+        if (!validateAll()) {
+            return;
         }
 
         const amt = Number(paidAmount);
-        if (!amt || amt <= 0) {
-            return setError("Please enter a valid payment amount greater than zero.");
-        }
-
-        if (!isEdit && selectedInvoice) {
-            const maxDue = Number(selectedInvoice.due_amount);
-            if (amt > maxDue) {
-                return setError(`Payment amount (₹${amt}) cannot exceed remaining balance due (₹${maxDue.toFixed(2)}).`);
-            }
-        }
 
         try {
             setLoading(true);
@@ -243,7 +307,12 @@ export default function PlayerPaymentForm({
                     body: JSON.stringify(payload),
                 });
                 const json = await res.json();
-                if (!res.ok || !json.success) throw new Error(json.message || "Failed to update payment.");
+                if (!res.ok || !json.success) {
+                    if (json.errors) {
+                        setFieldErrors(json.errors);
+                    }
+                    throw new Error(json.message || "Failed to update payment.");
+                }
 
                 alert("Payment details updated successfully.");
                 router.push(`/next_panel/player-payments/${id}`);
@@ -265,7 +334,25 @@ export default function PlayerPaymentForm({
                     body: JSON.stringify(payload),
                 });
                 const json = await res.json();
-                if (!res.ok || !json.success) throw new Error(json.message || "Failed to process payment.");
+                if (!res.ok || !json.success) {
+                    if (json.errors) {
+                        const mappedErrors = {};
+                        if (json.errors.player_program_fee_id) mappedErrors.feeId = json.errors.player_program_fee_id;
+                        if (json.errors.paid_amount) mappedErrors.paidAmount = json.errors.paid_amount;
+                        if (json.errors.payment_date) mappedErrors.paymentDate = json.errors.payment_date;
+                        if (json.errors.payment_mode) mappedErrors.paymentMode = json.errors.payment_mode;
+                        setFieldErrors(mappedErrors);
+                        const firstKey = Object.keys(mappedErrors)[0];
+                        if (firstKey) {
+                            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                            if (el) {
+                                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                el.focus();
+                            }
+                        }
+                    }
+                    throw new Error(json.message || "Failed to process payment.");
+                }
 
                 alert("Payment received successfully!");
                 const redirectSource = from || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") : null);
@@ -340,7 +427,7 @@ export default function PlayerPaymentForm({
                                 {/* Invoice Selection */}
                                 <div className="col-12">
                                     <label className="form-label fw-semibold">
-                                        Select Fee Invoice <span className="text-danger">*</span>
+                                        Select Fee Invoice <RequiredLabel />
                                     </label>
                                     {isEdit ? (
                                         <input
@@ -354,28 +441,33 @@ export default function PlayerPaymentForm({
                                             readOnly
                                         />
                                     ) : (
-                                        <select
-                                            className="form-select"
-                                            value={feeId}
-                                            onChange={handleInvoiceChange}
-                                            required
-                                        >
-                                            <option value="">
-                                                {loadingInvoices ? "Loading fee invoices..." : "Choose Fee Invoice to Pay"}
-                                            </option>
-                                            {feeId && !invoices.some((inv) => String(inv.id) === String(feeId)) && (
-                                                <option value={feeId}>
-                                                    {loadingInvoices ? `Loading Invoice #${feeId}...` : `Invoice #${feeId}`}
+                                        <>
+                                            <select
+                                                name="feeId"
+                                                id="feeId"
+                                                className={`form-select ${fieldErrors.feeId ? "is-invalid border-danger" : ""}`}
+                                                value={feeId}
+                                                onChange={handleInvoiceChange}
+                                                onBlur={(e) => handleBlur("feeId", e.target.value)}
+                                            >
+                                                <option value="">
+                                                    {loadingInvoices ? "Loading fee invoices..." : "Choose Fee Invoice to Pay"}
                                                 </option>
-                                            )}
-                                            {invoices.map((inv) => (
-                                                <option key={inv.id} value={inv.id}>
-                                                    #{inv.id} · {inv.player_name} [{inv.admission_no}] — {inv.program_name} (
-                                                    {inv.fee_month_name || inv.fee_month?.slice(0, 7)}) · Due: ₹
-                                                    {Number(inv.due_amount).toFixed(2)}
-                                                </option>
-                                            ))}
-                                        </select>
+                                                {feeId && !invoices.some((inv) => String(inv.id) === String(feeId)) && (
+                                                    <option value={feeId}>
+                                                        {loadingInvoices ? `Loading Invoice #${feeId}...` : `Invoice #${feeId}`}
+                                                    </option>
+                                                )}
+                                                {invoices.map((inv) => (
+                                                    <option key={inv.id} value={inv.id}>
+                                                        #{inv.id} · {inv.player_name} [{inv.admission_no}] — {inv.program_name} (
+                                                        {inv.fee_month_name || inv.fee_month?.slice(0, 7)}) · Due: ₹
+                                                        {Number(inv.due_amount).toFixed(2)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <FormError error={fieldErrors.feeId} />
+                                        </>
                                     )}
                                     <div className="form-text">
                                         Only invoices with outstanding dues are listed above.
@@ -385,25 +477,34 @@ export default function PlayerPaymentForm({
                                 {/* Paid Amount */}
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Amount Paying (₹) <span className="text-danger">*</span>
+                                        Amount Paying (₹) <RequiredLabel />
                                     </label>
                                     <input
                                         type="number"
+                                        name="paidAmount"
+                                        id="paidAmount"
                                         step="0.01"
                                         min="1"
                                         max={!isEdit && selectedInvoice ? Number(selectedInvoice.due_amount) : undefined}
-                                        className="form-control fw-bold fs-5 text-success"
+                                        className={`form-control fw-bold fs-5 text-success ${fieldErrors.paidAmount ? "is-invalid border-danger" : ""}`}
                                         value={paidAmount}
-                                        onChange={(e) => setPaidAmount(e.target.value)}
+                                        onChange={(e) => {
+                                            setPaidAmount(e.target.value);
+                                            clearError("paidAmount");
+                                        }}
+                                        onBlur={(e) => handleBlur("paidAmount", e.target.value)}
                                         disabled={isEdit}
-                                        required
                                     />
+                                    <FormError error={fieldErrors.paidAmount} />
                                     <div className="form-text">
                                         {selectedInvoice && !isEdit && (
                                             <button
                                                 type="button"
                                                 className="btn btn-link btn-sm p-0 text-decoration-none"
-                                                onClick={() => setPaidAmount(String(selectedInvoice.due_amount))}
+                                                onClick={() => {
+                                                    setPaidAmount(String(selectedInvoice.due_amount));
+                                                    clearError("paidAmount");
+                                                }}
                                             >
                                                 Pay full due: ₹{Number(selectedInvoice.due_amount).toFixed(2)}
                                             </button>
@@ -414,27 +515,38 @@ export default function PlayerPaymentForm({
                                 {/* Payment Date */}
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Payment Date <span className="text-danger">*</span>
+                                        Payment Date <RequiredLabel />
                                     </label>
                                     <input
                                         type="date"
-                                        className="form-control"
+                                        name="paymentDate"
+                                        id="paymentDate"
+                                        className={`form-control ${fieldErrors.paymentDate ? "is-invalid border-danger" : ""}`}
                                         value={paymentDate}
-                                        onChange={(e) => setPaymentDate(e.target.value)}
-                                        required
+                                        onChange={(e) => {
+                                            setPaymentDate(e.target.value);
+                                            clearError("paymentDate");
+                                        }}
+                                        onBlur={(e) => handleBlur("paymentDate", e.target.value)}
                                     />
+                                    <FormError error={fieldErrors.paymentDate} />
                                 </div>
 
                                 {/* Payment Mode */}
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Payment Mode <span className="text-danger">*</span>
+                                        Payment Mode <RequiredLabel />
                                     </label>
                                     <select
-                                        className="form-select"
+                                        name="paymentMode"
+                                        id="paymentMode"
+                                        className={`form-select ${fieldErrors.paymentMode ? "is-invalid border-danger" : ""}`}
                                         value={paymentMode}
-                                        onChange={(e) => setPaymentMode(e.target.value)}
-                                        required
+                                        onChange={(e) => {
+                                            setPaymentMode(e.target.value);
+                                            clearError("paymentMode");
+                                        }}
+                                        onBlur={(e) => handleBlur("paymentMode", e.target.value)}
                                     >
                                         {PAYMENT_MODES.map((mode) => (
                                             <option key={mode.value} value={mode.value}>
@@ -442,6 +554,7 @@ export default function PlayerPaymentForm({
                                             </option>
                                         ))}
                                     </select>
+                                    <FormError error={fieldErrors.paymentMode} />
                                 </div>
 
                                 {/* Reference / Txn No */}

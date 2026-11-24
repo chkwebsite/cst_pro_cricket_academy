@@ -13,6 +13,7 @@ import {
     isValidCricketOvers,
     oversToBalls,
 } from "../components/cricketHelpers";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     match_id: "",
@@ -52,7 +53,17 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
+
+    const clearError = (fieldName) => {
+        setFieldErrors((prev) => {
+            if (!prev[fieldName]) return prev;
+            const updated = { ...prev };
+            delete updated[fieldName];
+            return updated;
+        });
+    };
 
     // Fetch matches
     useEffect(() => {
@@ -191,6 +202,9 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
             innings_id: "",
             match_player_id: "",
         }));
+        clearError("match_id");
+        clearError("innings_id");
+        clearError("match_player_id");
     };
 
     const handleInningsChange = (iId) => {
@@ -199,10 +213,13 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
             innings_id: iId,
             match_player_id: "",
         }));
+        clearError("innings_id");
+        clearError("match_player_id");
     };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        clearError(name);
         setFormData((prev) => {
             const updated = { ...prev, [name]: value };
 
@@ -215,103 +232,6 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
 
             return updated;
         });
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError("");
-        setSuccessMsg("");
-
-        if (isLockedForCurrentUser) {
-            setError("This innings is completed. Only Super Admin and Academy Admin can add or edit player scores.");
-            return;
-        }
-
-        if (isFutureMatch) {
-            setError(`Bowling scores cannot be added or updated before the scheduled match date (${formatDate(selectedMatch?.match_date)}).`);
-            return;
-        }
-
-        if (!formData.match_id || !formData.innings_id || !formData.match_player_id) {
-            setError("Match, Innings and Bowler are required.");
-            return;
-        }
-
-        if (!isValidCricketOvers(formData.overs)) {
-            setError("Invalid cricket overs format. Decimal part must be between 0 and 5 (e.g. 4.0, 3.4).");
-            return;
-        }
-
-        const balls = oversToBalls(formData.overs);
-
-        if (exceedsMatchLimit) {
-            setError(`Overs mismatch! Bowler's overs (${formData.overs}) cannot exceed the match limit of ${matchOvers} overs (${maxMatchBalls} balls).`);
-            return;
-        }
-
-        if (exceedsInningsLimit) {
-            setError(`Overs mismatch! Innings total is ${currentInnings?.total_overs} overs (${inningsTotalBalls} balls). Other bowlers bowled ${otherBowlersBalls} balls. This bowler can bowl at most ${maxAllowedBalls} balls (~${maxAllowedOversFormatted} overs).`);
-            return;
-        }
-
-        if (widesExceeded) {
-            setError(`Wides (wd) mismatch! Innings total wides is ${inningsWides}. Other bowlers bowled ${otherWides} wides. This bowler can have at most ${maxAllowedWides} wide(s).`);
-            return;
-        }
-
-        if (noBallsExceeded) {
-            setError(`No-balls (nb) mismatch! Innings total no-balls is ${inningsNoBalls}. Other bowlers bowled ${otherNoBalls} no-balls. This bowler can have at most ${maxAllowedNoBalls} no-ball(s).`);
-            return;
-        }
-
-        if (wicketsExceeded) {
-            setError(`Wickets (W) mismatch! Innings total wickets is ${inningsWickets}. Other bowlers took ${otherWickets} wickets. This bowler can take at most ${maxAllowedWickets} wicket(s).`);
-            return;
-        }
-
-        if (extrasExceeded) {
-            setError(`Extras mismatch! Total bowler extras (${otherWides + enteredWides + otherNoBalls + enteredNoBalls}) cannot exceed innings total extras (${inningsExtras}).`);
-            return;
-        }
-
-        const payload = {
-            match_id: Number(formData.match_id),
-            innings_id: Number(formData.innings_id),
-            match_player_id: Number(formData.match_player_id),
-            overs: Number(formData.overs),
-            balls_bowled: balls,
-            maidens: Number(formData.maidens) || 0,
-            runs_conceded: Number(formData.runs_conceded) || 0,
-            wickets: Number(formData.wickets) || 0,
-            wides: Number(formData.wides) || 0,
-            no_balls: Number(formData.no_balls) || 0,
-        };
-
-        setLoading(true);
-        try {
-            const url = isEdit ? `/api/match-bowling-scorecard/${id}` : "/api/match-bowling-scorecard";
-            const method = isEdit ? "PUT" : "POST";
-
-            const res = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const json = await res.json();
-
-            if (!res.ok || !json.success) {
-                throw new Error(json.message || "Failed to save bowling scorecard");
-            }
-
-            setSuccessMsg(isEdit ? "Bowling record updated successfully!" : "Bowling record created successfully!");
-            setTimeout(() => {
-                router.push(returnTo);
-            }, 700);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
     };
 
     const selectedMatch = matches.find((m) => String(m.id) === String(formData.match_id));
@@ -371,6 +291,136 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
 
     const economyPreview = calculateEconomy(formData.runs_conceded, formData.balls_bowled);
 
+    const validateField = (name, value) => {
+        let err = "";
+        if (name === "match_id") {
+            if (!value) err = "Please select a match.";
+        } else if (name === "innings_id") {
+            if (!value) err = "Please select an innings.";
+        } else if (name === "match_player_id") {
+            if (!value) err = "Please select a bowler.";
+        } else if (name === "overs") {
+            if (value === "" || value === null) {
+                err = "Overs is required.";
+            } else if (!isValidCricketOvers(value)) {
+                err = "Invalid cricket overs format. Decimal part must be between .0 and .5 (e.g. 4.0, 3.4).";
+            } else if (exceedsMatchLimit) {
+                err = `Bowler's overs (${value}) cannot exceed the match limit of ${matchOvers} overs.`;
+            } else if (exceedsInningsLimit) {
+                err = `Overs exceeds remaining innings balls (~${maxAllowedOversFormatted} ov).`;
+            }
+        } else if (name === "wides") {
+            if (widesExceeded) err = `Wides exceeds available limit (${maxAllowedWides}).`;
+        } else if (name === "no_balls") {
+            if (noBallsExceeded) err = `No-balls exceeds available limit (${maxAllowedNoBalls}).`;
+        } else if (name === "wickets") {
+            if (wicketsExceeded) err = `Wickets exceeds available limit (${maxAllowedWickets}).`;
+        }
+        return err;
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.match_id) errors.match_id = "Please select a match.";
+        if (!formData.innings_id) errors.innings_id = "Please select an innings.";
+        if (!formData.match_player_id) errors.match_player_id = "Please select a bowler.";
+
+        const oversErr = validateField("overs", formData.overs);
+        if (oversErr) errors.overs = oversErr;
+
+        if (widesExceeded) errors.wides = `Wides exceeds available limit (${maxAllowedWides}).`;
+        if (noBallsExceeded) errors.no_balls = `No-balls exceeds available limit (${maxAllowedNoBalls}).`;
+        if (wicketsExceeded) errors.wickets = `Wickets exceeds available limit (${maxAllowedWickets}).`;
+
+        return errors;
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError("");
+        setSuccessMsg("");
+
+        if (isLockedForCurrentUser) {
+            setError("This innings is completed. Only Super Admin and Academy Admin can add or edit player scores.");
+            return;
+        }
+
+        if (isFutureMatch) {
+            setError(`Bowling scores cannot be added or updated before the scheduled match date (${formatDate(selectedMatch?.match_date)}).`);
+            return;
+        }
+
+        const clientErrors = validateAll();
+        if (Object.keys(clientErrors).length > 0) {
+            setFieldErrors(clientErrors);
+            const firstKey = Object.keys(clientErrors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return;
+        }
+
+        const balls = oversToBalls(formData.overs);
+
+        const payload = {
+            match_id: Number(formData.match_id),
+            innings_id: Number(formData.innings_id),
+            match_player_id: Number(formData.match_player_id),
+            overs: Number(formData.overs),
+            balls_bowled: balls,
+            maidens: Number(formData.maidens) || 0,
+            runs_conceded: Number(formData.runs_conceded) || 0,
+            wickets: Number(formData.wickets) || 0,
+            wides: Number(formData.wides) || 0,
+            no_balls: Number(formData.no_balls) || 0,
+        };
+
+        setLoading(true);
+        try {
+            const url = isEdit ? `/api/match-bowling-scorecard/${id}` : "/api/match-bowling-scorecard";
+            const method = isEdit ? "PUT" : "POST";
+
+            const res = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const json = await res.json();
+
+            if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
+                throw new Error(json.message || "Failed to save bowling scorecard");
+            }
+
+            setSuccessMsg(isEdit ? "Bowling record updated successfully!" : "Bowling record created successfully!");
+            setTimeout(() => {
+                router.push(returnTo);
+            }, 700);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (fetching) {
         return (
             <div className="text-center py-5">
@@ -381,7 +431,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
     }
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
             {error && <div className="alert alert-danger">{error}</div>}
             {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
@@ -411,15 +461,16 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                 {/* Match Selection */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Match <span className="text-danger">*</span>
+                        Match <RequiredLabel />
                     </label>
                     <select
                         name="match_id"
-                        className="form-select"
+                        id="match_id"
+                        className={`form-select ${fieldErrors.match_id ? "is-invalid border-danger" : ""}`}
                         value={formData.match_id}
                         onChange={(e) => handleMatchChange(e.target.value)}
+                        onBlur={handleBlur}
                         disabled={isEdit}
-                        required
                     >
                         <option value="">Select a match...</option>
                         {matches.map((m) => (
@@ -428,20 +479,22 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.match_id} />
                 </div>
 
                 {/* Innings Selection */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Innings <span className="text-danger">*</span>
+                        Innings <RequiredLabel />
                     </label>
                     <select
                         name="innings_id"
-                        className="form-select"
+                        id="innings_id"
+                        className={`form-select ${fieldErrors.innings_id ? "is-invalid border-danger" : ""}`}
                         value={formData.innings_id}
                         onChange={(e) => handleInningsChange(e.target.value)}
+                        onBlur={handleBlur}
                         disabled={isEdit || !formData.match_id}
-                        required
                     >
                         <option value="">Select an innings...</option>
                         {inningsList.map((i) => (
@@ -450,13 +503,14 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.innings_id} />
                 </div>
 
                 {/* Bowler Selection */}
                 <div className="col-md-12">
                     <div className="d-flex justify-content-between align-items-center mb-1">
                         <label className="form-label fw-semibold mb-0">
-                            Bowler (Bowling Team) <span className="text-danger">*</span>
+                            Bowler (Bowling Team) <RequiredLabel />
                         </label>
                         {formData.innings_id && (
                             <Link
@@ -469,11 +523,12 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                     </div>
                     <select
                         name="match_player_id"
-                        className="form-select"
+                        id="match_player_id"
+                        className={`form-select ${fieldErrors.match_player_id ? "is-invalid border-danger" : ""}`}
                         value={formData.match_player_id}
                         onChange={handleChange}
+                        onBlur={handleBlur}
                         disabled={isEdit || !formData.innings_id}
-                        required
                     >
                         <option value="">
                             {bowlingPlayers.length === 0 && formData.innings_id
@@ -486,6 +541,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.match_player_id} />
                     {formData.innings_id && bowlingPlayers.length === 0 && (
                         <div className="alert alert-warning py-2 px-3 mt-2 small d-flex flex-wrap align-items-center justify-content-between gap-2 rounded-3">
                             <span>
@@ -565,23 +621,25 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                         <div className="row g-3">
                             <div className="col-md-3 col-6">
                                 <label className="form-label small text-muted">
-                                    Overs <span className="text-danger">*</span> (e.g. 4.0, 3.2)
+                                    Overs <RequiredLabel /> (e.g. 4.0, 3.2)
                                 </label>
                                 <input
                                     type="number"
                                     step="0.1"
                                     name="overs"
-                                    className={`form-control ${oversExceeded ? "is-invalid" : ""}`}
+                                    id="overs"
+                                    className={`form-control ${fieldErrors.overs || oversExceeded ? "is-invalid border-danger" : ""}`}
                                     min="0"
                                     value={formData.overs}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur}
                                 />
+                                <FormError error={fieldErrors.overs} />
                                 <small className="text-muted d-block mt-1">
                                     Balls bowled: {formData.balls_bowled}
                                 </small>
-                                {oversExceeded && (
-                                    <div className="invalid-feedback">
+                                {oversExceeded && !fieldErrors.overs && (
+                                    <div className="invalid-feedback d-block">
                                         Max allowed: ~{maxAllowedOversFormatted} ov ({maxAllowedBalls} balls)
                                     </div>
                                 )}
@@ -592,6 +650,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                                 <input
                                     type="number"
                                     name="maidens"
+                                    id="maidens"
                                     className="form-control"
                                     min="0"
                                     value={formData.maidens}
@@ -604,6 +663,7 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                                 <input
                                     type="number"
                                     name="runs_conceded"
+                                    id="runs_conceded"
                                     className="form-control"
                                     min="0"
                                     value={formData.runs_conceded}
@@ -621,13 +681,16 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                                 <input
                                     type="number"
                                     name="wickets"
-                                    className={`form-control fw-bold text-danger ${wicketsExceeded ? "is-invalid" : ""}`}
+                                    id="wickets"
+                                    className={`form-control fw-bold text-danger ${fieldErrors.wickets || wicketsExceeded ? "is-invalid border-danger" : ""}`}
                                     min="0"
                                     value={formData.wickets}
                                     onChange={handleChange}
+                                    onBlur={handleBlur}
                                 />
-                                {wicketsExceeded && (
-                                    <div className="invalid-feedback">
+                                <FormError error={fieldErrors.wickets} />
+                                {wicketsExceeded && !fieldErrors.wickets && (
+                                    <div className="invalid-feedback d-block">
                                         Max {maxAllowedWickets} (Innings: {inningsWickets})
                                     </div>
                                 )}
@@ -643,13 +706,16 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                                 <input
                                     type="number"
                                     name="wides"
-                                    className={`form-control ${widesExceeded ? "is-invalid" : ""}`}
+                                    id="wides"
+                                    className={`form-control ${fieldErrors.wides || widesExceeded ? "is-invalid border-danger" : ""}`}
                                     min="0"
                                     value={formData.wides}
                                     onChange={handleChange}
+                                    onBlur={handleBlur}
                                 />
-                                {widesExceeded && (
-                                    <div className="invalid-feedback">
+                                <FormError error={fieldErrors.wides} />
+                                {widesExceeded && !fieldErrors.wides && (
+                                    <div className="invalid-feedback d-block">
                                         Max {maxAllowedWides} (Innings: {inningsWides})
                                     </div>
                                 )}
@@ -665,13 +731,16 @@ export default function MatchBowlingScorecardForm({ id = null, returnTo = "/next
                                 <input
                                     type="number"
                                     name="no_balls"
-                                    className={`form-control ${noBallsExceeded ? "is-invalid" : ""}`}
+                                    id="no_balls"
+                                    className={`form-control ${fieldErrors.no_balls || noBallsExceeded ? "is-invalid border-danger" : ""}`}
                                     min="0"
                                     value={formData.no_balls}
                                     onChange={handleChange}
+                                    onBlur={handleBlur}
                                 />
-                                {noBallsExceeded && (
-                                    <div className="invalid-feedback">
+                                <FormError error={fieldErrors.no_balls} />
+                                {noBallsExceeded && !fieldErrors.no_balls && (
+                                    <div className="invalid-feedback d-block">
                                         Max {maxAllowedNoBalls} (Innings: {inningsNoBalls})
                                     </div>
                                 )}

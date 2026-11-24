@@ -388,31 +388,29 @@ export async function POST(request) {
         } = body;
 
         // Validation
+        const errors = {};
         if (!umpire_id) {
-            return NextResponse.json(
-                { success: false, message: "Umpire is required." },
-                { status: 400 }
-            );
+            errors.umpire_id = "Please select an umpire.";
         }
 
         const payAmount = Number(amount);
-        if (!Number.isFinite(payAmount) || payAmount <= 0) {
-            return NextResponse.json(
-                { success: false, message: "Valid payment amount greater than zero is required." },
-                { status: 400 }
-            );
+        if (amount === undefined || amount === null || amount === "") {
+            errors.amount = "Payment amount is required.";
+        } else if (!Number.isFinite(payAmount) || payAmount <= 0) {
+            errors.amount = "Valid payment amount greater than zero is required.";
         }
 
         if (!payment_date) {
-            return NextResponse.json(
-                { success: false, message: "Payment date is required." },
-                { status: 400 }
-            );
+            errors.payment_date = "Payment date is required.";
         }
 
-        if (!VALID_MODES.includes(payment_mode)) {
+        if (payment_mode && !VALID_MODES.includes(payment_mode)) {
+            errors.payment_mode = `Invalid payment mode. Supported modes: ${VALID_MODES.join(", ")}`;
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: `Invalid payment mode. Supported modes: ${VALID_MODES.join(", ")}` },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -427,7 +425,7 @@ export async function POST(request) {
 
         if (uRows.length === 0) {
             return NextResponse.json(
-                { success: false, message: "Umpire not found." },
+                { success: false, message: "Selected umpire does not exist.", errors: { umpire_id: "Selected umpire does not exist." } },
                 { status: 404 }
             );
         }

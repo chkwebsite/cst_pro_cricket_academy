@@ -375,21 +375,31 @@ export async function POST(request) {
         const tournamentId = requiredId(tournament_id);
         const matchNo = Number(match_no);
 
+        const errors = {};
         if (!tournamentId) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Valid tournament_id is required",
-                },
-                { status: 400 }
-            );
+            errors.tournament_id = "Please choose a tournament.";
         }
 
         if (!Number.isInteger(matchNo) || matchNo <= 0) {
+            errors.match_no = "Match number must be a positive integer.";
+        }
+
+        if (team_a_id && team_b_id && Number(team_a_id) === Number(team_b_id)) {
+            errors.team_b_id = "Team A and Team B must be different teams.";
+        }
+
+        if (winner_team_id && team_a_id && team_b_id) {
+            if (Number(winner_team_id) !== Number(team_a_id) && Number(winner_team_id) !== Number(team_b_id)) {
+                errors.winner_team_id = "Winner must be Team A or Team B.";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "match_no must be a positive integer",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );

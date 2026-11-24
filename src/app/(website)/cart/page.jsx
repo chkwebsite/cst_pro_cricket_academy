@@ -30,8 +30,8 @@ export default function CartPage() {
         clearCart,
     } = useCart();
 
-    const deliveryFee = subtotal > 1500 || subtotal === 0 ? 0 : 99;
-    const finalAmount = grandTotal + deliveryFee;
+    const deliveryFee = 0; // Academy Branch Pickup is always Free
+    const finalAmount = grandTotal;
 
     if (!isLoggedIn || !user) {
         return (
@@ -132,7 +132,8 @@ export default function CartPage() {
 
                                 <div className="divide-y">
                                     {items.map((item) => {
-                                        const unitPrice = Number(item.sale_price ?? item.price ?? 0);
+                                        const rawUnit = Number(item.sale_price ?? item.price ?? 0);
+                                        const unitPrice = !isNaN(rawUnit) ? Math.max(0, rawUnit) : 0;
                                         const itemTotal = unitPrice * Number(item.quantity || 1);
 
                                         return (
@@ -245,7 +246,8 @@ export default function CartPage() {
                                         <ArrowLeft size={14} /> Continue Shopping
                                     </Link>
                                     <div className="small text-muted">
-                                        Free shipping on orders above ₹1,500
+                                        <span className="badge bg-success-subtle text-success border border-success-subtle me-1">Free</span>
+                                        Academy Branch Pickup available across all branches
                                     </div>
                                 </div>
                             </div>
@@ -266,11 +268,11 @@ export default function CartPage() {
                                 <div className="col-12 col-md-4">
                                     <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
                                         <div className="text-info mb-2">
-                                            <Truck size={24} className="mx-auto" />
+                                            <Building2 size={24} className="mx-auto" />
                                         </div>
-                                        <div className="fw-bold text-navy small">Fast Delivery / Pickup</div>
+                                        <div className="fw-bold text-navy small">Academy Pickup</div>
                                         <div className="text-muted extra-small" style={{ fontSize: "0.75rem" }}>
-                                            Home shipping or collect at any branch
+                                            Collect ready gear in 2 days from branch
                                         </div>
                                     </div>
                                 </div>
@@ -291,40 +293,40 @@ export default function CartPage() {
                         {/* Order Summary Sidebar */}
                         <div className="col-12 col-lg-4">
                             <div className="card border-0 shadow-sm rounded-4 p-4 bg-white sticky-top" style={{ top: "100px" }}>
-                                <h4 className="fw-bold text-navy mb-3 display-font">ORDER SUMMARY</h4>
+                                <h4 className="fw-bold text-navy mb-3 display-font">PRICE DETAILS</h4>
 
                                 <div className="d-flex justify-content-between py-2 border-bottom">
-                                    <span className="text-muted">Subtotal ({itemCount} items)</span>
-                                    <span className="fw-semibold text-navy">₹{subtotal.toLocaleString("en-IN")}</span>
+                                    <span className="text-muted">Price ({itemCount} {itemCount === 1 ? "item" : "items"})</span>
+                                    <span className="fw-semibold text-navy">₹{grandTotal.toLocaleString("en-IN")}</span>
                                 </div>
 
                                 <div className="d-flex justify-content-between py-2 border-bottom">
-                                    <span className="text-muted">Estimated Tax / GST</span>
-                                    <span className="fw-semibold text-navy">
-                                        {taxTotal > 0 ? `₹${Math.round(taxTotal).toLocaleString("en-IN")}` : "Included"}
+                                    <span className="text-muted">Net Base Amount</span>
+                                    <span className="fw-semibold text-navy">₹{Math.round(subtotal).toLocaleString("en-IN")}</span>
+                                </div>
+
+                                <div className="d-flex justify-content-between py-2 border-bottom">
+                                    <span className="text-muted">Taxes &amp; GST (Included)</span>
+                                    <span className="fw-semibold text-success">
+                                        {taxTotal > 0 ? `+₹${Math.round(taxTotal).toLocaleString("en-IN")}` : "Included"}
                                     </span>
                                 </div>
 
                                 <div className="d-flex justify-content-between py-2 border-bottom">
-                                    <span className="text-muted">Estimated Shipping</span>
-                                    <span className="fw-semibold text-navy">
-                                        {deliveryFee === 0 ? (
-                                            <span className="text-success fw-bold">FREE</span>
-                                        ) : (
-                                            `₹${deliveryFee}`
-                                        )}
-                                    </span>
+                                    <span className="text-muted">Branch Pickup Fee</span>
+                                    <span className="text-success fw-bold">FREE</span>
                                 </div>
 
                                 <div className="d-flex justify-content-between py-3 my-2 border-bottom">
                                     <span className="fw-bold text-navy fs-5">Total Amount</span>
-                                    <span className="fw-bold text-navy fs-5">
-                                        ₹{Math.round(finalAmount).toLocaleString("en-IN")}
+                                    <span className="fw-bold text-navy fs-5" style={{ color: "#062f38" }}>
+                                        ₹{Math.round(grandTotal).toLocaleString("en-IN")}
                                     </span>
                                 </div>
 
-                                <div className="small text-muted mb-4">
-                                    Final shipping &amp; delivery charges are confirmed at checkout based on selected branch or destination address.
+                                <div className="small text-success fw-semibold mb-4 d-flex align-items-center gap-1.5">
+                                    <CheckCircle2 size={15} />
+                                    <span>Inclusive of all taxes &amp; GST</span>
                                 </div>
 
                                 <Link

@@ -13,6 +13,7 @@ import {
     ArrowLeft,
     CreditCard,
 } from "lucide-react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const PAYMENT_MODES = ["Cash", "UPI", "Bank Transfer", "Card", "Cheque"];
 
@@ -38,7 +39,77 @@ export default function UmpirePaymentForm() {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        let err = "";
+        const val = typeof value === "string" ? value.trim() : value;
+        switch (name) {
+            case "umpire_id":
+                if (!val) err = "Please select an umpire.";
+                break;
+            case "amount":
+                if (val === "" || val === undefined || val === null) err = "Payment amount is required.";
+                else if (Number(val) <= 0) err = "Payment amount must be greater than ₹0.";
+                break;
+            case "payment_date":
+                if (!val) err = "Payment date is required.";
+                break;
+            case "payment_mode":
+                if (!val) err = "Payment mode is required.";
+                break;
+            default:
+                break;
+        }
+        return err;
+    };
+
+    const handleBlur = (field) => {
+        const val = field === "umpire_id" ? selectedUmpireId : field === "amount" ? amount : field === "payment_date" ? paymentDate : paymentMode;
+        const err = validateField(field, val);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        const uErr = validateField("umpire_id", selectedUmpireId);
+        if (uErr) errors.umpire_id = uErr;
+
+        const aErr = validateField("amount", amount);
+        if (aErr) errors.amount = aErr;
+
+        const dErr = validateField("payment_date", paymentDate);
+        if (dErr) errors.payment_date = dErr;
+
+        const mErr = validateField("payment_mode", paymentMode);
+        if (mErr) errors.payment_mode = mErr;
+
+        setFieldErrors(errors);
+
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // Lists
     const [umpires, setUmpires] = useState([]);
@@ -110,6 +181,7 @@ export default function UmpirePaymentForm() {
     };
 
     const handleUmpireChange = (uId) => {
+        clearError("umpire_id");
         setSelectedUmpireId(uId);
         setSelectedDutyKey("");
         setAmount("");
@@ -120,22 +192,11 @@ export default function UmpirePaymentForm() {
         setError("");
         setSuccessMsg("");
 
-        if (!selectedUmpireId) {
-            setError("Please select an umpire.");
+        if (!validateAll()) {
             return;
         }
 
         const payNum = Number(amount);
-        if (!Number.isFinite(payNum) || payNum <= 0) {
-            setError("Please enter a valid payment amount greater than ₹0.");
-            return;
-        }
-
-        if (!paymentDate) {
-            setError("Please select a payment date.");
-            return;
-        }
-
         setLoading(true);
 
         try {
@@ -162,6 +223,15 @@ export default function UmpirePaymentForm() {
             const json = await res.json();
 
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 throw new Error(json.message || "Failed to record payment.");
             }
 
@@ -185,13 +255,14 @@ export default function UmpirePaymentForm() {
                 {/* 1. Umpire & Duty Selection */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Select Umpire <span className="text-danger">*</span>
+                        Select Umpire <RequiredLabel />
                     </label>
                     <select
-                        className="form-select"
+                        name="umpire_id"
+                        className={`form-select ${fieldErrors.umpire_id ? "is-invalid border-danger" : ""}`}
                         value={selectedUmpireId}
                         onChange={(e) => handleUmpireChange(e.target.value)}
-                        required
+                        onBlur={() => handleBlur("umpire_id")}
                     >
                         <option value="">Choose Umpire...</option>
                         {umpires.map((u) => (
@@ -200,6 +271,7 @@ export default function UmpirePaymentForm() {
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.umpire_id} />
                 </div>
 
                 <div className="col-md-6">
@@ -251,45 +323,59 @@ export default function UmpirePaymentForm() {
                 {/* 3. Payment Details */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Payment Amount (₹) <span className="text-danger">*</span>
+                        Payment Amount (₹) <RequiredLabel />
                     </label>
                     <div className="input-group">
                         <span className="input-group-text bg-white">₹</span>
                         <input
                             type="number"
+                            name="amount"
                             step="0.01"
                             min="1"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.amount ? "is-invalid border-danger" : ""}`}
                             placeholder="Enter amount to pay"
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            required
+                            onChange={(e) => {
+                                clearError("amount");
+                                setAmount(e.target.value);
+                            }}
+                            onBlur={() => handleBlur("amount")}
                         />
                     </div>
+                    <FormError error={fieldErrors.amount} />
                 </div>
 
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Payment Date <span className="text-danger">*</span>
+                        Payment Date <RequiredLabel />
                     </label>
                     <input
                         type="date"
-                        className="form-control"
+                        name="payment_date"
+                        className={`form-control ${fieldErrors.payment_date ? "is-invalid border-danger" : ""}`}
                         value={paymentDate}
-                        onChange={(e) => setPaymentDate(e.target.value)}
-                        required
+                        onChange={(e) => {
+                            clearError("payment_date");
+                            setPaymentDate(e.target.value);
+                        }}
+                        onBlur={() => handleBlur("payment_date")}
                     />
+                    <FormError error={fieldErrors.payment_date} />
                 </div>
 
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Payment Mode <span className="text-danger">*</span>
+                        Payment Mode <RequiredLabel />
                     </label>
                     <select
-                        className="form-select"
+                        name="payment_mode"
+                        className={`form-select ${fieldErrors.payment_mode ? "is-invalid border-danger" : ""}`}
                         value={paymentMode}
-                        onChange={(e) => setPaymentMode(e.target.value)}
-                        required
+                        onChange={(e) => {
+                            clearError("payment_mode");
+                            setPaymentMode(e.target.value);
+                        }}
+                        onBlur={() => handleBlur("payment_mode")}
                     >
                         {PAYMENT_MODES.map((mode) => (
                             <option key={mode} value={mode}>
@@ -297,6 +383,7 @@ export default function UmpirePaymentForm() {
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.payment_mode} />
                 </div>
 
                 <div className="col-md-6">

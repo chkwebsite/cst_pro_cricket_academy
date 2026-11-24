@@ -277,42 +277,44 @@ function validateRequiredFields({
     age_group_id,
     aadhaar_no,
 }) {
+    const errors = {};
+
     if (!first_name || !String(first_name).trim()) {
-        throw new Error("First name is required");
+        errors.first_name = "First name is required";
     }
 
     if (!branch_id) {
-        throw new Error("Branch ID is required");
+        errors.branch_id = "Branch ID is required";
     }
 
     if (!role_id) {
-        throw new Error("Role ID is required");
+        errors.role_id = "Role ID is required";
     }
 
     if (!program_id) {
-        throw new Error("Program ID is required");
+        errors.program_id = "Program ID is required";
     }
 
     if (!email || !String(email).trim()) {
-        throw new Error("Email is required");
-    }
-
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(String(email).trim())) {
-        throw new Error("Invalid email format");
+        errors.email = "Email is required";
+    } else {
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(String(email).trim())) {
+            errors.email = "Invalid email format";
+        }
     }
 
     if (!phone || !String(phone).trim()) {
-        throw new Error("Phone number is required");
-    }
-
-    const phoneDigits = String(phone).replace(/\D/g, "");
-    if (phoneDigits.length < 10) {
-        throw new Error("Phone number must have at least 10 digits");
+        errors.phone = "Phone number is required";
+    } else {
+        const phoneDigits = String(phone).replace(/\D/g, "");
+        if (phoneDigits.length < 10) {
+            errors.phone = "Phone number must have at least 10 digits";
+        }
     }
 
     if (!address || !String(address).trim()) {
-        throw new Error("Address is required");
+        errors.address = "Address is required";
     }
 
     if (
@@ -321,16 +323,18 @@ function validateRequiredFields({
         under_age === "" ||
         (Number(under_age) !== 0 && Number(under_age) !== 1)
     ) {
-        throw new Error("Under Age selection is required (Yes or No)");
+        errors.under_age = "Under Age selection is required (Yes or No)";
     }
 
     if (!age_group_id || Number(age_group_id) <= 0) {
-        throw new Error("Age Group is required");
+        errors.age_group_id = "Age Group is required";
     }
 
     if (!aadhaar_no || !String(aadhaar_no).trim()) {
-        throw new Error("Aadhaar number is required");
+        errors.aadhaar_no = "Aadhaar number is required";
     }
+
+    return errors;
 }
 
 async function validateAgeGroup(connection, age_group_id) {
@@ -757,7 +761,7 @@ export async function POST(request) {
            VALIDATION
         ----------------------------- */
 
-        validateRequiredFields({
+        const errors = validateRequiredFields({
             first_name,
             branch_id,
             role_id,
@@ -770,22 +774,76 @@ export async function POST(request) {
             aadhaar_no,
         });
 
-        await validateBranchRoleProgram(
-            connection,
-            branch_id,
-            role_id,
-            program_id
-        );
+        if (branch_id) {
+            const [branches] = await connection.query(
+                `SELECT id FROM cst_branch WHERE id = ? AND status = 1 LIMIT 1`,
+                [branch_id]
+            );
+            if (branches.length === 0) {
+                errors.branch_id = "Selected branch is inactive or does not exist";
+            }
+        }
 
-        await validateAgeGroup(
-            connection,
-            age_group_id
-        );
+        if (role_id) {
+            const [roles] = await connection.query(
+                `SELECT id FROM cst_roles WHERE id = ? AND status = 1 LIMIT 1`,
+                [role_id]
+            );
+            if (roles.length === 0) {
+                errors.role_id = "Selected role is inactive or does not exist";
+            }
+        }
 
-        await validateUser(
-            connection,
-            user_id
-        );
+        if (program_id && branch_id) {
+            const [programs] = await connection.query(
+                `SELECT id FROM cst_programs WHERE id = ? AND status = 1 AND branch_id = ? LIMIT 1`,
+                [program_id, branch_id]
+            );
+            if (programs.length === 0) {
+                errors.program_id = "Program not found for the selected branch";
+            }
+        }
+
+        if (age_group_id) {
+            const [agRows] = await connection.query(
+                `SELECT id FROM cst_age_groups WHERE id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1`,
+                [Number(age_group_id)]
+            );
+            if (agRows.length === 0) {
+                errors.age_group_id = "Selected age group does not exist";
+            }
+        }
+
+        if (user_id) {
+            const [users] = await connection.query(
+                `SELECT id FROM cst_users WHERE id = ? LIMIT 1`,
+                [user_id]
+            );
+            if (users.length === 0) {
+                errors.user_id = "User not found";
+            }
+        }
+
+        if (aadhaar_no && String(aadhaar_no).trim()) {
+            const [existingAadhaar] = await connection.query(
+                `SELECT id FROM cst_admission_players WHERE aadhaar_no = ? AND is_deleted = 0 LIMIT 1`,
+                [String(aadhaar_no).trim()]
+            );
+            if (existingAadhaar.length > 0) {
+                errors.aadhaar_no = "A player with this Aadhaar number already exists";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: Object.values(errors)[0],
+                    errors,
+                },
+                { status: 400 }
+            );
+        }
 
         /* -----------------------------
            UPLOAD FILE
@@ -1249,23 +1307,6 @@ export async function PUT(request, context) {
             formData.get("aadhaar_card");
 
         /* -----------------------------
-           VALIDATION
-        ----------------------------- */
-
-        validateRequiredFields({
-            first_name,
-            branch_id,
-            role_id,
-            program_id,
-            email,
-            phone,
-            address,
-            under_age,
-            age_group_id,
-            aadhaar_no,
-        });
-
-        /* -----------------------------
            GET EXISTING PLAYER
         ----------------------------- */
 
@@ -1301,25 +1342,92 @@ export async function PUT(request, context) {
             existingRows[0];
 
         /* -----------------------------
-           VALIDATE REFERENCES
+           VALIDATION
         ----------------------------- */
 
-        await validateBranchRoleProgram(
-            connection,
+        const errors = validateRequiredFields({
+            first_name,
             branch_id,
             role_id,
-            program_id
-        );
+            program_id,
+            email,
+            phone,
+            address,
+            under_age,
+            age_group_id,
+            aadhaar_no,
+        });
 
-        await validateAgeGroup(
-            connection,
-            age_group_id
-        );
+        if (branch_id) {
+            const [branches] = await connection.query(
+                `SELECT id FROM cst_branch WHERE id = ? AND status = 1 LIMIT 1`,
+                [branch_id]
+            );
+            if (branches.length === 0) {
+                errors.branch_id = "Selected branch is inactive or does not exist";
+            }
+        }
 
-        await validateUser(
-            connection,
-            user_id
-        );
+        if (role_id) {
+            const [roles] = await connection.query(
+                `SELECT id FROM cst_roles WHERE id = ? AND status = 1 LIMIT 1`,
+                [role_id]
+            );
+            if (roles.length === 0) {
+                errors.role_id = "Selected role is inactive or does not exist";
+            }
+        }
+
+        if (program_id && branch_id) {
+            const [programs] = await connection.query(
+                `SELECT id FROM cst_programs WHERE id = ? AND status = 1 AND branch_id = ? LIMIT 1`,
+                [program_id, branch_id]
+            );
+            if (programs.length === 0) {
+                errors.program_id = "Program not found for the selected branch";
+            }
+        }
+
+        if (age_group_id) {
+            const [agRows] = await connection.query(
+                `SELECT id FROM cst_age_groups WHERE id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1`,
+                [Number(age_group_id)]
+            );
+            if (agRows.length === 0) {
+                errors.age_group_id = "Selected age group does not exist";
+            }
+        }
+
+        if (user_id) {
+            const [users] = await connection.query(
+                `SELECT id FROM cst_users WHERE id = ? LIMIT 1`,
+                [user_id]
+            );
+            if (users.length === 0) {
+                errors.user_id = "User not found";
+            }
+        }
+
+        if (aadhaar_no && String(aadhaar_no).trim()) {
+            const [existingAadhaar] = await connection.query(
+                `SELECT id FROM cst_admission_players WHERE aadhaar_no = ? AND id != ? AND is_deleted = 0 LIMIT 1`,
+                [String(aadhaar_no).trim(), playerId]
+            );
+            if (existingAadhaar.length > 0) {
+                errors.aadhaar_no = "A player with this Aadhaar number already exists";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: Object.values(errors)[0],
+                    errors,
+                },
+                { status: 400 }
+            );
+        }
 
         /* -----------------------------
            OPTIONAL NEW AADHAAR

@@ -45,7 +45,7 @@
         "field": "contact_person",
         "type": "varchar(150)",
         "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
+        "null": "NO",
         "key": "",
         "default": null,
         "extra": "",
@@ -55,7 +55,7 @@
         "field": "email",
         "type": "varchar(150)",
         "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
+        "null": "NO",
         "key": "",
         "default": null,
         "extra": "",
@@ -65,7 +65,7 @@
         "field": "phone",
         "type": "varchar(20)",
         "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
+        "null": "NO",
         "key": "",
         "default": null,
         "extra": "",
@@ -85,7 +85,7 @@
         "field": "address",
         "type": "text",
         "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
+        "null": "NO",
         "key": "",
         "default": null,
         "extra": "",
@@ -95,7 +95,7 @@
         "field": "city",
         "type": "varchar(100)",
         "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
+        "null": "NO",
         "key": "",
         "default": null,
         "extra": "",
@@ -105,7 +105,7 @@
         "field": "state",
         "type": "varchar(100)",
         "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
+        "null": "NO",
         "key": "",
         "default": null,
         "extra": "",
@@ -1233,186 +1233,128 @@
       }
     ]
   },
-  "cst_branch": {
-    "columns": [
-      {
-        "field": "id",
-        "type": "int",
-        "collation": null,
-        "null": "NO",
-        "key": "PRI",
-        "default": null,
-        "extra": "auto_increment",
-        "comment": ""
-      },
-      {
-        "field": "academy_id",
-        "type": "int",
-        "collation": null,
-        "null": "NO",
-        "key": "MUL",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "branch_name",
-        "type": "varchar(150)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "NO",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "branch_code",
-        "type": "varchar(100)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "NO",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "directions",
-        "type": "varchar(255)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "email",
-        "type": "varchar(150)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "phone",
-        "type": "varchar(20)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "address",
-        "type": "text",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "city",
-        "type": "varchar(100)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "state",
-        "type": "varchar(100)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "pin_code",
-        "type": "varchar(10)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "status",
-        "type": "tinyint",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": "1",
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "is_deleted",
-        "type": "tinyint",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": "0",
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "created_at",
-        "type": "timestamp",
-        "collation": null,
-        "null": "YES",
-        "key": "",
-        "default": "CURRENT_TIMESTAMP",
-        "extra": "DEFAULT_GENERATED",
-        "comment": ""
-      },
-      {
-        "field": "updated_at",
-        "type": "timestamp",
-        "collation": null,
-        "null": "YES",
-        "key": "",
-        "default": "CURRENT_TIMESTAMP",
-        "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP",
-        "comment": ""
-      }
-    ],
-    "indexes": [
-      {
-        "name": "PRIMARY",
-        "column": "id",
-        "unique": true,
-        "type": "BTREE"
-      },
-      {
-        "name": "uq_branch_code",
-        "column": "academy_id",
-        "unique": true,
-        "type": "BTREE"
-      },
-      {
-        "name": "uq_branch_code",
-        "column": "branch_code",
-        "unique": true,
-        "type": "BTREE"
-      },
-      {
-        "name": "idx_branch_academy",
-        "column": "academy_id",
-        "unique": false,
-        "type": "BTREE"
-      }
-    ]
-  },
+  "cst_branch": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": null,
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "academy_id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "branch_name",
+      "Type": "varchar(150)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "branch_code",
+      "Type": "varchar(100)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "directions",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "email",
+      "Type": "varchar(150)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "phone",
+      "Type": "varchar(20)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "address",
+      "Type": "text",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "city",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "state",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "pin_code",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "1",
+      "Extra": ""
+    },
+    {
+      "Field": "is_deleted",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "created_at",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED"
+    },
+    {
+      "Field": "updated_at",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    }
+  ],
   "cst_cart": {
     "columns": [
       {
@@ -8307,190 +8249,136 @@
       }
     ]
   },
-  "cst_programs": {
-    "columns": [
-      {
-        "field": "id",
-        "type": "int",
-        "collation": null,
-        "null": "NO",
-        "key": "PRI",
-        "default": null,
-        "extra": "auto_increment",
-        "comment": ""
-      },
-      {
-        "field": "academy_id",
-        "type": "int",
-        "collation": null,
-        "null": "NO",
-        "key": "MUL",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "branch_id",
-        "type": "int",
-        "collation": null,
-        "null": "YES",
-        "key": "MUL",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "program_name",
-        "type": "varchar(150)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "NO",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "program_code",
-        "type": "varchar(100)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "program_image",
-        "type": "varchar(255)",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "program_features",
-        "type": "text",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "description",
-        "type": "text",
-        "collation": "utf8mb4_0900_ai_ci",
-        "null": "YES",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "program_fee",
-        "type": "decimal(10,2)",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": null,
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "registration_fee",
-        "type": "decimal(10,2)",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": "0.00",
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "daily_fee",
-        "type": "decimal(10,2)",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": "0.00",
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "kit_fee",
-        "type": "decimal(10,2)",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": "0.00",
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "status",
-        "type": "tinyint",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": "1",
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "is_deleted",
-        "type": "tinyint",
-        "collation": null,
-        "null": "NO",
-        "key": "",
-        "default": "0",
-        "extra": "",
-        "comment": ""
-      },
-      {
-        "field": "created_at",
-        "type": "timestamp",
-        "collation": null,
-        "null": "YES",
-        "key": "",
-        "default": "CURRENT_TIMESTAMP",
-        "extra": "DEFAULT_GENERATED",
-        "comment": ""
-      },
-      {
-        "field": "updated_at",
-        "type": "timestamp",
-        "collation": null,
-        "null": "YES",
-        "key": "",
-        "default": "CURRENT_TIMESTAMP",
-        "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP",
-        "comment": ""
-      }
-    ],
-    "indexes": [
-      {
-        "name": "PRIMARY",
-        "column": "id",
-        "unique": true,
-        "type": "BTREE"
-      },
-      {
-        "name": "idx_program_academy",
-        "column": "academy_id",
-        "unique": false,
-        "type": "BTREE"
-      },
-      {
-        "name": "idx_program_branch",
-        "column": "branch_id",
-        "unique": false,
-        "type": "BTREE"
-      }
-    ]
-  },
+  "cst_programs": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": null,
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "academy_id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "branch_id",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "MUL",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "program_name",
+      "Type": "varchar(150)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "program_code",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "program_image",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "program_features",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "description",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "program_fee",
+      "Type": "decimal(10,2)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "registration_fee",
+      "Type": "decimal(10,2)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0.00",
+      "Extra": ""
+    },
+    {
+      "Field": "daily_fee",
+      "Type": "decimal(10,2)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0.00",
+      "Extra": ""
+    },
+    {
+      "Field": "kit_fee",
+      "Type": "decimal(10,2)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0.00",
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "1",
+      "Extra": ""
+    },
+    {
+      "Field": "is_deleted",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "created_at",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED"
+    },
+    {
+      "Field": "updated_at",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    }
+  ],
   "cst_public_users": {
     "columns": [
       {

@@ -338,6 +338,15 @@ export default function UserForm({ id = null, redirectPath = "/next_panel/users"
             }
 
             if (!res.ok || !data?.success) {
+                if (data?.errors) {
+                    setFieldErrors((prev) => ({ ...prev, ...data.errors }));
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(
                     data?.message ||
                     `Request failed with status ${res.status}${responseText ? "" : ": empty server response"}`

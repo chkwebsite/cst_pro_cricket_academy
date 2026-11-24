@@ -158,33 +158,17 @@ export async function POST(request) {
         } = body;
 
         // Required field validation
-        if (
-            !customer_name ||
-            !mobile ||
-            !ground_id ||
-            !booking_date ||
-            !start_time ||
-            !end_time ||
-            !booking_purpose
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Please provide all required fields",
-                },
-                { status: 400 }
-            );
-        }
+        const errors = {};
+        if (!customer_name || !String(customer_name).trim()) errors.customer_name = "Customer name is required.";
+        if (!mobile || !String(mobile).trim()) errors.mobile = "Mobile number is required.";
+        else if (String(mobile).trim().length < 10) errors.mobile = "Please enter a valid 10-digit mobile number.";
 
-        // Validate booking time
-        if (start_time >= end_time) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "End time must be after start time",
-                },
-                { status: 400 }
-            );
+        if (!ground_id) errors.ground_id = "Please select a ground.";
+        if (!booking_date) errors.booking_date = "Booking date is required.";
+        if (!start_time) errors.start_time = "Start time is required.";
+        if (!end_time) errors.end_time = "End time is required.";
+        else if (start_time && end_time && start_time >= end_time) {
+            errors.end_time = "End time must be after start time.";
         }
 
         const validPurposes = [
@@ -194,26 +178,28 @@ export async function POST(request) {
             "Corporate Event",
             "Other",
         ];
-
-        if (!validPurposes.includes(booking_purpose)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid booking purpose",
-                },
-                { status: 400 }
-            );
+        if (!booking_purpose || !validPurposes.includes(booking_purpose)) {
+            errors.booking_purpose = "Please select a valid booking purpose.";
         }
 
         if (
             number_of_players != null &&
-            (!Number.isInteger(Number(number_of_players)) ||
-                Number(number_of_players) < 1)
+            number_of_players !== "" &&
+            (!Number.isInteger(Number(number_of_players)) || Number(number_of_players) < 1)
         ) {
+            errors.number_of_players = "Number of players must be a positive integer.";
+        }
+
+        if (email && String(email).trim() && !/^\S+@\S+\.\S+$/.test(String(email).trim())) {
+            errors.email = "Please enter a valid email address.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Number of players must be a positive integer",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );

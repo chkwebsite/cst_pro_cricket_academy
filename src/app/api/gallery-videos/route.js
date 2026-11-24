@@ -9,8 +9,8 @@ const MAX_THUMBNAIL_SIZE = 2 * 1024 * 1024; // 2 MB
 const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-function jsonError(message, status = 400) {
-  return NextResponse.json({ success: false, message }, { status });
+function jsonError(message, status = 400, errors = null) {
+  return NextResponse.json({ success: false, message, ...(errors ? { errors } : {}) }, { status });
 }
 
 function safeExtension(fileName, fallback) {
@@ -123,39 +123,67 @@ export async function POST(request) {
     const videoFile = formData.get("video");
     const thumbnailFile = formData.get("thumbnail_image");
 
-    if (!video_title) return jsonError("video_title is required.");
-    if (!["YouTube", "Vimeo", "Upload"].includes(video_type)) {
-      return jsonError("video_type must be YouTube, Vimeo or Upload.");
+    const errors = {};
+    if (!video_title) {
+      errors.video_title = "Video title is required.";
     }
-    if (album_id !== null && (!Number.isInteger(album_id) || album_id < 1)) return jsonError("Invalid album_id.");
-    if (!Number.isInteger(sort_order) || sort_order < 0) return jsonError("sort_order must be a non-negative integer.");
-    if (![0, 1].includes(status)) return jsonError("status must be 0 or 1.");
-    if (uploaded_by !== null && (!Number.isInteger(uploaded_by) || uploaded_by < 1)) return jsonError("Invalid uploaded_by.");
+    if (!["YouTube", "Vimeo", "Upload"].includes(video_type)) {
+      errors.video_type = "video_type must be YouTube, Vimeo or Upload.";
+    }
+    if (album_id !== null && (!Number.isInteger(album_id) || album_id < 1)) {
+      errors.album_id = "Invalid album selection.";
+    }
+    if (!Number.isInteger(sort_order) || sort_order < 0) {
+      errors.sort_order = "sort_order must be a non-negative integer.";
+    }
+    if (![0, 1].includes(status)) {
+      errors.status = "status must be 0 or 1.";
+    }
+    if (uploaded_by !== null && (!Number.isInteger(uploaded_by) || uploaded_by < 1)) {
+      errors.uploaded_by = "Invalid uploaded_by user.";
+    }
 
     let video_url = submittedVideoUrl;
     if (video_type === "Upload") {
       if (!videoFile || typeof videoFile.arrayBuffer !== "function" || videoFile.size === 0) {
-        return jsonError("For video_type=Upload, provide a video file in the `video` field.");
+        errors.video = "Please choose a video file to upload.";
+      } else if (!VIDEO_TYPES.includes(videoFile.type)) {
+        errors.video = "Only MP4, WEBM and MOV videos are allowed.";
+      } else if (videoFile.size > MAX_VIDEO_SIZE) {
+        errors.video = "Video file must not exceed 20MB.";
       }
-      if (!VIDEO_TYPES.includes(videoFile.type)) return jsonError("Only MP4, WEBM and MOV videos are allowed.");
-      if (videoFile.size > MAX_VIDEO_SIZE) return jsonError("Video file must not exceed 20MB.");
     } else {
-      if (!video_url) return jsonError("video_url is required for YouTube and Vimeo videos.");
-      let parsedUrl;
-      try { parsedUrl = new URL(video_url); } catch { return jsonError("video_url must be a valid URL."); }
-      if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") return jsonError("video_url must use HTTP or HTTPS.");
-      const host = parsedUrl.hostname.toLowerCase();
-      if (video_type === "YouTube" && !["youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(host)) {
-        return jsonError("Please provide a valid YouTube URL.");
-      }
-      if (video_type === "Vimeo" && !(host === "vimeo.com" || host.endsWith(".vimeo.com"))) {
-        return jsonError("Please provide a valid Vimeo URL.");
+      if (!video_url) {
+        errors.video_url = `Video URL is required for ${video_type}.`;
+      } else {
+        let parsedUrl;
+        try { parsedUrl = new URL(video_url); } catch { errors.video_url = "Video URL must be a valid URL."; }
+        if (parsedUrl) {
+          if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+            errors.video_url = "Video URL must use HTTP or HTTPS.";
+          } else {
+            const host = parsedUrl.hostname.toLowerCase();
+            if (video_type === "YouTube" && !["youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(host)) {
+              errors.video_url = "Please provide a valid YouTube URL.";
+            }
+            if (video_type === "Vimeo" && !(host === "vimeo.com" || host.endsWith(".vimeo.com"))) {
+              errors.video_url = "Please provide a valid Vimeo URL.";
+            }
+          }
+        }
       }
     }
 
     if (thumbnailFile && typeof thumbnailFile.arrayBuffer === "function" && thumbnailFile.size > 0) {
-      if (!IMAGE_TYPES.includes(thumbnailFile.type)) return jsonError("Thumbnail must be JPG, PNG or WEBP.");
-      if (thumbnailFile.size > MAX_THUMBNAIL_SIZE) return jsonError("Thumbnail must not exceed 2MB.");
+      if (!IMAGE_TYPES.includes(thumbnailFile.type)) {
+        errors.thumbnail_image = "Thumbnail must be JPG, PNG or WEBP.";
+      } else if (thumbnailFile.size > MAX_THUMBNAIL_SIZE) {
+        errors.thumbnail_image = "Thumbnail must not exceed 2MB.";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return jsonError(Object.values(errors)[0], 400, errors);
     }
 
     connection = await pool.getConnection();
@@ -166,7 +194,9 @@ export async function POST(request) {
       const [albumRows] = await connection.execute(
         "SELECT id, academy_id, branch_id FROM cst_gallery_albums WHERE id = ? AND is_deleted = 0 LIMIT 1", [album_id]
       );
-      if (!albumRows.length) return jsonError("Invalid album_id or album is deleted.");
+      if (!albumRows.length) {
+        return jsonError("Selected gallery album does not exist.", 400, { album_id: "Selected gallery album does not exist." });
+      }
 
       if (authUser && !verifyRecordAccess(authUser, { academy_id: albumRows[0].academy_id, branch_id: albumRows[0].branch_id })) {
         return jsonError("Forbidden. Gallery album belongs to another academy or branch.", 403);

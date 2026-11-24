@@ -149,7 +149,7 @@ export async function PUT(request, { params }) {
         const dateCheck = validateMatchDateForScoring(existing.match_date, "Innings");
         if (!dateCheck.allowed) {
             return NextResponse.json(
-                { success: false, message: dateCheck.message },
+                { success: false, message: dateCheck.message, errors: { match_id: dateCheck.message } },
                 { status: 400 }
             );
         }
@@ -192,6 +192,7 @@ export async function PUT(request, { params }) {
                 {
                     success: false,
                     message: "Batting team and bowling team must be different",
+                    errors: { bowling_team_id: "Batting team and bowling team must be different." },
                 },
                 { status: 400 }
             );
@@ -281,6 +282,7 @@ export async function PUT(request, { params }) {
                     {
                         success: false,
                         message: "Invalid overs format. Decimal part (balls) must be between .0 and .5 (e.g. 19.5, 20.0).",
+                        errors: { total_overs: "Invalid overs format. Decimal part must be between .0 and .5." },
                     },
                     { status: 400 }
                 );
@@ -292,6 +294,7 @@ export async function PUT(request, { params }) {
                     {
                         success: false,
                         message: `Overs mismatch! Innings total overs (${updated.total_overs}) cannot exceed the match limit of ${matchOvers} overs (${maxAllowedBalls} balls).`,
+                        errors: { total_overs: `Total overs (${updated.total_overs}) exceeds match limit of ${matchOvers} overs.` },
                     },
                     { status: 400 }
                 );
@@ -310,6 +313,7 @@ export async function PUT(request, { params }) {
                     {
                         success: false,
                         message: `Overs mismatch! Total overs (${updated.total_overs} = ${enteredBalls} balls) cannot be less than balls already bowled by bowlers in this innings (${totalBallsBowled} balls).`,
+                        errors: { total_overs: `Cannot set overs less than balls already bowled (${totalBallsBowled} balls).` },
                     },
                     { status: 400 }
                 );
@@ -411,6 +415,7 @@ export async function PUT(request, { params }) {
                 {
                     success: false,
                     message: "This innings number already exists for this match",
+                    errors: { innings_no: "This innings number already exists for this match" },
                 },
                 { status: 409 }
             );

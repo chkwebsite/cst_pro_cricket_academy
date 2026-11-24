@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import {
     Clock,
     Calendar,
@@ -62,7 +63,18 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
     const [fetching, setFetching] = useState(isEdit);
     const [loadingEnrollments, setLoadingEnrollments] = useState(false);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState(null);
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
 
     // 1. Fetch lookups (Academies, Coaches)
     // Listed coaches must either have user_type === 'Coach' OR role_id === 5 in api/user-roles
@@ -265,23 +277,72 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
         );
     }, [coaches, branchId, academyId, coachUserId]);
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "academy_id" && !academyId) err = "Please select an academy.";
+        if (field === "branch_id" && !branchId) err = "Please select a branch.";
+        if (field === "user_program_id" && !userProgramId) err = "Please select a player program enrollment.";
+        if (field === "coach_user_id" && !coachUserId) err = "Please select a personal coach.";
+        if (field === "start_time" && !startTime) err = "Please specify start time.";
+        if (field === "end_time") {
+            if (!endTime) err = "Please specify end time.";
+            else if (startTime && startTime >= endTime) err = "End time must be after start time.";
+        }
+        if (field === "session_duration" && (!sessionDuration || Number(sessionDuration) <= 0)) {
+            err = "Duration must be a positive number.";
+        }
+        if (field === "start_date" && !startDate) err = "Please enter start date.";
+        if (field === "end_date" && endDate && startDate && endDate < startDate) {
+            err = "End date cannot be earlier than start date.";
+        }
+
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            clearError(field);
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!academyId) errors.academy_id = "Please select an academy.";
+        if (!branchId) errors.branch_id = "Please select a branch.";
+        if (!userProgramId) errors.user_program_id = "Please select a player program enrollment.";
+        if (!coachUserId) errors.coach_user_id = "Please select a personal coach.";
+        if (selectedDays.length === 0) errors.training_days = "Please select at least one training day.";
+        if (!startTime) errors.start_time = "Please specify start time.";
+        if (!endTime) errors.end_time = "Please specify end time.";
+        if (startTime && endTime && startTime >= endTime) {
+            errors.end_time = "End time must be after start time.";
+        }
+        if (!sessionDuration || Number(sessionDuration) <= 0) {
+            errors.session_duration = "Duration must be a positive number.";
+        }
+        if (!startDate) errors.start_date = "Please enter start date.";
+        if (endDate && startDate && endDate < startDate) {
+            errors.end_date = "End date cannot be earlier than start date.";
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     // Form submit
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
         setSuccessMsg(null);
 
-        if (!academyId) return setError("Please select an academy.");
-        if (!branchId) return setError("Please select a branch.");
-        if (!userProgramId) return setError("Please select a player program enrollment.");
-        if (!coachUserId) return setError("Please select a personal coach.");
-        if (selectedDays.length === 0) return setError("Please select at least one training day.");
-        if (!startTime || !endTime) return setError("Please specify start and end times.");
-        if (startTime >= endTime) return setError("End time must be after start time.");
-        if (!startDate) return setError("Please enter start date.");
-        if (endDate && endDate < startDate) {
-            return setError("End date cannot be earlier than start date.");
-        }
+        if (!validateAll()) return;
 
         setLoading(true);
         try {
@@ -311,6 +372,15 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
 
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors && typeof json.errors === "object") {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save individual training record.");
             }
 
@@ -367,22 +437,25 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     {/* Row 1: Academy & Branch */}
                     <div className="row g-3 mb-3">
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Academy <span className="text-danger">*</span>
+                                <RequiredLabel>Academy</RequiredLabel>
                             </label>
                             <select
-                                className="form-select"
+                                name="academy_id"
+                                id="academy_id"
+                                className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                 value={academyId}
                                 onChange={(e) => {
                                     setAcademyId(e.target.value);
                                     setBranchId("");
                                     setUserProgramId("");
+                                    clearError("academy_id");
                                 }}
-                                required
+                                onBlur={handleBlur("academy_id")}
                             >
                                 <option value="">-- Select Academy --</option>
                                 {academies.map((a) => (
@@ -391,21 +464,25 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.academy_id} />
                         </div>
 
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Branch <span className="text-danger">*</span>
+                                <RequiredLabel>Branch</RequiredLabel>
                             </label>
                             <select
-                                className="form-select"
+                                name="branch_id"
+                                id="branch_id"
+                                className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                 value={branchId}
                                 onChange={(e) => {
                                     setBranchId(e.target.value);
                                     setUserProgramId("");
+                                    clearError("branch_id");
                                 }}
+                                onBlur={handleBlur("branch_id")}
                                 disabled={!academyId}
-                                required
                             >
                                 <option value="">-- Select Branch --</option>
                                 {branches.map((b) => (
@@ -414,6 +491,7 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.branch_id} />
                         </div>
                     </div>
 
@@ -421,14 +499,19 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                     <div className="row g-3 mb-3">
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Enrolled Player <span className="text-danger">*</span>
+                                <RequiredLabel>Enrolled Player</RequiredLabel>
                             </label>
                             <select
-                                className="form-select"
+                                name="user_program_id"
+                                id="user_program_id"
+                                className={`form-select ${fieldErrors.user_program_id ? "is-invalid border-danger" : ""}`}
                                 value={userProgramId}
-                                onChange={(e) => setUserProgramId(e.target.value)}
+                                onChange={(e) => {
+                                    setUserProgramId(e.target.value);
+                                    clearError("user_program_id");
+                                }}
+                                onBlur={handleBlur("user_program_id")}
                                 disabled={!branchId || loadingEnrollments}
-                                required
                             >
                                 <option value="">
                                     {loadingEnrollments
@@ -449,17 +532,23 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                     );
                                 })}
                             </select>
+                            <FormError error={fieldErrors.user_program_id} />
                         </div>
 
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Dedicated Coach <span className="text-danger">*</span>
+                                <RequiredLabel>Dedicated Coach</RequiredLabel>
                             </label>
                             <select
-                                className="form-select"
+                                name="coach_user_id"
+                                id="coach_user_id"
+                                className={`form-select ${fieldErrors.coach_user_id ? "is-invalid border-danger" : ""}`}
                                 value={coachUserId}
-                                onChange={(e) => setCoachUserId(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setCoachUserId(e.target.value);
+                                    clearError("coach_user_id");
+                                }}
+                                onBlur={handleBlur("coach_user_id")}
                             >
                                 <option value="">
                                     {branchCoaches.length === 0
@@ -472,6 +561,7 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.coach_user_id} />
                         </div>
                     </div>
 
@@ -479,56 +569,77 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                     <div className="row g-3 mb-3">
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Clock size={15} /> Start Time <span className="text-danger">*</span>
+                                <Clock size={15} /> <RequiredLabel>Start Time</RequiredLabel>
                             </label>
                             <input
                                 type="time"
-                                className="form-control"
+                                name="start_time"
+                                id="start_time"
+                                className={`form-control ${fieldErrors.start_time ? "is-invalid border-danger" : ""}`}
                                 value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setStartTime(e.target.value);
+                                    clearError("start_time");
+                                }}
+                                onBlur={handleBlur("start_time")}
                             />
+                            <FormError error={fieldErrors.start_time} />
                         </div>
 
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Clock size={15} /> End Time <span className="text-danger">*</span>
+                                <Clock size={15} /> <RequiredLabel>End Time</RequiredLabel>
                             </label>
                             <input
                                 type="time"
-                                className="form-control"
+                                name="end_time"
+                                id="end_time"
+                                className={`form-control ${fieldErrors.end_time ? "is-invalid border-danger" : ""}`}
                                 value={endTime}
-                                onChange={(e) => setEndTime(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setEndTime(e.target.value);
+                                    clearError("end_time");
+                                }}
+                                onBlur={handleBlur("end_time")}
                             />
+                            <FormError error={fieldErrors.end_time} />
                         </div>
 
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Activity size={15} /> Duration (Mins) <span className="text-danger">*</span>
+                                <Activity size={15} /> <RequiredLabel>Duration (Mins)</RequiredLabel>
                             </label>
                             <input
                                 type="number"
-                                className="form-control"
+                                name="session_duration"
+                                id="session_duration"
+                                className={`form-control ${fieldErrors.session_duration ? "is-invalid border-danger" : ""}`}
                                 min="15"
                                 max="360"
                                 value={sessionDuration}
-                                onChange={(e) => setSessionDuration(Number(e.target.value))}
-                                required
+                                onChange={(e) => {
+                                    setSessionDuration(Number(e.target.value));
+                                    clearError("session_duration");
+                                }}
+                                onBlur={handleBlur("session_duration")}
                             />
+                            <FormError error={fieldErrors.session_duration} />
                         </div>
                     </div>
 
                     {/* Row 4: Training Days */}
-                    <div className="mb-3 p-3 bg-light rounded border">
+                    <div className={`mb-3 p-3 bg-light rounded border ${fieldErrors.training_days ? "border-danger" : ""}`}>
                         <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                             <label className="form-label fw-semibold mb-0">
-                                Training Days <span className="text-danger">*</span>
+                                <RequiredLabel>Training Days</RequiredLabel>
                             </label>
                             <div className="d-flex gap-2">
                                 <button
                                     type="button"
-                                    onClick={handleSelectAllDays}
+                                    onClick={() => {
+                                        handleSelectAllDays();
+                                        clearError("training_days");
+                                    }}
                                     className="btn btn-outline-secondary btn-sm py-0 px-2"
                                     style={{ fontSize: "0.72rem" }}
                                 >
@@ -536,7 +647,10 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={handleSelectWeekdays}
+                                    onClick={() => {
+                                        handleSelectWeekdays();
+                                        clearError("training_days");
+                                    }}
                                     className="btn btn-outline-secondary btn-sm py-0 px-2"
                                     style={{ fontSize: "0.72rem" }}
                                 >
@@ -544,7 +658,10 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={handleSelectWeekends}
+                                    onClick={() => {
+                                        handleSelectWeekends();
+                                        clearError("training_days");
+                                    }}
                                     className="btn btn-outline-secondary btn-sm py-0 px-2"
                                     style={{ fontSize: "0.72rem" }}
                                 >
@@ -560,7 +677,10 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                     <button
                                         key={d.key}
                                         type="button"
-                                        onClick={() => toggleDay(d.key)}
+                                        onClick={() => {
+                                            toggleDay(d.key);
+                                            clearError("training_days");
+                                        }}
                                         className={`btn btn-sm px-3 py-1 fw-semibold transition-all ${
                                             isSelected ? "btn-primary shadow-sm" : "btn-outline-secondary bg-white"
                                         }`}
@@ -570,6 +690,7 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                                 );
                             })}
                         </div>
+                        <FormError error={fieldErrors.training_days} />
                         <div className="small text-muted mt-2" style={{ fontSize: "0.75rem" }}>
                             Selected days: {selectedDays.join(", ") || "None"}
                         </div>
@@ -579,15 +700,21 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                     <div className="row g-3 mb-3">
                         <div className="col-md-4">
                             <label className="form-label fw-semibold d-flex align-items-center gap-1">
-                                <Calendar size={15} /> Start Date <span className="text-danger">*</span>
+                                <Calendar size={15} /> <RequiredLabel>Start Date</RequiredLabel>
                             </label>
                             <input
                                 type="date"
-                                className="form-control"
+                                name="start_date"
+                                id="start_date"
+                                className={`form-control ${fieldErrors.start_date ? "is-invalid border-danger" : ""}`}
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setStartDate(e.target.value);
+                                    clearError("start_date");
+                                }}
+                                onBlur={handleBlur("start_date")}
                             />
+                            <FormError error={fieldErrors.start_date} />
                         </div>
 
                         <div className="col-md-4">
@@ -596,15 +723,24 @@ export default function IndividualTrainingForm({ id = null, initialUserProgramId
                             </label>
                             <input
                                 type="date"
-                                className="form-control"
+                                name="end_date"
+                                id="end_date"
+                                className={`form-control ${fieldErrors.end_date ? "is-invalid border-danger" : ""}`}
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(e) => {
+                                    setEndDate(e.target.value);
+                                    clearError("end_date");
+                                }}
+                                onBlur={handleBlur("end_date")}
                             />
+                            <FormError error={fieldErrors.end_date} />
                         </div>
 
                         <div className="col-md-4">
                             <label className="form-label fw-semibold">Status</label>
                             <select
+                                name="status"
+                                id="status"
                                 className="form-select"
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value)}

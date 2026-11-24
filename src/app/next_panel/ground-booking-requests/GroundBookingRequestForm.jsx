@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import {
     AlertCircle,
     ArrowLeft,
@@ -50,6 +51,99 @@ export default function GroundBookingRequestForm({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        switch (name) {
+            case "customer_name":
+                return !value?.trim() ? "Customer name is required." : "";
+            case "mobile":
+                return !value?.trim()
+                    ? "Mobile number is required."
+                    : value.trim().length < 10
+                    ? "Please enter a valid 10-digit mobile number."
+                    : "";
+            case "email":
+                return value && !/^\S+@\S+\.\S+$/.test(value)
+                    ? "Please enter a valid email address."
+                    : "";
+            case "ground_id":
+                return !value ? "Please select a ground." : "";
+            case "booking_date":
+                return !value ? "Booking date is required." : "";
+            case "start_time":
+                return !value ? "Start time is required." : "";
+            case "end_time":
+                if (!value) return "End time is required.";
+                if (formData.start_time && value <= formData.start_time)
+                    return "End time must be after start time.";
+                return "";
+            case "booking_purpose":
+                return !value ? "Please select a booking purpose." : "";
+            case "number_of_players":
+                if (value !== "" && value != null) {
+                    const num = Number(value);
+                    if (!Number.isInteger(num) || num < 1) {
+                        return "Number of players must be a positive integer.";
+                    }
+                }
+                return "";
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        const fieldsToValidate = [
+            "customer_name",
+            "mobile",
+            "email",
+            "ground_id",
+            "booking_date",
+            "start_time",
+            "end_time",
+            "booking_purpose",
+            "number_of_players",
+        ];
+
+        fieldsToValidate.forEach((f) => {
+            const err = validateField(f, formData[f]);
+            if (err) errs[f] = err;
+        });
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+
+        return true;
+    };
 
     // Fetch active grounds
     useEffect(() => {
@@ -85,6 +179,7 @@ export default function GroundBookingRequestForm({
             ...prev,
             [name]: value,
         }));
+        clearError(name);
     };
 
     const handleSubmit = async (e) => {
@@ -92,28 +187,7 @@ export default function GroundBookingRequestForm({
         setError(null);
         setSuccessMessage(null);
 
-        if (!formData.customer_name?.trim()) {
-            setError("Customer name is required.");
-            return;
-        }
-
-        if (!formData.mobile?.trim() || formData.mobile.trim().length < 10) {
-            setError("Please enter a valid 10-digit mobile number.");
-            return;
-        }
-
-        if (!formData.ground_id) {
-            setError("Please select a ground.");
-            return;
-        }
-
-        if (!formData.booking_date) {
-            setError("Booking date is required.");
-            return;
-        }
-
-        if (formData.start_time >= formData.end_time) {
-            setError("End time must be after start time.");
+        if (!validateAll()) {
             return;
         }
 
@@ -141,6 +215,17 @@ export default function GroundBookingRequestForm({
             const result = await res.json();
 
             if (!res.ok || !result.success) {
+                if (result.errors) {
+                    setFieldErrors(result.errors);
+                    const firstKey = Object.keys(result.errors)[0];
+                    if (firstKey) {
+                        const el = document.querySelector(`[name="${firstKey}"]`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
+                }
                 throw new Error(result.message || "Failed to save booking request.");
             }
 
@@ -188,7 +273,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Customer Name <span className="text-danger ms-1">*</span>
+                                Customer Name <RequiredLabel />
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -197,18 +282,19 @@ export default function GroundBookingRequestForm({
                                 <input
                                     type="text"
                                     name="customer_name"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.customer_name ? "is-invalid border-danger" : ""}`}
                                     placeholder="e.g. Rahul Sharma"
                                     value={formData.customer_name}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur}
                                 />
                             </div>
+                            <FormError error={fieldErrors.customer_name} />
                         </div>
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Mobile Number <span className="text-danger ms-1">*</span>
+                                Mobile Number <RequiredLabel />
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -217,14 +303,15 @@ export default function GroundBookingRequestForm({
                                 <input
                                     type="tel"
                                     name="mobile"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.mobile ? "is-invalid border-danger" : ""}`}
                                     placeholder="10-digit mobile number"
                                     maxLength={15}
                                     value={formData.mobile}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur}
                                 />
                             </div>
+                            <FormError error={fieldErrors.mobile} />
                         </div>
 
                         <div className="mb-3">
@@ -238,12 +325,14 @@ export default function GroundBookingRequestForm({
                                 <input
                                     type="email"
                                     name="email"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.email ? "is-invalid border-danger" : ""}`}
                                     placeholder="e.g. client@example.com"
                                     value={formData.email}
                                     onChange={handleChange}
+                                    onBlur={handleBlur}
                                 />
                             </div>
+                            <FormError error={fieldErrors.email} />
                         </div>
 
                         <div className="mb-3">
@@ -257,14 +346,16 @@ export default function GroundBookingRequestForm({
                                 <input
                                     type="number"
                                     name="number_of_players"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.number_of_players ? "is-invalid border-danger" : ""}`}
                                     min="1"
                                     max="200"
                                     placeholder="e.g. 22"
                                     value={formData.number_of_players}
                                     onChange={handleChange}
+                                    onBlur={handleBlur}
                                 />
                             </div>
+                            <FormError error={fieldErrors.number_of_players} />
                         </div>
 
                         <div>
@@ -293,7 +384,7 @@ export default function GroundBookingRequestForm({
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Select Ground <span className="text-danger ms-1">*</span>
+                                Select Ground <RequiredLabel />
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -301,10 +392,10 @@ export default function GroundBookingRequestForm({
                                 </span>
                                 <select
                                     name="ground_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.ground_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.ground_id}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur}
                                     disabled={loadingGrounds}
                                 >
                                     <option value="">
@@ -317,11 +408,12 @@ export default function GroundBookingRequestForm({
                                     ))}
                                 </select>
                             </div>
+                            <FormError error={fieldErrors.ground_id} />
                         </div>
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Booking Date <span className="text-danger ms-1">*</span>
+                                Booking Date <RequiredLabel />
                             </label>
                             <div className="input-group">
                                 <span className="input-group-text bg-light">
@@ -330,18 +422,19 @@ export default function GroundBookingRequestForm({
                                 <input
                                     type="date"
                                     name="booking_date"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.booking_date ? "is-invalid border-danger" : ""}`}
                                     value={formData.booking_date}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur}
                                 />
                             </div>
+                            <FormError error={fieldErrors.booking_date} />
                         </div>
 
                         <div className="row g-2 mb-3">
                             <div className="col-6">
                                 <label className="form-label small fw-semibold text-secondary">
-                                    Start Time <span className="text-danger ms-1">*</span>
+                                    Start Time <RequiredLabel />
                                 </label>
                                 <div className="input-group">
                                     <span className="input-group-text bg-light">
@@ -350,16 +443,17 @@ export default function GroundBookingRequestForm({
                                     <input
                                         type="time"
                                         name="start_time"
-                                        className="form-control"
+                                        className={`form-control ${fieldErrors.start_time ? "is-invalid border-danger" : ""}`}
                                         value={formData.start_time}
                                         onChange={handleChange}
-                                        required
+                                        onBlur={handleBlur}
                                     />
                                 </div>
+                                <FormError error={fieldErrors.start_time} />
                             </div>
                             <div className="col-6">
                                 <label className="form-label small fw-semibold text-secondary">
-                                    End Time <span className="text-danger ms-1">*</span>
+                                    End Time <RequiredLabel />
                                 </label>
                                 <div className="input-group">
                                     <span className="input-group-text bg-light">
@@ -368,25 +462,26 @@ export default function GroundBookingRequestForm({
                                     <input
                                         type="time"
                                         name="end_time"
-                                        className="form-control"
+                                        className={`form-control ${fieldErrors.end_time ? "is-invalid border-danger" : ""}`}
                                         value={formData.end_time}
                                         onChange={handleChange}
-                                        required
+                                        onBlur={handleBlur}
                                     />
                                 </div>
+                                <FormError error={fieldErrors.end_time} />
                             </div>
                         </div>
 
                         <div className="mb-3">
                             <label className="form-label small fw-semibold text-secondary">
-                                Booking Purpose <span className="text-danger ms-1">*</span>
+                                Booking Purpose <RequiredLabel />
                             </label>
                             <select
                                 name="booking_purpose"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.booking_purpose ? "is-invalid border-danger" : ""}`}
                                 value={formData.booking_purpose}
                                 onChange={handleChange}
-                                required
+                                onBlur={handleBlur}
                             >
                                 {BOOKING_PURPOSES.map((purpose) => (
                                     <option key={purpose} value={purpose}>
@@ -394,6 +489,7 @@ export default function GroundBookingRequestForm({
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.booking_purpose} />
                         </div>
 
                         {/* Admin Fields (Always present in Edit, optional in New) */}

@@ -187,14 +187,16 @@ export async function POST(request) {
 
         const cover_image = formData.get("cover_image");
 
-        if (!album_title || !slug) {
-            return NextResponse.json({
-                success: false,
-                message: "Album title and slug are required"
-            }, { status: 400 });
+        const errors = {};
+
+        if (!album_title) {
+            errors.album_title = "Album title is required";
+        }
+        if (!slug) {
+            errors.slug = "Album slug is required";
         }
 
-        // Validate and upload cover image
+        // Validate cover image
         if (
             cover_image &&
             typeof cover_image === "object" &&
@@ -203,24 +205,101 @@ export async function POST(request) {
         ) {
             const allowedTypes = [
                 "image/jpeg",
+                "image/jpg",
                 "image/png",
                 "image/webp"
             ];
 
             if (!allowedTypes.includes(cover_image.type)) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Only JPG, PNG and WEBP images are allowed"
-                }, { status: 400 });
+                errors.cover_image = "Only JPG, PNG and WEBP images are allowed";
+            } else if (cover_image.size > 2 * 1024 * 1024) {
+                errors.cover_image = "Cover image must not exceed 2MB";
             }
+        }
 
-            if (cover_image.size > 2 * 1024 * 1024) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Cover image must not exceed 2MB"
-                }, { status: 400 });
+        connection = await pool.getConnection();
+
+        // Validate academy
+        if (academy_id !== null) {
+            const [academyRows] = await connection.execute(
+                `SELECT id FROM cst_academy WHERE id = ? LIMIT 1`,
+                [academy_id]
+            );
+
+            if (academyRows.length === 0) {
+                errors.academy_id = "Selected academy does not exist";
             }
+        }
 
+        // Validate branch and academy relationship
+        if (branch_id !== null) {
+            const [branchRows] = await connection.execute(
+                `SELECT id, academy_id
+                 FROM cst_branch
+                 WHERE id = ?
+                 LIMIT 1`,
+                [branch_id]
+            );
+
+            if (branchRows.length === 0) {
+                errors.branch_id = "Selected branch does not exist";
+            } else if (
+                academy_id !== null &&
+                Number(branchRows[0].academy_id) !== Number(academy_id)
+            ) {
+                errors.branch_id = "Selected branch does not belong to the selected academy";
+            }
+        }
+
+        // Validate category
+        if (category_id !== null) {
+            const [categoryRows] = await connection.execute(
+                `SELECT id, academy_id
+                 FROM cst_gallery_categories
+                 WHERE id = ?
+                 AND is_deleted = 0
+                 LIMIT 1`,
+                [category_id]
+            );
+
+            if (categoryRows.length === 0) {
+                errors.category_id = "Selected gallery category does not exist";
+            } else if (
+                academy_id !== null &&
+                categoryRows[0].academy_id !== null &&
+                Number(categoryRows[0].academy_id) !== Number(academy_id)
+            ) {
+                errors.category_id = "Selected category does not belong to the selected academy";
+            }
+        }
+
+        // Check duplicate slug
+        if (slug) {
+            const [slugRows] = await connection.execute(
+                `SELECT id FROM cst_gallery_albums WHERE slug = ? LIMIT 1`,
+                [slug]
+            );
+
+            if (slugRows.length > 0) {
+                errors.slug = "This album slug is already in use";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json({
+                success: false,
+                message: Object.values(errors)[0],
+                errors
+            }, { status: 400 });
+        }
+
+        // Save cover image if provided
+        if (
+            cover_image &&
+            typeof cover_image === "object" &&
+            typeof cover_image.arrayBuffer === "function" &&
+            cover_image.size > 0
+        ) {
             const uploadDir = path.join(
                 process.cwd(),
                 "public",
@@ -240,94 +319,6 @@ export async function POST(request) {
             );
 
             coverImagePath = `/images/uploads/gallery-albums/${fileName}`;
-        }
-
-        connection = await pool.getConnection();
-
-        // Validate academy
-        if (academy_id !== null) {
-            const [academyRows] = await connection.execute(
-                `SELECT id FROM cst_academy WHERE id = ? LIMIT 1`,
-                [academy_id]
-            );
-
-            if (academyRows.length === 0) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Invalid academy_id"
-                }, { status: 400 });
-            }
-        }
-
-        // Validate branch and academy relationship
-        if (branch_id !== null) {
-            const [branchRows] = await connection.execute(
-                `SELECT id, academy_id
-                 FROM cst_branch
-                 WHERE id = ?
-    LIMIT 1`,
-                [branch_id]
-            );
-
-            if (branchRows.length === 0) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Invalid branch_id"
-                }, { status: 400 });
-            }
-
-            if (
-                academy_id !== null &&
-                Number(branchRows[0].academy_id) !== Number(academy_id)
-            ) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Selected branch does not belong to the selected academy"
-                }, { status: 400 });
-            }
-        }
-
-        // Validate category
-        if (category_id !== null) {
-            const [categoryRows] = await connection.execute(
-                `SELECT id, academy_id
-                 FROM cst_gallery_categories
-                 WHERE id = ?
-    AND is_deleted = 0
-                 LIMIT 1`,
-                [category_id]
-            );
-
-            if (categoryRows.length === 0) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Invalid gallery category"
-                }, { status: 400 });
-            }
-
-            if (
-                academy_id !== null &&
-                categoryRows[0].academy_id !== null &&
-                Number(categoryRows[0].academy_id) !== Number(academy_id)
-            ) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Selected category does not belong to the selected academy"
-                }, { status: 400 });
-            }
-        }
-
-        // Check duplicate slug
-        const [slugRows] = await connection.execute(
-            `SELECT id FROM cst_gallery_albums WHERE slug = ? LIMIT 1`,
-            [slug]
-        );
-
-        if (slugRows.length > 0) {
-            return NextResponse.json({
-                success: false,
-                message: "This album slug already exists"
-            }, { status: 409 });
         }
 
         const [result] = await connection.execute(

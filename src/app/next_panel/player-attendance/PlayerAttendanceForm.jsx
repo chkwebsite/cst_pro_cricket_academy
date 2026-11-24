@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { useUser } from "../components/UserContext";
 import { getUserRole, ROLES } from "../../components/lib/rbac-rules";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const STATUS_OPTIONS = [
     { value: "Present", label: "Present", badge: "bg-success" },
@@ -43,12 +44,22 @@ export default function PlayerAttendanceForm({ id = null }) {
         remarks: "",
     });
 
+    const [fieldErrors, setFieldErrors] = useState({});
     const [enrollments, setEnrollments] = useState([]);
     const [loadingEnrollments, setLoadingEnrollments] = useState(false);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
     const [existingRecord, setExistingRecord] = useState(null);
+
+    const clearError = (fieldName) => {
+        setFieldErrors((prev) => {
+            if (!prev[fieldName]) return prev;
+            const updated = { ...prev };
+            delete updated[fieldName];
+            return updated;
+        });
+    };
 
     // Fetch active enrollments
     useEffect(() => {
@@ -101,36 +112,85 @@ export default function PlayerAttendanceForm({ id = null }) {
         })();
     }, [id]);
 
+    const selectedEnrollment = enrollments.find((e) => String(e.id) === String(formData.user_program_id));
+
+    const validateField = (name, value) => {
+        let err = "";
+        if (name === "user_program_id") {
+            if (!isEdit && !value) {
+                err = "Please select a player enrollment.";
+            }
+        } else if (name === "attendance_date") {
+            if (!value) {
+                err = "Please select an attendance date.";
+            } else if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                err = "Invalid date format. Use YYYY-MM-DD.";
+            } else {
+                const enrollStartDate = selectedEnrollment?.start_date ? String(selectedEnrollment.start_date).slice(0, 10) : null;
+                if (enrollStartDate && value < enrollStartDate) {
+                    err = `Attendance date cannot be before joining/enrollment date (${enrollStartDate}).`;
+                } else if (!isMasterAdmin) {
+                    const todayMidnight = new Date();
+                    todayMidnight.setHours(0, 0, 0, 0);
+                    const parts = value.split("-").map(Number);
+                    const selDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    const diffDays = Math.round((todayMidnight.getTime() - selDate.getTime()) / (1000 * 60 * 60 * 24));
+                    if (diffDays < 0 || diffDays > 7) {
+                        err = "Attendance date must be within today and the past 7 days.";
+                    }
+                }
+            }
+        } else if (name === "attendance_status") {
+            if (!value) {
+                err = "Please select attendance status.";
+            }
+        }
+        return err;
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
+        clearError(name);
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!isEdit) {
+            const pErr = validateField("user_program_id", formData.user_program_id);
+            if (pErr) errors.user_program_id = pErr;
+        }
+        const dErr = validateField("attendance_date", formData.attendance_date);
+        if (dErr) errors.attendance_date = dErr;
+
+        const sErr = validateField("attendance_status", formData.attendance_status);
+        if (sErr) errors.attendance_status = sErr;
+
+        return errors;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
 
-        if (!formData.user_program_id) {
-            return setError("Please select a player enrollment.");
-        }
-        if (!formData.attendance_date) {
-            return setError("Please select an attendance date.");
-        }
-
-        const enrollStartDate = selectedEnrollment?.start_date ? String(selectedEnrollment.start_date).slice(0, 10) : null;
-        if (enrollStartDate && formData.attendance_date < enrollStartDate) {
-            return setError(`Attendance date (${formData.attendance_date}) cannot be before the player joining/enrollment date (${enrollStartDate}).`);
-        }
-
-        if (!isMasterAdmin && formData.attendance_date) {
-            const todayMidnight = new Date();
-            todayMidnight.setHours(0, 0, 0, 0);
-            const parts = formData.attendance_date.split("-").map(Number);
-            const selDate = new Date(parts[0], parts[1] - 1, parts[2]);
-            const diffDays = Math.round((todayMidnight.getTime() - selDate.getTime()) / (1000 * 60 * 60 * 24));
-            if (diffDays < 0 || diffDays > 7) {
-                return setError("Attendance date must be within today and the past 7 days.");
+        const clientErrors = validateAll();
+        if (Object.keys(clientErrors).length > 0) {
+            setFieldErrors(clientErrors);
+            const firstKey = Object.keys(clientErrors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
             }
+            return;
         }
 
         try {
@@ -140,13 +200,13 @@ export default function PlayerAttendanceForm({ id = null }) {
                       id: Number(id),
                       attendance_date: formData.attendance_date,
                       attendance_status: formData.attendance_status,
-                      remarks: formData.remarks.trim() || null,
+                      remarks: formData.remarks?.trim() || null,
                   }
                 : {
                       user_program_id: Number(formData.user_program_id),
                       attendance_date: formData.attendance_date,
                       attendance_status: formData.attendance_status,
-                      remarks: formData.remarks.trim() || null,
+                      remarks: formData.remarks?.trim() || null,
                       marked_by: user?.id || null,
                   };
 
@@ -158,6 +218,15 @@ export default function PlayerAttendanceForm({ id = null }) {
 
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 throw new Error(json.message || "Failed to save attendance.");
             }
 
@@ -173,8 +242,6 @@ export default function PlayerAttendanceForm({ id = null }) {
 
     if (fetching) return <div className="text-center py-5">Loading attendance details...</div>;
 
-    const selectedEnrollment = enrollments.find((e) => String(e.id) === String(formData.user_program_id));
-
     return (
         <div className="card shadow-sm">
             <div className="card-header bg-white py-3">
@@ -184,11 +251,11 @@ export default function PlayerAttendanceForm({ id = null }) {
             <div className="card-body p-4">
                 {error && <div className="alert alert-danger">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="row g-3">
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Player Enrollment <span className="text-danger">*</span>
+                                Player Enrollment <RequiredLabel />
                             </label>
                             {isEdit ? (
                                 <input
@@ -202,31 +269,35 @@ export default function PlayerAttendanceForm({ id = null }) {
                                     readOnly
                                 />
                             ) : (
-                                <select
-                                    name="user_program_id"
-                                    className="form-select"
-                                    value={formData.user_program_id}
-                                    onChange={handleChange}
-                                    required
-                                >
-                                    <option value="">
-                                        {loadingEnrollments ? "Loading player enrollments..." : "Choose Player & Program"}
-                                    </option>
-                                    {enrollments.map((item) => {
-                                        const pName =
-                                            item.player_name ||
-                                            [item.player_first_name, item.player_last_name].filter(Boolean).join(" ") ||
-                                            [item.first_name, item.last_name].filter(Boolean).join(" ") ||
-                                            `Player #${item.admission_players_id || item.user_id}`;
-                                        const adm = item.admission_no ? `[${item.admission_no}]` : "";
-                                        const prog = item.program_name || `Program #${item.program_id}`;
-                                        return (
-                                            <option key={item.id} value={item.id}>
-                                                {pName} {adm} — {prog}
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+                                <>
+                                    <select
+                                        name="user_program_id"
+                                        id="user_program_id"
+                                        className={`form-select ${fieldErrors.user_program_id ? "is-invalid border-danger" : ""}`}
+                                        value={formData.user_program_id}
+                                        onChange={handleChange}
+                                        onBlur={handleBlur}
+                                    >
+                                        <option value="">
+                                            {loadingEnrollments ? "Loading player enrollments..." : "Choose Player & Program"}
+                                        </option>
+                                        {enrollments.map((item) => {
+                                            const pName =
+                                                item.player_name ||
+                                                [item.player_first_name, item.player_last_name].filter(Boolean).join(" ") ||
+                                                [item.first_name, item.last_name].filter(Boolean).join(" ") ||
+                                                `Player #${item.admission_players_id || item.user_id}`;
+                                            const adm = item.admission_no ? `[${item.admission_no}]` : "";
+                                            const prog = item.program_name || `Program #${item.program_id}`;
+                                            return (
+                                                <option key={item.id} value={item.id}>
+                                                    {pName} {adm} — {prog}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    <FormError error={fieldErrors.user_program_id} />
+                                </>
                             )}
                             <div className="form-text">
                                 {selectedEnrollment
@@ -237,14 +308,16 @@ export default function PlayerAttendanceForm({ id = null }) {
 
                         <div className="col-md-6">
                             <label className="form-label fw-semibold">
-                                Attendance Date <span className="text-danger">*</span>
+                                Attendance Date <RequiredLabel />
                             </label>
                             <input
                                 type="date"
                                 name="attendance_date"
-                                className="form-control"
+                                id="attendance_date"
+                                className={`form-control ${fieldErrors.attendance_date ? "is-invalid border-danger" : ""}`}
                                 value={formData.attendance_date}
                                 onChange={handleChange}
+                                onBlur={handleBlur}
                                 min={
                                     (() => {
                                         const enrollStart = selectedEnrollment?.start_date ? String(selectedEnrollment.start_date).slice(0, 10) : null;
@@ -256,8 +329,8 @@ export default function PlayerAttendanceForm({ id = null }) {
                                     })()
                                 }
                                 max={!isMasterAdmin ? maxDateStr : undefined}
-                                required
                             />
+                            <FormError error={fieldErrors.attendance_date} />
                             {!isMasterAdmin && (
                                 <div className="form-text text-muted">
                                     Attendance can only be marked for today and up to 7 days in the past.
@@ -267,9 +340,9 @@ export default function PlayerAttendanceForm({ id = null }) {
 
                         <div className="col-12">
                             <label className="form-label fw-semibold">
-                                Attendance Status <span className="text-danger">*</span>
+                                Attendance Status <RequiredLabel />
                             </label>
-                            <div className="d-flex flex-wrap gap-3">
+                            <div className="d-flex flex-wrap gap-3" id="attendance_status">
                                 {STATUS_OPTIONS.map((opt) => (
                                     <label
                                         key={opt.value}
@@ -293,12 +366,14 @@ export default function PlayerAttendanceForm({ id = null }) {
                                     </label>
                                 ))}
                             </div>
+                            <FormError error={fieldErrors.attendance_status} />
                         </div>
 
                         <div className="col-12">
                             <label className="form-label fw-semibold">Remarks</label>
                             <textarea
                                 name="remarks"
+                                id="remarks"
                                 rows="3"
                                 className="form-control"
                                 placeholder="e.g. Arrived 15 minutes late, approved leave, injury, etc."

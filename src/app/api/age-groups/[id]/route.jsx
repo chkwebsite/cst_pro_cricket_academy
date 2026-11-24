@@ -73,12 +73,13 @@ id,
 // UPDATE AGE GROUP
 // =====================================================
 export async function PUT(request, { params }) {
-    const authUser = await getAuthenticatedUser(request);
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
     if (!authUser) {
         return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
     }
-    const roleId = Number(authUser.role_id);
-    if (roleId !== 1 && roleId !== 2) {
+    const isAllowed = authUser.isSuperAdmin || authUser.isAcademyAdmin || authUser.role === "SUPER_ADMIN" || authUser.role === "ACADEMY_ADMIN" || Number(authUser.role_id) === 1 || Number(authUser.role_id) === 2;
+    if (!isAllowed) {
         return NextResponse.json({ success: false, message: "Forbidden. Only administrators can update age groups." }, { status: 403 });
     }
 
@@ -115,19 +116,27 @@ export async function PUT(request, { params }) {
         }
 
         // =================================================
-        // AGE VALIDATION (MANDATORY)
+        // AGE VALIDATION (MANDATORY: 6 to 60)
         // =================================================
 
         if (min_age === undefined || min_age === null || String(min_age).trim() === "") {
             errors.min_age = "Minimum age is required.";
-        } else if (isNaN(Number(min_age)) || Number(min_age) < 0) {
-            errors.min_age = "Minimum age must be a valid non-negative number.";
+        } else if (isNaN(Number(min_age))) {
+            errors.min_age = "Minimum age must be a valid number.";
+        } else if (Number(min_age) < 6) {
+            errors.min_age = "Minimum age cannot be less than 6.";
+        } else if (Number(min_age) > 60) {
+            errors.min_age = "Minimum age cannot be greater than 60.";
         }
 
         if (max_age === undefined || max_age === null || String(max_age).trim() === "") {
             errors.max_age = "Maximum age is required.";
-        } else if (isNaN(Number(max_age)) || Number(max_age) < 0) {
-            errors.max_age = "Maximum age must be a valid non-negative number.";
+        } else if (isNaN(Number(max_age))) {
+            errors.max_age = "Maximum age must be a valid number.";
+        } else if (Number(max_age) < 6) {
+            errors.max_age = "Maximum age cannot be less than 6.";
+        } else if (Number(max_age) > 60) {
+            errors.max_age = "Maximum age cannot be greater than 60.";
         }
 
         if (!errors.min_age && !errors.max_age && Number(min_age) > Number(max_age)) {
@@ -253,6 +262,14 @@ id,
     } catch (error) {
         console.error("UPDATE AGE GROUP ERROR:", error);
 
+        if (error.code === "ER_CHECK_CONSTRAINT_VIOLATED") {
+            return NextResponse.json({
+                success: false,
+                message: "Invalid age range. Minimum age must be between 6 and 60, and maximum age cannot be less than minimum age.",
+                errors: { min_age: "Minimum age must be at least 6 and maximum age at most 60." }
+            }, { status: 400 });
+        }
+
         return NextResponse.json({
             success: false,
             message: "Failed to update age group"
@@ -269,12 +286,13 @@ id,
 // DELETE AGE GROUP - SOFT DELETE
 // =====================================================
 export async function DELETE(request, { params }) {
-    const authUser = await getAuthenticatedUser(request);
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(request);
+    if (errorResponse) return errorResponse;
     if (!authUser) {
         return NextResponse.json({ success: false, message: "Unauthorized. Authentication required." }, { status: 401 });
     }
-    const roleId = Number(authUser.role_id);
-    if (roleId !== 1 && roleId !== 2) {
+    const isAllowed = authUser.isSuperAdmin || authUser.isAcademyAdmin || authUser.role === "SUPER_ADMIN" || authUser.role === "ACADEMY_ADMIN" || Number(authUser.role_id) === 1 || Number(authUser.role_id) === 2;
+    if (!isAllowed) {
         return NextResponse.json({ success: false, message: "Forbidden. Only administrators can delete age groups." }, { status: 403 });
     }
 

@@ -84,49 +84,89 @@ function OrdersContent() {
     const [groundBookings, setGroundBookings] = useState([]);
     const [loadingGround, setLoadingGround] = useState(false);
 
-    // Load store orders
+    // Load store orders with multi-source fallback (User ID, Phone, LocalStorage)
     const fetchOrders = async () => {
         setLoading(true);
         setError(null);
         try {
-            let url = "/api/orders?";
-            const params = [];
-
-            if (isLoggedIn && user?.id) {
-                if (user.is_public || user.user_type === "Public User") {
-                    params.push(`public_user_id=${user.id}`);
-                } else {
-                    params.push(`customer_user_id=${user.id}`);
-                }
-            } else if (searchOrderNo.trim()) {
-                params.push(`search=${encodeURIComponent(searchOrderNo.trim())}`);
-            } else {
-                setOrders([]);
-                setLoading(false);
-                return;
-            }
+            let loadedOrders = [];
+            const queryParams = new URLSearchParams();
 
             if (statusFilter !== "ALL") {
-                params.push(`order_status=${statusFilter}`);
+                queryParams.set("order_status", statusFilter);
             }
 
-            url += params.join("&");
+            // 1. Direct explicit search query (Order No, phone, email)
+            if (searchOrderNo.trim()) {
+                queryParams.set("search", searchOrderNo.trim());
+                const res = await fetch(`/api/orders?${queryParams.toString()}`);
+                const json = await res.json();
+                if (res.ok && json.success && Array.isArray(json.data)) {
+                    loadedOrders = json.data;
+                }
+            } else if (isLoggedIn && user?.id) {
+                // 2. Logged-in user: query by customer_user_id and public_user_id
+                queryParams.set("customer_user_id", String(user.id));
+                queryParams.set("public_user_id", String(user.id));
+                if (user.email) queryParams.set("customer_email", user.email);
+                if (user.phone) queryParams.set("customer_phone", user.phone);
 
-            const res = await fetch(url);
-            const json = await res.json();
-            let loadedOrders = res.ok && json.success ? json.data || [] : [];
+                const res = await fetch(`/api/orders?${queryParams.toString()}`);
+                const json = await res.json();
+                if (res.ok && json.success && Array.isArray(json.data)) {
+                    loadedOrders = json.data;
+                }
 
-            // If empty and user has a phone number, fallback search by phone to catch all matching orders
-            if (loadedOrders.length === 0 && isLoggedIn && user?.phone) {
-                const fallbackRes = await fetch(`/api/orders?search=${encodeURIComponent(user.phone)}`);
-                const fallbackJson = await fallbackRes.json();
-                if (fallbackRes.ok && fallbackJson.success && Array.isArray(fallbackJson.data) && fallbackJson.data.length > 0) {
-                    loadedOrders = fallbackJson.data;
+                // If no orders found by user ID, fallback to searching by user's phone
+                if (loadedOrders.length === 0 && user?.phone) {
+                    const phoneParams = new URLSearchParams();
+                    if (statusFilter !== "ALL") phoneParams.set("order_status", statusFilter);
+                    phoneParams.set("search", user.phone);
+                    const phoneRes = await fetch(`/api/orders?${phoneParams.toString()}`);
+                    const phoneJson = await phoneRes.json();
+                    if (phoneRes.ok && phoneJson.success && Array.isArray(phoneJson.data) && phoneJson.data.length > 0) {
+                        loadedOrders = phoneJson.data;
+                    }
+                }
+            }
+
+            // 3. Fallback: check localStorage recent orders and saved customer phone
+            if (loadedOrders.length === 0 && !searchOrderNo.trim()) {
+                let localOrders = [];
+                let localPhone = "";
+                if (typeof window !== "undefined") {
+                    try {
+                        localOrders = JSON.parse(localStorage.getItem("cst_recent_orders") || "[]");
+                        localPhone = localStorage.getItem("cst_customer_phone") || "";
+                    } catch (_) {}
+                }
+
+                if (localOrders.length > 0) {
+                    const recentParams = new URLSearchParams();
+                    if (statusFilter !== "ALL") recentParams.set("order_status", statusFilter);
+                    recentParams.set("order_nos", localOrders.join(","));
+                    const recentRes = await fetch(`/api/orders?${recentParams.toString()}`);
+                    const recentJson = await recentRes.json();
+                    if (recentRes.ok && recentJson.success && Array.isArray(recentJson.data) && recentJson.data.length > 0) {
+                        loadedOrders = recentJson.data;
+                    }
+                }
+
+                if (loadedOrders.length === 0 && localPhone) {
+                    const phoneParams = new URLSearchParams();
+                    if (statusFilter !== "ALL") phoneParams.set("order_status", statusFilter);
+                    phoneParams.set("search", localPhone);
+                    const phoneRes = await fetch(`/api/orders?${phoneParams.toString()}`);
+                    const phoneJson = await phoneRes.json();
+                    if (phoneRes.ok && phoneJson.success && Array.isArray(phoneJson.data) && phoneJson.data.length > 0) {
+                        loadedOrders = phoneJson.data;
+                    }
                 }
             }
 
             setOrders(loadedOrders);
         } catch (err) {
+            console.error("fetchOrders error:", err);
             setError("Unable to load orders at this time.");
         } finally {
             setLoading(false);
@@ -154,12 +194,18 @@ function OrdersContent() {
     };
 
     useEffect(() => {
+        if (querySearch && querySearch !== searchOrderNo) {
+            setSearchOrderNo(querySearch);
+        }
+    }, [querySearch]);
+
+    useEffect(() => {
         if (orderType === "store") {
             fetchOrders();
         } else {
             fetchGroundBookings();
         }
-    }, [isLoggedIn, user?.id, statusFilter, orderType]);
+    }, [isLoggedIn, user?.id, statusFilter, orderType, searchOrderNo]);
 
     // Handle guest search submit
     const handleGuestSearch = (e) => {
@@ -671,8 +717,8 @@ function OrdersContent() {
                                                                 : isCancelled
                                                                 ? "Order cancelled. Items returned to inventory."
                                                                 : isPickup
-                                                                ? `Ready for pickup: ${formatDeliveryDate(ord.estimated_delivery_date || getEstimatedDeliveryDate(ord.created_at, ord.fulfillment_type))} (+2 Days)`
-                                                                : `Estimated delivery: ${formatDeliveryDate(ord.estimated_delivery_date || getEstimatedDeliveryDate(ord.created_at, ord.fulfillment_type))} (+12 Days)`}
+                                                                ? `Ready for pickup at ${ord.branch_name || "Academy Branch"}: ${formatDeliveryDate(ord.estimated_delivery_date || getEstimatedDeliveryDate(ord.created_at, ord.fulfillment_type))} (+2 Days)`
+                                                                : `Ready for pickup: ${formatDeliveryDate(ord.estimated_delivery_date || getEstimatedDeliveryDate(ord.created_at, ord.fulfillment_type))} (+2 Days)`}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -911,27 +957,28 @@ function OrdersContent() {
                                                                     )}
                                                                 </div>
 
-                                                                {/* Pricing Breakdown Summary */}
+                                                                {/* Pricing Breakdown Summary - Flipkart Inclusive GST */}
                                                                 <div className="bg-white rounded-3 p-3 border small">
                                                                     <div className="d-flex justify-content-between text-muted mb-1">
-                                                                        <span>Subtotal</span>
+                                                                        <span>Net Base Amount</span>
                                                                         <span>₹{Number(ord.subtotal || 0).toLocaleString("en-IN")}</span>
                                                                     </div>
-                                                                    {Number(ord.delivery_charge) > 0 && (
-                                                                        <div className="d-flex justify-content-between text-muted mb-1">
-                                                                            <span>Delivery Fee</span>
-                                                                            <span>₹{Number(ord.delivery_charge).toLocaleString("en-IN")}</span>
-                                                                        </div>
-                                                                    )}
-                                                                    {Number(ord.tax_amount) > 0 && (
-                                                                        <div className="d-flex justify-content-between text-muted mb-1">
-                                                                            <span>Tax / GST</span>
-                                                                            <span>₹{Number(ord.tax_amount).toLocaleString("en-IN")}</span>
-                                                                        </div>
-                                                                    )}
+                                                                    <div className="d-flex justify-content-between text-muted mb-1">
+                                                                        <span>Taxes &amp; GST (Included)</span>
+                                                                        <span className="text-success">
+                                                                            {Number(ord.tax_amount || 0) > 0 ? `+₹${Number(ord.tax_amount || 0).toLocaleString("en-IN")}` : "Included in Price"}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="d-flex justify-content-between text-muted mb-1">
+                                                                        <span>Academy Branch Pickup</span>
+                                                                        <span className="text-success fw-bold">FREE</span>
+                                                                    </div>
                                                                     <div className="d-flex justify-content-between fw-bold text-dark pt-2 border-top fs-6">
-                                                                        <span>Grand Total</span>
+                                                                        <span>Total Amount</span>
                                                                         <span className="text-success">₹{Number(ord.grand_total || 0).toLocaleString("en-IN")}</span>
+                                                                    </div>
+                                                                    <div className="extra-small text-muted text-end mt-0.5">
+                                                                        (Inclusive of all taxes &amp; GST)
                                                                     </div>
                                                                 </div>
 

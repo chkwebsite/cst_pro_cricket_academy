@@ -46,8 +46,8 @@ const PAYMENT_STATUS_COLORS = {
     Refunded: "bg-secondary text-white",
 };
 
-const getEstimatedDeliveryDate = (createdDate, type = "Delivery") => {
-    const days = type === "Pickup" ? 2 : 12;
+const getEstimatedDeliveryDate = (createdDate, type = "Pickup") => {
+    const days = 2;
     const d = createdDate ? new Date(createdDate) : new Date();
     d.setDate(d.getDate() + days);
     return d;
@@ -853,21 +853,19 @@ export default function OrdersPage() {
                                                     </tbody>
                                                     <tfoot className="table-light">
                                                         <tr>
-                                                            <td colSpan="3" className="text-end small">Subtotal:</td>
+                                                            <td colSpan="3" className="text-end small">Item Net Subtotal:</td>
                                                             <td className="text-end fw-semibold">₹{Number(viewOrder.subtotal).toLocaleString("en-IN")}</td>
                                                         </tr>
                                                         <tr>
-                                                            <td colSpan="3" className="text-end small">Tax Amount:</td>
-                                                            <td className="text-end fw-semibold">₹{Number(viewOrder.tax_amount).toLocaleString("en-IN")}</td>
+                                                            <td colSpan="3" className="text-end small">Taxes &amp; GST (Included):</td>
+                                                            <td className="text-end fw-semibold text-success">+₹{Number(viewOrder.tax_amount).toLocaleString("en-IN")}</td>
                                                         </tr>
-                                                        {Number(viewOrder.delivery_charge) > 0 && (
-                                                            <tr>
-                                                                <td colSpan="3" className="text-end small">Delivery Charge:</td>
-                                                                <td className="text-end fw-semibold">₹{Number(viewOrder.delivery_charge).toLocaleString("en-IN")}</td>
-                                                            </tr>
-                                                        )}
+                                                        <tr>
+                                                            <td colSpan="3" className="text-end small">Academy Branch Pickup:</td>
+                                                            <td className="text-end fw-bold text-success">FREE</td>
+                                                        </tr>
                                                         <tr className="table-success">
-                                                            <td colSpan="3" className="text-end fw-bold">Grand Total:</td>
+                                                            <td colSpan="3" className="text-end fw-bold">Grand Total (Inclusive of all taxes):</td>
                                                             <td className="text-end fw-bold fs-5 text-success">
                                                                 ₹{Number(viewOrder.grand_total).toLocaleString("en-IN")}
                                                             </td>

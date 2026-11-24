@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import useCurrentUser from "../teams/useCurrentUser";
 import useTournamentOptions from "../tournament-teams/useTournamentOptions";
 
@@ -41,6 +42,88 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        switch (name) {
+            case "tournament_id":
+                return !value ? "Please choose a tournament." : "";
+            case "tournament_team_id":
+                return !value ? "Please choose a tournament team." : "";
+            case "player_id":
+                return !value ? "Please choose a player." : "";
+            case "player_fee": {
+                const num = Number(value);
+                if (isNaN(num) || num < 0) {
+                    return "Player tournament fee must be zero or greater.";
+                }
+                return "";
+            }
+            case "paid_amount": {
+                const num = Number(value);
+                const fee = Number(formData.player_fee) || 0;
+                if (isNaN(num) || num < 0 || num > fee) {
+                    return "Paid amount must be between zero and player tournament fee.";
+                }
+                return "";
+            }
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (name, value) => {
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        const tourErr = validateField("tournament_id", formData.tournament_id);
+        if (tourErr) errs.tournament_id = tourErr;
+
+        const teamErr = validateField("tournament_team_id", formData.tournament_team_id);
+        if (teamErr) errs.tournament_team_id = teamErr;
+
+        const selPlayerId = formData.player_source === "user" ? formData.user_id : formData.outside_player_id;
+        const playerErr = validateField("player_id", selPlayerId);
+        if (playerErr) errs.player_id = playerErr;
+
+        const selectedReg = tournamentTeams.find((item) => Number(item.id) === Number(formData.tournament_team_id));
+        const isExternalTeam = selectedReg?.team_type === "External" || formData.team_type === "External";
+
+        if (!isExternalTeam) {
+            const feeErr = validateField("player_fee", formData.player_fee);
+            if (feeErr) errs.player_fee = feeErr;
+            const paidErr = validateField("paid_amount", formData.paid_amount);
+            if (paidErr) errs.paid_amount = paidErr;
+        }
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // GET SINGLE TOURNAMENT TEAM PLAYER (edit mode)
     useEffect(() => {
@@ -160,6 +243,10 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        clearError(name);
+        if (name === "user_id" || name === "outside_player_id") {
+            clearError("player_id");
+        }
 
         if (name === "player_source") {
             setFormData((prev) => ({
@@ -168,6 +255,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                 user_id: "",
                 outside_player_id: "",
             }));
+            clearError("player_id");
             return;
         }
 
@@ -184,6 +272,8 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                 user_id: "",
                 outside_player_id: "",
             }));
+            clearError("tournament_team_id");
+            clearError("player_id");
             return;
         }
 
@@ -202,6 +292,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                 const msg = `Player is already enrolled in this tournament under team "${teamName}". A player cannot be enrolled twice in the same tournament.`;
                 alert(msg);
                 setError(msg);
+                setFieldErrors((prev) => ({ ...prev, player_id: msg }));
                 setFormData((prev) => ({
                     ...prev,
                     [name]: "",
@@ -233,25 +324,16 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Mirrors the API's validation
+        if (!validateAll()) {
+            return;
+        }
+
         const tournamentTeamId = Number(formData.tournament_team_id);
         const teamId = Number(formData.team_id);
         const tournamentId = Number(formData.tournament_id);
-        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
-            return setError("Please choose a tournament");
-        }
-        if (!Number.isInteger(tournamentTeamId) || tournamentTeamId <= 0) {
-            return setError("Please enter a valid tournament team ID");
-        }
-        if (!Number.isInteger(teamId) || teamId <= 0) {
-            return setError("Please enter a valid team ID");
-        }
 
         const isUser = formData.player_source === "user";
         const playerId = Number(isUser ? formData.user_id : formData.outside_player_id);
-        if (!Number.isInteger(playerId) || playerId <= 0) {
-            return setError(isUser ? "Please enter a valid user ID" : "Please enter a valid outside player ID");
-        }
 
         const enrolled = enrolledTournamentPlayers.find((ttp) => {
             if (isEdit && Number(ttp.id) === Number(id)) return false;
@@ -264,6 +346,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
             const teamName = enrolled.team_name || "another team";
             const msg = `Player is already enrolled in this tournament under team "${teamName}". A player cannot be enrolled twice in the same tournament.`;
             setError(msg);
+            setFieldErrors((prev) => ({ ...prev, player_id: msg }));
             alert(msg);
             return;
         }
@@ -272,11 +355,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
         const isExternalTeam = selectedReg?.team_type === "External" || formData.team_type === "External";
 
         const fee = isExternalTeam ? 0 : Number(formData.player_fee);
-        if (!isExternalTeam && (!Number.isFinite(fee) || fee < 0)) return setError("Player tournament fee must be zero or greater");
         const paidAmount = isExternalTeam ? 0 : Number(formData.paid_amount);
-        if (!isExternalTeam && (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > fee)) {
-            return setError("Paid amount must be between zero and player tournament fee");
-        }
 
         try {
             setLoading(true);
@@ -307,6 +386,17 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    if (firstKey) {
+                        const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -347,30 +437,33 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Tournament <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Tournament <RequiredLabel /></label>
                             <select
                                 name="tournament_id"
-                                className="form-select"
+                                id="tournament_id"
+                                className={`form-select ${fieldErrors.tournament_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.tournament_id}
                                 onChange={handleChange}
-                                required
+                                onBlur={(e) => handleBlur("tournament_id", e.target.value)}
                             >
                                 <option value="">Choose Tournament</option>
                                 {tournaments.map((tournament) => (
                                     <option key={tournament.id} value={tournament.id}>{tournament.tournament_name}</option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.tournament_id} />
                             {tournamentError && <div className="form-text text-danger">{tournamentError}</div>}
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Tournament Team <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">Tournament Team <RequiredLabel /></label>
                             <select
                                 name="tournament_team_id"
-                                className="form-select"
+                                id="tournament_team_id"
+                                className={`form-select ${fieldErrors.tournament_team_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.tournament_team_id}
                                 onChange={handleChange}
-                                required
+                                onBlur={(e) => handleBlur("tournament_team_id", e.target.value)}
                                 disabled={!formData.tournament_id}
                             >
                                 <option value="">Choose Team</option>
@@ -380,6 +473,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.tournament_team_id} />
                         </div>
 
                         <div className="col-md-4 mb-3">
@@ -404,13 +498,14 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                         </div>
 
                         <div className="col-md-8 mb-3">
-                            <label className="form-label">{isUser ? "Registered Player" : "Outside Player"} <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">{isUser ? "Registered Player" : "Outside Player"} <RequiredLabel /></label>
                             <select
                                 name={isUser ? "user_id" : "outside_player_id"}
-                                className="form-select"
+                                id="player_id"
+                                className={`form-select ${fieldErrors.player_id ? "is-invalid border-danger" : ""}`}
                                 value={isUser ? formData.user_id : formData.outside_player_id}
                                 onChange={handleChange}
-                                required
+                                onBlur={(e) => handleBlur("player_id", e.target.value)}
                                 disabled={playerOptionsLoading}
                             >
                                 <option value="">
@@ -451,6 +546,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                                           );
                                       })}
                             </select>
+                            <FormError error={fieldErrors.player_id} />
                         </div>
                     </div>
 
@@ -498,11 +594,14 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                                         min="0"
                                         step="0.01"
                                         name="player_fee"
-                                        className="form-control"
+                                        id="player_fee"
+                                        className={`form-control ${fieldErrors.player_fee ? "is-invalid border-danger" : ""}`}
                                         value={formData.player_fee}
                                         onChange={handleChange}
+                                        onBlur={(e) => handleBlur("player_fee", e.target.value)}
                                         placeholder="e.g. 1500"
                                     />
+                                    <FormError error={fieldErrors.player_fee} />
                                     {isEdit && (
                                         <div className="form-text">Cannot be less than the amount already paid.</div>
                                     )}
@@ -516,10 +615,13 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                                         max={formData.player_fee}
                                         step="0.01"
                                         name="paid_amount"
-                                        className="form-control"
+                                        id="paid_amount"
+                                        className={`form-control ${fieldErrors.paid_amount ? "is-invalid border-danger" : ""}`}
                                         value={formData.paid_amount}
                                         onChange={handleChange}
+                                        onBlur={(e) => handleBlur("paid_amount", e.target.value)}
                                     />
+                                    <FormError error={fieldErrors.paid_amount} />
                                 </div>
                                 {Number(formData.paid_amount) > 0 && !isEdit && (
                                     <>

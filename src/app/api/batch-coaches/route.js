@@ -201,15 +201,10 @@ export async function POST(request) {
             remarks = null,
         } = body;
 
-        if (!batch_id || !coach_user_id || !start_date) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "batch_id, coach_user_id and start_date are required",
-                },
-                { status: 400 }
-            );
-        }
+        const errors = {};
+        if (!batch_id) errors.batch_id = "Training batch is required.";
+        if (!coach_user_id) errors.coach_user_id = "Coach user is required.";
+        if (!start_date) errors.start_date = "Start date is required.";
 
         const validRoles = [
             "Head Coach",
@@ -218,21 +213,20 @@ export async function POST(request) {
             "Specialist Coach",
         ];
 
-        if (!validRoles.includes(coach_role)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid coach_role",
-                },
-                { status: 400 }
-            );
+        if (!coach_role || !validRoles.includes(coach_role)) {
+            errors.coach_role = "Invalid coach role selected.";
         }
 
-        if (end_date && end_date < start_date) {
+        if (end_date && start_date && end_date < start_date) {
+            errors.end_date = "End date cannot be earlier than start date.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "end_date cannot be before start_date",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -320,6 +314,7 @@ AND(end_date IS NULL OR end_date >= ?)
                 {
                     success: false,
                     message: "This coach is already assigned to this batch",
+                    errors: { coach_user_id: "This coach is already assigned to this batch." },
                 },
                 { status: 409 }
             );
@@ -482,21 +477,25 @@ export async function PUT(request) {
             "Specialist Coach",
         ];
 
+        const putErrors = {};
+        if (!updated.batch_id) putErrors.batch_id = "Training batch is required.";
+        if (!updated.coach_user_id) putErrors.coach_user_id = "Coach user is required.";
+        if (!updated.start_date) putErrors.start_date = "Start date is required.";
+
         if (!validRoles.includes(updated.coach_role)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid coach_role",
-                },
-                { status: 400 }
-            );
+            putErrors.coach_role = "Invalid coach role selected.";
         }
 
-        if (updated.end_date && updated.end_date < updated.start_date) {
+        if (updated.end_date && updated.start_date && updated.end_date < updated.start_date) {
+            putErrors.end_date = "End date cannot be earlier than start date.";
+        }
+
+        if (Object.keys(putErrors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "end_date cannot be before start_date",
+                    message: Object.values(putErrors)[0],
+                    errors: putErrors,
                 },
                 { status: 400 }
             );

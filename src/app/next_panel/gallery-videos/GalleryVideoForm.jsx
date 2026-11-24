@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     album_id: "",
@@ -33,7 +34,84 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        let err = "";
+        const val = typeof value === "string" ? value.trim() : value;
+        switch (name) {
+            case "video_title":
+                if (!val) err = "Video title is required.";
+                else if (val.length < 2) err = "Video title must be at least 2 characters.";
+                break;
+            case "video_url":
+                if (formData.video_type !== "Upload") {
+                    if (!val) {
+                        err = `Please enter a valid ${formData.video_type} URL.`;
+                    } else {
+                        try {
+                            const parsed = new URL(val);
+                            const host = parsed.hostname.toLowerCase();
+                            if (formData.video_type === "YouTube" && !["youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(host)) {
+                                err = "Please provide a valid YouTube URL.";
+                            } else if (formData.video_type === "Vimeo" && !(host === "vimeo.com" || host.endsWith(".vimeo.com"))) {
+                                err = "Please provide a valid Vimeo URL.";
+                            }
+                        } catch {
+                            err = "Please enter a valid URL.";
+                        }
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+        return err;
+    };
+
+    const handleBlur = (field) => {
+        const err = validateField(field, formData[field]);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        const titleErr = validateField("video_title", formData.video_title);
+        if (titleErr) errors.video_title = titleErr;
+
+        if (formData.video_type !== "Upload") {
+            const urlErr = validateField("video_url", formData.video_url);
+            if (urlErr) errors.video_url = urlErr;
+        } else if (!isEdit && !videoFile) {
+            errors.video = "Please choose a video file to upload.";
+        }
+
+        setFieldErrors(errors);
+
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // Load albums
     useEffect(() => {
@@ -89,12 +167,16 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 2 * 1024 * 1024) {
-                setError(`Thumbnail "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                const msg = `Thumbnail "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`;
+                setFieldErrors((prev) => ({ ...prev, thumbnail_image: msg }));
+                setError(msg);
                 e.target.value = "";
                 setThumbnailFile(null);
                 setThumbnailPreview(null);
                 return;
             }
+            clearError("thumbnail_image");
+            setError("");
             setThumbnailFile(file);
             setThumbnailPreview(URL.createObjectURL(file));
         }
@@ -104,11 +186,15 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 20 * 1024 * 1024) {
-                setError(`Video "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed video size is 20MB.`);
+                const msg = `Video "${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed video size is 20MB.`;
+                setFieldErrors((prev) => ({ ...prev, video: msg }));
+                setError(msg);
                 e.target.value = "";
                 setVideoFile(null);
                 return;
             }
+            clearError("video");
+            setError("");
             setVideoFile(file);
         }
     };
@@ -118,18 +204,7 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
         setError("");
         setSuccessMsg("");
 
-        if (!formData.video_title.trim()) {
-            setError("Video title is required.");
-            return;
-        }
-
-        if (formData.video_type === "Upload" && !isEdit && !videoFile) {
-            setError("Please choose a video file to upload.");
-            return;
-        }
-
-        if (formData.video_type !== "Upload" && !formData.video_url.trim()) {
-            setError(`Please enter a valid ${formData.video_type} URL.`);
+        if (!validateAll()) {
             return;
         }
 
@@ -161,6 +236,15 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
             });
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 throw new Error(json.message || "Failed to save video.");
             }
 
@@ -233,28 +317,33 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                             <div className="row g-3">
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Video Title <span className="text-danger">*</span>
+                                        Video Title <RequiredLabel />
                                     </label>
                                     <input
                                         type="text"
-                                        className="form-control"
+                                        name="video_title"
+                                        className={`form-control ${fieldErrors.video_title ? "is-invalid border-danger" : ""}`}
                                         placeholder="e.g. Match Highlights: ST Academy vs Warriors"
                                         value={formData.video_title}
-                                        onChange={(e) =>
-                                            setFormData({ ...formData, video_title: e.target.value })
-                                        }
-                                        required
+                                        onChange={(e) => {
+                                            clearError("video_title");
+                                            setFormData({ ...formData, video_title: e.target.value });
+                                        }}
+                                        onBlur={() => handleBlur("video_title")}
                                     />
+                                    <FormError error={fieldErrors.video_title} />
                                 </div>
 
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">Album</label>
                                     <select
-                                        className="form-select"
+                                        name="album_id"
+                                        className={`form-select ${fieldErrors.album_id ? "is-invalid border-danger" : ""}`}
                                         value={formData.album_id}
-                                        onChange={(e) =>
-                                            setFormData({ ...formData, album_id: e.target.value })
-                                        }
+                                        onChange={(e) => {
+                                            clearError("album_id");
+                                            setFormData({ ...formData, album_id: e.target.value });
+                                        }}
                                     >
                                         <option value="">No specific album (General Video)</option>
                                         {albums.map((al) => (
@@ -264,23 +353,29 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                             </option>
                                         ))}
                                     </select>
+                                    <FormError error={fieldErrors.album_id} />
                                 </div>
 
                                 <div className="col-md-4">
                                     <label className="form-label fw-semibold">
-                                        Video Source <span className="text-danger">*</span>
+                                        Video Source <RequiredLabel />
                                     </label>
                                     <select
-                                        className="form-select"
+                                        name="video_type"
+                                        className={`form-select ${fieldErrors.video_type ? "is-invalid border-danger" : ""}`}
                                         value={formData.video_type}
-                                        onChange={(e) =>
-                                            setFormData({ ...formData, video_type: e.target.value })
-                                        }
+                                        onChange={(e) => {
+                                            clearError("video_type");
+                                            clearError("video_url");
+                                            clearError("video");
+                                            setFormData({ ...formData, video_type: e.target.value });
+                                        }}
                                     >
                                         <option value="YouTube">YouTube</option>
                                         <option value="Vimeo">Vimeo</option>
                                         <option value="Upload">Direct File Upload</option>
                                     </select>
+                                    <FormError error={fieldErrors.video_type} />
                                 </div>
 
                                 <div className="col-md-4">
@@ -331,37 +426,42 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                 {formData.video_type !== "Upload" ? (
                                     <div className="col-12">
                                         <label className="form-label fw-semibold">
-                                            {formData.video_type} Video URL <span className="text-danger">*</span>
+                                            {formData.video_type} Video URL <RequiredLabel />
                                         </label>
                                         <input
                                             type="url"
-                                            className="form-control"
+                                            name="video_url"
+                                            className={`form-control ${fieldErrors.video_url ? "is-invalid border-danger" : ""}`}
                                             placeholder={
                                                 formData.video_type === "YouTube"
                                                     ? "https://www.youtube.com/watch?v=dQw4w9WgXcQ or https://youtu.be/..."
                                                     : "https://vimeo.com/123456789"
                                             }
                                             value={formData.video_url}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, video_url: e.target.value })
-                                            }
-                                            required
+                                            onChange={(e) => {
+                                                clearError("video_url");
+                                                setFormData({ ...formData, video_url: e.target.value });
+                                            }}
+                                            onBlur={() => handleBlur("video_url")}
                                         />
-                                        <small className="text-muted">
+                                        <FormError error={fieldErrors.video_url} />
+                                        <small className="text-muted d-block mt-1">
                                             Paste full video link from {formData.video_type}.
                                         </small>
                                     </div>
                                 ) : (
                                     <div className="col-12">
                                         <label className="form-label fw-semibold">
-                                            {isEdit ? "Replace Video File" : <>Upload Video File (Max 20MB) <span className="text-danger">*</span></>}
+                                            {isEdit ? "Replace Video File" : <>Upload Video File (Max 20MB) <RequiredLabel /></>}
                                         </label>
                                         <input
                                             type="file"
-                                            className="form-control"
+                                            name="video"
+                                            className={`form-control ${fieldErrors.video ? "is-invalid border-danger" : ""}`}
                                             accept="video/mp4,video/webm,video/quicktime"
                                             onChange={handleVideoFileChange}
                                         />
+                                        <FormError error={fieldErrors.video} />
                                         <small className="text-muted d-block mt-1">
                                             Supported video formats: MP4, WEBM, MOV (Max 20MB).
                                         </small>
@@ -406,10 +506,12 @@ export default function GalleryVideoForm({ id = null, defaultAlbumId = "" }) {
                                     </label>
                                     <input
                                         type="file"
-                                        className="form-control"
+                                        name="thumbnail_image"
+                                        className={`form-control ${fieldErrors.thumbnail_image ? "is-invalid border-danger" : ""}`}
                                         accept="image/jpeg,image/png,image/webp,image/jpg"
                                         onChange={handleThumbnailChange}
                                     />
+                                    <FormError error={fieldErrors.thumbnail_image} />
                                     <small className="text-muted d-block mt-1">
                                         For YouTube / Vimeo, a custom thumbnail can override the default video cover.
                                     </small>

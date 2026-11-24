@@ -13,6 +13,7 @@ import {
     Layers,
     Shield,
 } from "lucide-react";
+import { FormError } from "@/app/components/form";
 
 const COACH_ROLES = [
     "Head Coach",
@@ -42,6 +43,7 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState(null);
 
     // 1. Load Batches and Coaches
@@ -143,18 +145,66 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
         };
     }, [id, isEdit]);
 
+    const validateAll = () => {
+        const errs = {};
+        if (!batchId) {
+            errs.batch_id = "Training batch is required.";
+        }
+        if (!coachUserId) {
+            errs.coach_user_id = "Coach user is required.";
+        }
+        if (!coachRole) {
+            errs.coach_role = "Coach role is required.";
+        }
+        if (!startDate) {
+            errs.start_date = "Start date is required.";
+        }
+        if (endDate && startDate && endDate < startDate) {
+            errs.end_date = "End date cannot be earlier than start date.";
+        }
+
+        setFieldErrors(errs);
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "batch_id" && !batchId) err = "Training batch is required.";
+        if (field === "coach_user_id" && !coachUserId) err = "Coach user is required.";
+        if (field === "coach_role" && !coachRole) err = "Coach role is required.";
+        if (field === "start_date" && !startDate) err = "Start date is required.";
+        if (field === "end_date" && endDate && startDate && endDate < startDate) {
+            err = "End date cannot be earlier than start date.";
+        }
+
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
     // Submit handler
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
         setSuccessMsg(null);
 
-        if (!batchId) return setError("Please select a batch.");
-        if (!coachUserId) return setError("Please select a coach.");
-        if (!coachRole) return setError("Please select coach role.");
-        if (!startDate) return setError("Please select start date.");
-        if (endDate && endDate < startDate) {
-            return setError("End date cannot be earlier than start date.");
+        if (!validateAll()) {
+            return;
         }
 
         setLoading(true);
@@ -182,6 +232,15 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
 
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save coach assignment.");
             }
 
@@ -238,18 +297,29 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     {/* Row 1: Batch & Coach */}
                     <div className="row g-3 mb-3">
                         <div className="col-md-6">
-                            <label className="form-label fw-semibold">
+                            <label className="form-label fw-semibold" htmlFor="batch_id">
                                 Training Batch <span className="text-danger">*</span>
                             </label>
                             <select
-                                className="form-select"
+                                id="batch_id"
+                                name="batch_id"
+                                className={`form-select ${fieldErrors.batch_id ? "is-invalid border-danger" : ""}`}
                                 value={batchId}
-                                onChange={(e) => setBatchId(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setBatchId(e.target.value);
+                                    if (fieldErrors.batch_id) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.batch_id;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("batch_id")}
                             >
                                 <option value="">-- Select Training Batch --</option>
                                 {batches.map((b) => (
@@ -258,17 +328,29 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.batch_id} />
                         </div>
 
                         <div className="col-md-6">
-                            <label className="form-label fw-semibold">
+                            <label className="form-label fw-semibold" htmlFor="coach_user_id">
                                 Coach User <span className="text-danger">*</span>
                             </label>
                             <select
-                                className="form-select"
+                                id="coach_user_id"
+                                name="coach_user_id"
+                                className={`form-select ${fieldErrors.coach_user_id ? "is-invalid border-danger" : ""}`}
                                 value={coachUserId}
-                                onChange={(e) => setCoachUserId(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setCoachUserId(e.target.value);
+                                    if (fieldErrors.coach_user_id) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.coach_user_id;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("coach_user_id")}
                             >
                                 <option value="">
                                     {coaches.length === 0
@@ -281,32 +363,48 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.coach_user_id} />
                         </div>
                     </div>
 
                     {/* Row 2: Coach Role & Status */}
                     <div className="row g-3 mb-3">
                         <div className="col-md-6">
-                            <label className="form-label fw-semibold">
+                            <label className="form-label fw-semibold" htmlFor="coach_role">
                                 Coach Role <span className="text-danger">*</span>
                             </label>
                             <select
-                                className="form-select"
+                                id="coach_role"
+                                name="coach_role"
+                                className={`form-select ${fieldErrors.coach_role ? "is-invalid border-danger" : ""}`}
                                 value={coachRole}
-                                onChange={(e) => setCoachRole(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setCoachRole(e.target.value);
+                                    if (fieldErrors.coach_role) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.coach_role;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("coach_role")}
                             >
+                                <option value="">-- Select Coach Role --</option>
                                 {COACH_ROLES.map((role) => (
                                     <option key={role} value={role}>
                                         {role}
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.coach_role} />
                         </div>
 
                         <div className="col-md-6">
-                            <label className="form-label fw-semibold">Assignment Status</label>
+                            <label className="form-label fw-semibold" htmlFor="status">Assignment Status</label>
                             <select
+                                id="status"
+                                name="status"
                                 className="form-select"
                                 value={status}
                                 onChange={(e) => setStatus(Number(e.target.value))}
@@ -320,38 +418,65 @@ export default function BatchCoachForm({ id = null, initialBatchId = "" }) {
                     {/* Row 3: Dates */}
                     <div className="row g-3 mb-3">
                         <div className="col-md-6">
-                            <label className="form-label fw-semibold d-flex align-items-center gap-1">
+                            <label className="form-label fw-semibold d-flex align-items-center gap-1" htmlFor="start_date">
                                 <Calendar size={15} /> Start Date <span className="text-danger">*</span>
                             </label>
                             <input
                                 type="date"
-                                className="form-control"
+                                id="start_date"
+                                name="start_date"
+                                className={`form-control ${fieldErrors.start_date ? "is-invalid border-danger" : ""}`}
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setStartDate(e.target.value);
+                                    if (fieldErrors.start_date) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.start_date;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("start_date")}
                             />
+                            <FormError error={fieldErrors.start_date} />
                         </div>
 
                         <div className="col-md-6">
-                            <label className="form-label fw-semibold d-flex align-items-center gap-1">
+                            <label className="form-label fw-semibold d-flex align-items-center gap-1" htmlFor="end_date">
                                 <Calendar size={15} /> End Date
                             </label>
                             <input
                                 type="date"
-                                className="form-control"
+                                id="end_date"
+                                name="end_date"
+                                className={`form-control ${fieldErrors.end_date ? "is-invalid border-danger" : ""}`}
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(e) => {
+                                    setEndDate(e.target.value);
+                                    if (fieldErrors.end_date) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.end_date;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("end_date")}
                             />
                             <div className="form-text" style={{ fontSize: "0.75rem" }}>
                                 Leave blank if ongoing/permanent assignment.
                             </div>
+                            <FormError error={fieldErrors.end_date} />
                         </div>
                     </div>
 
                     {/* Row 4: Remarks */}
                     <div className="mb-4">
-                        <label className="form-label fw-semibold">Remarks / Responsibilities</label>
+                        <label className="form-label fw-semibold" htmlFor="remarks">Remarks / Responsibilities</label>
                         <textarea
+                            id="remarks"
+                            name="remarks"
                             className="form-control"
                             rows={3}
                             placeholder="Notes regarding training focus (e.g. Batting drills, fast bowling analysis, fielding supervision)."

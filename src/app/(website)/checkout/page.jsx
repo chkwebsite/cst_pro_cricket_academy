@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
     AlertCircle,
     ArrowLeft,
+    Building2,
     Calendar,
     Check,
     CheckCircle2,
@@ -15,6 +16,7 @@ import {
     Lock,
     MapPin,
     Package,
+    Phone,
     ShieldCheck,
     ShoppingBag,
     Truck,
@@ -52,9 +54,10 @@ export default function CheckoutPage() {
     const [branches, setBranches] = useState([]);
     const [loadingBranches, setLoadingBranches] = useState(true);
 
-    // Form state
-    const [fulfillmentType, setFulfillmentType] = useState("Delivery"); // "Delivery" | "Pickup"
+    // Form state - Home Delivery removed, strictly Academy Branch Pickup
+    const fulfillmentType = "Pickup";
     const [selectedBranchId, setSelectedBranchId] = useState("");
+    const selectedBranch = branches.find((b) => String(b.id) === String(selectedBranchId)) || null;
     const [paymentMethod, setPaymentMethod] = useState("COD"); // "COD" | "UPI" | "Card" | "Bank Transfer"
     const [notes, setNotes] = useState("");
 
@@ -67,37 +70,34 @@ export default function CheckoutPage() {
     const [guestPassword, setGuestPassword] = useState("");
     const [createAccount, setCreateAccount] = useState(false);
 
-    // Delivery Address
-    const [address, setAddress] = useState("");
-    const [city, setCity] = useState("");
-    const [stateVal, setStateVal] = useState("");
-    const [pincode, setPincode] = useState("");
-
     // Submission states
     const [submitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
 
-    // Calculate delivery fee
-    const deliveryFee = fulfillmentType === "Pickup" ? 0 : subtotal > 1500 ? 0 : 99;
-    const finalTotal = grandTotal + deliveryFee;
+    // Branch pickup is always Free
+    const deliveryFee = 0;
+    const finalTotal = grandTotal;
 
-    // Delivery estimated dates (+2 days for Pickup, +12 days for Delivery)
-    const deliveryEstDate = getEstimatedDeliveryDate("Delivery");
+    // Pickup ready date (+2 days)
     const pickupEstDate = getEstimatedDeliveryDate("Pickup");
-    const currentEstDate = fulfillmentType === "Pickup" ? pickupEstDate : deliveryEstDate;
+    const currentEstDate = pickupEstDate;
 
-    // Load branches (only for academy_id = 1)
+    // Load branches for pickup
     useEffect(() => {
         let isMounted = true;
         async function fetchBranches() {
             try {
-                const res = await fetch("/api/branch?status=1&academy_id=1");
+                const res = await fetch("/api/branch?status=1");
                 const json = await res.json();
                 if (isMounted && res.ok && json.success && Array.isArray(json.data)) {
-                    const filtered = json.data.filter((b) => Number(b.academy_id) === 1);
-                    setBranches(filtered);
-                    if (filtered.length > 0) {
-                        setSelectedBranchId(String(filtered[0].id));
+                    let branchList = json.data;
+                    const ac1 = branchList.filter((b) => Number(b.academy_id) === 1);
+                    if (ac1.length > 0) {
+                        branchList = ac1;
+                    }
+                    setBranches(branchList);
+                    if (branchList.length > 0) {
+                        setSelectedBranchId(String(branchList[0].id));
                     }
                 }
             } catch (err) {
@@ -142,12 +142,7 @@ export default function CheckoutPage() {
         }
 
         if (!selectedBranchId) {
-            setErrorMessage("Please select a fulfillment branch.");
-            return;
-        }
-
-        if (fulfillmentType === "Delivery" && !address.trim()) {
-            setErrorMessage("Please enter your full delivery address.");
+            setErrorMessage("Please select an academy pickup branch.");
             return;
         }
 
@@ -216,8 +211,8 @@ export default function CheckoutPage() {
                 }
             }
 
-            // 1. Create order
-            const estDays = fulfillmentType === "Pickup" ? 2 : 12;
+            const selectedBranch = branches.find((b) => String(b.id) === String(selectedBranchId));
+            const estDays = 2; // Branch pickup in 2 days
             const estDateObj = new Date();
             estDateObj.setDate(estDateObj.getDate() + estDays);
             const yyyy = estDateObj.getFullYear();
@@ -225,27 +220,31 @@ export default function CheckoutPage() {
             const dd = String(estDateObj.getDate()).padStart(2, "0");
             const estimatedDeliveryDate = `${yyyy}-${mm}-${dd}`;
 
+            const branchAddressText = selectedBranch
+                ? `${selectedBranch.branch_name}${selectedBranch.address ? `, ${selectedBranch.address}` : ""}${selectedBranch.city ? `, ${selectedBranch.city}` : ""}`
+                : "Academy Branch Pickup";
+
             const orderPayload = {
-                academy_id: 1,
+                academy_id: selectedBranch?.academy_id || 1,
                 customer_user_id: isPublicUser ? null : activeUserId,
                 public_user_id: isPublicUser ? activeUserId : null,
                 fulfillment_branch_id: Number(selectedBranchId),
-                fulfillment_type: fulfillmentType,
+                fulfillment_type: "Pickup",
                 estimated_delivery_date: estimatedDeliveryDate,
                 customer_name: name.trim(),
                 customer_phone: phone.trim(),
                 customer_email: email.trim() || null,
-                delivery_address: fulfillmentType === "Delivery" ? address.trim() : null,
-                delivery_city: fulfillmentType === "Delivery" ? city.trim() || null : null,
-                delivery_state: fulfillmentType === "Delivery" ? stateVal.trim() || null : null,
-                delivery_pincode: fulfillmentType === "Delivery" ? pincode.trim() || null : null,
+                delivery_address: branchAddressText,
+                delivery_city: selectedBranch?.city || null,
+                delivery_state: null,
+                delivery_pincode: null,
                 subtotal: Number(subtotal.toFixed(2)),
                 tax_amount: Number(taxTotal.toFixed(2)),
-                delivery_charge: Number(deliveryFee.toFixed(2)),
+                delivery_charge: 0,
                 discount_amount: 0,
                 payment_method: paymentMethod,
                 payment_status: "Pending",
-                order_status: "Pending",
+                order_status: "Processing",
                 notes: notes.trim() || null,
             };
 
@@ -262,6 +261,19 @@ export default function CheckoutPage() {
 
             const createdOrderId = orderJson.id;
             const createdOrderNo = orderJson.order_no;
+
+            // Save order to recent orders cache in browser for instant tracking in /orders
+            if (typeof window !== "undefined") {
+                try {
+                    const storedOrders = JSON.parse(localStorage.getItem("cst_recent_orders") || "[]");
+                    if (!storedOrders.includes(createdOrderNo)) {
+                        storedOrders.unshift(createdOrderNo);
+                        localStorage.setItem("cst_recent_orders", JSON.stringify(storedOrders.slice(0, 25)));
+                    }
+                    if (phone.trim()) localStorage.setItem("cst_customer_phone", phone.trim());
+                    if (email.trim()) localStorage.setItem("cst_customer_email", email.trim());
+                } catch (_) {}
+            }
 
             // 2. Add each order item
             for (const item of items) {
@@ -295,8 +307,8 @@ export default function CheckoutPage() {
                     body: JSON.stringify({
                         order_id: createdOrderId,
                         old_status: null,
-                        new_status: "Pending",
-                        remarks: `Order placed online via CST Pro store (${fulfillmentType} - ${paymentMethod}).`,
+                        new_status: "Processing",
+                        remarks: `Order placed online via CST Pro store (${fulfillmentType} - ${paymentMethod}). Status: Processing.`,
                         actor_type: isPublicUser ? "Public User" : "Academy User",
                         actor_id: activeUserId,
                     }),
@@ -493,120 +505,57 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
-                            {/* Step 2: Fulfillment & Shipping */}
+                            {/* Step 2: Fulfillment - Academy Branch Pickup */}
                             <div className="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
-                                <div className="d-flex align-items-center gap-2 mb-3">
-                                    <div
-                                        className="rounded-circle bg-navy text-lime d-flex align-items-center justify-content-center fw-bold"
-                                        style={{ width: "30px", height: "30px", fontSize: "0.85rem" }}
-                                    >
-                                        2
-                                    </div>
-                                    <h5 className="fw-bold text-navy mb-0 display-font">FULFILLMENT METHOD</h5>
-                                </div>
-
-                                {/* Toggle Delivery vs Pickup */}
-                                <div className="row g-2 mb-3">
-                                    <div className="col-12 col-sm-6">
-                                        <label
-                                            className={`card p-3 border rounded-4 cursor-pointer text-start transition-all h-100 ${
-                                                fulfillmentType === "Delivery"
-                                                    ? "border-navy bg-light shadow-sm"
-                                                    : "bg-white border-light-subtle"
-                                            }`}
-                                            onClick={() => setFulfillmentType("Delivery")}
-                                            style={{ cursor: "pointer" }}
+                                <div className="d-flex align-items-center justify-content-between mb-3">
+                                    <div className="d-flex align-items-center gap-2">
+                                        <div
+                                            className="rounded-circle bg-navy text-lime d-flex align-items-center justify-content-center fw-bold"
+                                            style={{ width: "30px", height: "30px", fontSize: "0.85rem" }}
                                         >
-                                            <div className="d-flex align-items-center justify-content-between mb-2">
-                                                <div className="d-flex align-items-center gap-2 fw-bold text-navy">
-                                                    <Truck size={18} className="text-navy" />
-                                                    <span>Home Delivery</span>
-                                                </div>
-                                                <input
-                                                    type="radio"
-                                                    name="fulfillment"
-                                                    checked={fulfillmentType === "Delivery"}
-                                                    onChange={() => setFulfillmentType("Delivery")}
-                                                />
-                                            </div>
-                                            <div className="small text-muted mb-2">
-                                                Delivered to your doorstep. Free over ₹1,500.
-                                            </div>
-                                            <div className="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 rounded-pill small fw-semibold d-inline-flex align-items-center gap-1">
-                                                <Clock size={12} />
-                                                <span>Est. Delivery: +12 Days ({formatDeliveryDate(deliveryEstDate)})</span>
-                                            </div>
-                                        </label>
-                                    </div>
-
-                                    <div className="col-12 col-sm-6">
-                                        <label
-                                            className={`card p-3 border rounded-4 cursor-pointer text-start transition-all h-100 ${
-                                                fulfillmentType === "Pickup"
-                                                    ? "border-navy bg-light shadow-sm"
-                                                    : "bg-white border-light-subtle"
-                                            }`}
-                                            onClick={() => setFulfillmentType("Pickup")}
-                                            style={{ cursor: "pointer" }}
-                                        >
-                                            <div className="d-flex align-items-center justify-content-between mb-2">
-                                                <div className="d-flex align-items-center gap-2 fw-bold text-navy">
-                                                    <MapPin size={18} className="text-teal" />
-                                                    <span>Academy Pickup</span>
-                                                </div>
-                                                <input
-                                                    type="radio"
-                                                    name="fulfillment"
-                                                    checked={fulfillmentType === "Pickup"}
-                                                    onChange={() => setFulfillmentType("Pickup")}
-                                                />
-                                            </div>
-                                            <div className="small text-muted mb-2">
-                                                Collect gear from your academy branch (Free).
-                                            </div>
-                                            <div className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill small fw-semibold d-inline-flex align-items-center gap-1">
-                                                <CheckCircle2 size={12} />
-                                                <span>Ready for Pickup: +2 Days ({formatDeliveryDate(pickupEstDate)})</span>
-                                            </div>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                {/* Delivery / Pickup Schedule Alert */}
-                                <div className="alert alert-light border rounded-4 p-3 d-flex align-items-center gap-3 mb-4 shadow-sm">
-                                    <div
-                                        className="rounded-circle bg-navy text-lime p-2 d-flex align-items-center justify-content-center flex-shrink-0"
-                                        style={{ width: "40px", height: "40px" }}
-                                    >
-                                        {fulfillmentType === "Pickup" ? <Package size={20} /> : <Truck size={20} />}
-                                    </div>
-                                    <div className="flex-grow-1">
-                                        <div className="small fw-bold text-navy">
-                                            {fulfillmentType === "Pickup"
-                                                ? "⚡ Branch Pickup Schedule (Current Date + 2 Days)"
-                                                : "🚚 Home Delivery Schedule (Current Date + 12 Days)"}
+                                            2
                                         </div>
-                                        <div className="extra-small text-muted">
-                                            {fulfillmentType === "Pickup"
-                                                ? `Ready for collection by ${formatDeliveryDate(pickupEstDate)} at your selected branch.`
-                                                : `Estimated arrival on or before ${formatDeliveryDate(deliveryEstDate)} directly at your address.`}
-                                        </div>
+                                        <h5 className="fw-bold text-navy mb-0 display-font">FULFILLMENT METHOD</h5>
                                     </div>
-                                    <span className="badge bg-white text-navy border px-2.5 py-1 rounded-pill small fw-semibold d-none d-sm-inline-block">
-                                        {fulfillmentType === "Pickup" ? "+2 Days" : "+12 Days"}
+                                    <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 rounded-pill small fw-bold">
+                                        ✓ Free Academy Pickup
                                     </span>
+                                </div>
+
+                                {/* Pickup Highlight Card */}
+                                <div className="p-3.5 rounded-4 border mb-3" style={{ background: "#f8fafc", borderColor: "#e2e8f0" }}>
+                                    <div className="d-flex align-items-start gap-3">
+                                        <div
+                                            className="rounded-circle bg-navy text-lime p-2.5 d-flex align-items-center justify-content-center flex-shrink-0 mt-1"
+                                            style={{ width: "42px", height: "42px" }}
+                                        >
+                                            <Building2 size={22} />
+                                        </div>
+                                        <div className="flex-grow-1">
+                                            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-1">
+                                                <div className="fw-bold text-navy fs-6">Academy Branch Pickup</div>
+                                                <span className="badge bg-success text-white px-2.5 py-1 rounded-pill small fw-semibold">
+                                                    Ready in 2 Days ({formatDeliveryDate(pickupEstDate)})
+                                                </span>
+                                            </div>
+                                            <p className="small text-muted mb-0" style={{ lineHeight: "1.5" }}>
+                                                Select your nearest CST Academy branch below. You can collect your gear directly from the branch reception. No shipping, handling, or doorstep delivery fees.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Branch Selector */}
                                 <div className="mb-3">
-                                    <label className="form-label small fw-semibold text-navy mb-1">
-                                        {fulfillmentType === "Pickup" ? "Select Pickup Branch" : "Processing Branch"} <span className="text-danger">*</span>
+                                    <label className="form-label small fw-semibold text-navy mb-1.5 d-flex align-items-center justify-content-between">
+                                        <span>Select Academy Branch to Collect Gear <span className="text-danger">*</span></span>
+                                        <span className="extra-small text-muted">({branches.length} branches available)</span>
                                     </label>
                                     {loadingBranches ? (
-                                        <div className="small text-muted">Loading branches...</div>
+                                        <div className="small text-muted py-2">Loading academy branches...</div>
                                     ) : (
                                         <select
-                                            className="form-select"
+                                            className="form-select form-select-lg fs-6"
                                             value={selectedBranchId}
                                             onChange={(e) => setSelectedBranchId(e.target.value)}
                                             required
@@ -622,58 +571,31 @@ export default function CheckoutPage() {
                                     )}
                                 </div>
 
-                                {/* Delivery Address Details (only if Delivery) */}
-                                {fulfillmentType === "Delivery" && (
-                                    <div className="row g-3 pt-2">
-                                        <div className="col-12">
-                                            <label className="form-label small fw-semibold text-navy mb-1">
-                                                Delivery Address <span className="text-danger">*</span>
-                                            </label>
-                                            <textarea
-                                                className="form-control"
-                                                rows={2}
-                                                value={address}
-                                                onChange={(e) => setAddress(e.target.value)}
-                                                placeholder="Flat / House no, Building name, Street, Landmark"
-                                                required
-                                                disabled={submitting}
-                                            />
-                                        </div>
-
-                                        <div className="col-12 col-md-4">
-                                            <label className="form-label small fw-semibold text-navy mb-1">City</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={city}
-                                                onChange={(e) => setCity(e.target.value)}
-                                                placeholder="Mumbai"
-                                                disabled={submitting}
-                                            />
-                                        </div>
-
-                                        <div className="col-12 col-md-4">
-                                            <label className="form-label small fw-semibold text-navy mb-1">State</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={stateVal}
-                                                onChange={(e) => setStateVal(e.target.value)}
-                                                placeholder="Maharashtra"
-                                                disabled={submitting}
-                                            />
-                                        </div>
-
-                                        <div className="col-12 col-md-4">
-                                            <label className="form-label small fw-semibold text-navy mb-1">PIN Code</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={pincode}
-                                                onChange={(e) => setPincode(e.target.value)}
-                                                placeholder="400001"
-                                                disabled={submitting}
-                                            />
+                                {/* Selected Branch Info Card */}
+                                {selectedBranch && (
+                                    <div className="p-3 rounded-4 bg-light border border-teal-subtle mt-3">
+                                        <div className="d-flex align-items-start gap-2.5">
+                                            <MapPin size={18} className="text-danger flex-shrink-0 mt-1" />
+                                            <div className="flex-grow-1">
+                                                <div className="fw-bold text-navy small mb-0.5">
+                                                    {selectedBranch.branch_name} {selectedBranch.city ? `— ${selectedBranch.city}` : ""}
+                                                </div>
+                                                {selectedBranch.address && (
+                                                    <div className="extra-small text-muted mb-1">
+                                                        {selectedBranch.address}
+                                                    </div>
+                                                )}
+                                                <div className="d-flex flex-wrap align-items-center gap-3 extra-small text-secondary">
+                                                    {selectedBranch.branch_phone && (
+                                                        <span className="d-inline-flex align-items-center gap-1">
+                                                            <Phone size={12} /> Helpline: {selectedBranch.branch_phone}
+                                                        </span>
+                                                    )}
+                                                    <span className="d-inline-flex align-items-center gap-1 text-success fw-semibold">
+                                                        <Clock size={12} /> Collection Timing: Mon - Sat (9 AM - 6 PM)
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -693,7 +615,7 @@ export default function CheckoutPage() {
 
                                 <div className="row g-2">
                                     {[
-                                        { id: "COD", label: fulfillmentType === "Pickup" ? "Pay at Branch" : "Cash on Delivery (COD)", icon: DollarSign, desc: "Pay in cash or UPI upon delivery / pickup" },
+                                        { id: "COD", label: "Pay at Branch (Cash / UPI)", icon: DollarSign, desc: "Pay in cash or UPI when collecting gear at branch" },
                                         { id: "UPI", label: "UPI / QR Code", icon: CreditCard, desc: "Pay instantly via PhonePe, Google Pay, or Paytm" },
                                         { id: "Card", label: "Debit / Credit Card", icon: CreditCard, desc: "Visa, Mastercard, RuPay & all major cards" },
                                         { id: "Bank Transfer", label: "Direct Bank Transfer", icon: Lock, desc: "Transfer directly to CST Pro Academy account" },
@@ -735,7 +657,7 @@ export default function CheckoutPage() {
                                 <textarea
                                     className="form-control"
                                     rows={2}
-                                    placeholder="e.g. Please call before delivery, bat knocking request, jersey size note..."
+                                    placeholder="e.g. Bat knocking request, grip color preference, jersey size note..."
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
                                     disabled={submitting}
@@ -743,28 +665,34 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* RIGHT: Order Summary */}
+                        {/* RIGHT: Price Details (Flipkart / Amazon Style) */}
                         <div className="col-12 col-lg-4">
                             <div className="card border-0 shadow-sm rounded-4 p-4 bg-white sticky-top" style={{ top: "100px" }}>
-                                <h4 className="fw-bold text-navy mb-3 display-font">ORDER OVERVIEW</h4>
+                                <div className="border-bottom pb-3 mb-3">
+                                    <h5 className="fw-bold text-navy mb-0 display-font text-uppercase" style={{ letterSpacing: "0.5px" }}>
+                                        PRICE DETAILS
+                                    </h5>
+                                </div>
 
                                 {/* Items mini-list */}
-                                <div className="divide-y mb-3 max-h-240 overflow-y-auto" style={{ maxHeight: "240px" }}>
+                                <div className="divide-y mb-3 max-h-240 overflow-y-auto" style={{ maxHeight: "200px" }}>
                                     {items.map((item) => (
                                         <div key={item.product_id} className="py-2 d-flex align-items-center justify-content-between gap-2 border-bottom">
                                             <div className="d-flex align-items-center gap-2 overflow-hidden">
                                                 <div
                                                     className="rounded bg-light border flex-shrink-0 d-flex align-items-center justify-content-center overflow-hidden"
-                                                    style={{ width: "40px", height: "40px" }}
+                                                    style={{ width: "38px", height: "38px" }}
                                                 >
                                                     {item.image ? (
                                                         <img src={item.image} alt="" className="w-100 h-100 object-fit-cover" />
                                                     ) : (
-                                                        <Package size={18} className="text-muted" />
+                                                        <Package size={16} className="text-muted" />
                                                     )}
                                                 </div>
                                                 <div className="small text-truncate">
-                                                    <div className="fw-semibold text-navy text-truncate">{item.product_name}</div>
+                                                    <div className="fw-semibold text-navy text-truncate" style={{ maxWidth: "160px" }}>
+                                                        {item.product_name}
+                                                    </div>
                                                     <div className="text-muted extra-small">Qty: {item.quantity}</div>
                                                 </div>
                                             </div>
@@ -776,52 +704,60 @@ export default function CheckoutPage() {
                                     ))}
                                 </div>
 
-                                {/* Delivery / Pickup Promise Banner */}
-                                <div className="p-3 my-3 rounded-4 bg-light border d-flex align-items-start gap-2.5">
+                                {/* Pickup Schedule Banner */}
+                                <div className="p-3 my-2.5 rounded-4 bg-light border d-flex align-items-start gap-2.5">
                                     <div
                                         className="rounded-circle bg-navy text-lime d-flex align-items-center justify-content-center flex-shrink-0 mt-0.5"
-                                        style={{ width: "32px", height: "32px" }}
+                                        style={{ width: "30px", height: "30px" }}
                                     >
-                                        <Calendar size={16} />
+                                        <Calendar size={15} />
                                     </div>
                                     <div className="flex-grow-1">
                                         <div className="extra-small text-uppercase fw-bold text-muted" style={{ letterSpacing: "0.5px" }}>
-                                            {fulfillmentType === "Pickup" ? "Ready for Pickup (+2 Days)" : "Estimated Delivery (+12 Days)"}
+                                            Branch Pickup Ready
                                         </div>
                                         <div className="fw-bold text-navy fs-6">
-                                            {formatDeliveryDate(currentEstDate)}
+                                            {formatDeliveryDate(pickupEstDate)} (+2 Days)
                                         </div>
                                         <div className="extra-small text-muted">
-                                            {fulfillmentType === "Pickup" ? "⚡ Collect at selected academy branch" : "🚚 Doorstep delivery to your address"}
+                                            {selectedBranch ? `Collect at ${selectedBranch.branch_name}` : "Collect at chosen academy branch"}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Cost Breakdown */}
-                                <div className="d-flex justify-content-between py-1.5 small text-muted">
-                                    <span>Subtotal</span>
-                                    <span className="fw-semibold text-navy">₹{subtotal.toLocaleString("en-IN")}</span>
+                                {/* Cost Breakdown - Flipkart Inclusive GST Formula */}
+                                <div className="d-flex justify-content-between py-2 small text-muted">
+                                    <span>Price ({items.length} {items.length === 1 ? "item" : "items"})</span>
+                                    <span className="fw-semibold text-navy">₹{grandTotal.toLocaleString("en-IN")}</span>
                                 </div>
 
-                                <div className="d-flex justify-content-between py-1.5 small text-muted">
-                                    <span>Taxes &amp; GST</span>
-                                    <span className="fw-semibold text-navy">
-                                        {taxTotal > 0 ? `₹${Math.round(taxTotal).toLocaleString("en-IN")}` : "Included"}
+                                <div className="d-flex justify-content-between py-2 small text-muted">
+                                    <span>Item Subtotal (Net Base)</span>
+                                    <span className="fw-semibold text-navy">₹{Math.round(subtotal).toLocaleString("en-IN")}</span>
+                                </div>
+
+                                <div className="d-flex justify-content-between py-2 small text-muted">
+                                    <span>Taxes &amp; GST (Included)</span>
+                                    <span className="fw-semibold text-success">
+                                        {taxTotal > 0 ? `+₹${Math.round(taxTotal).toLocaleString("en-IN")}` : "Included in MRP"}
                                     </span>
                                 </div>
 
-                                <div className="d-flex justify-content-between py-1.5 small text-muted">
-                                    <span>Shipping ({fulfillmentType})</span>
-                                    <span className="fw-semibold text-navy">
-                                        {deliveryFee === 0 ? <span className="text-success fw-bold">FREE</span> : `₹${deliveryFee}`}
-                                    </span>
+                                <div className="d-flex justify-content-between py-2 small text-muted">
+                                    <span>Academy Pickup &amp; Handling</span>
+                                    <span className="text-success fw-bold">FREE</span>
                                 </div>
 
                                 <div className="d-flex justify-content-between py-3 my-2 border-top border-bottom">
-                                    <span className="fw-bold text-navy fs-5">Total Payable</span>
-                                    <span className="fw-bold text-navy fs-5">
+                                    <span className="fw-bold text-navy fs-5">Total Amount</span>
+                                    <span className="fw-bold fs-5" style={{ color: "#062f38" }}>
                                         ₹{Math.round(finalTotal).toLocaleString("en-IN")}
                                     </span>
+                                </div>
+
+                                <div className="p-2.5 mb-3 rounded-3 bg-success-subtle border border-success-subtle text-success small d-flex align-items-center gap-2">
+                                    <CheckCircle2 size={16} className="flex-shrink-0" />
+                                    <span>Inclusive of all taxes &amp; GST ({taxTotal > 0 ? `₹${Math.round(taxTotal).toLocaleString("en-IN")} GST included` : "All taxes included"})</span>
                                 </div>
 
                                 {/* Submit Button */}
@@ -846,7 +782,7 @@ export default function CheckoutPage() {
                                 <div className="mt-3 text-center">
                                     <span className="small text-muted d-inline-flex align-items-center gap-1">
                                         <ShieldCheck size={14} className="text-success" />
-                                        Guaranteed Safe CST Pro Checkout
+                                        100% Safe &amp; Secure Payments
                                     </span>
                                 </div>
                             </div>

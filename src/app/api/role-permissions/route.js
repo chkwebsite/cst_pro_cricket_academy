@@ -86,18 +86,19 @@ export async function POST(request) {
         } = body;
 
         // VALIDATION
+        const errors = {};
         if (!role_id) {
-            return NextResponse.json({
-                success: false,
-                message: "Role ID is required"
-            }, { status: 400 });
+            errors.role_id = "Please select a role.";
+        }
+        if (!permission_id) {
+            errors.permission_id = "Please select a permission.";
         }
 
-        if (!permission_id) {
-            return NextResponse.json({
-                success: false,
-                message: "Permission ID is required"
-            }, { status: 400 });
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json(
+                { success: false, message: Object.values(errors)[0], errors },
+                { status: 400 }
+            );
         }
 
 
@@ -154,7 +155,8 @@ export async function POST(request) {
         if (existing.length > 0) {
             return NextResponse.json({
                 success: false,
-                message: "This permission is already assigned to this role"
+                message: "This permission is already assigned to this role",
+                errors: { permission_id: "This permission is already assigned to this role." },
             }, { status: 409 });
         }
 

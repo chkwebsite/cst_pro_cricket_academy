@@ -237,95 +237,50 @@ export async function POST(request) {
         // VALIDATION
         // =====================================================
 
+        const errors = {};
+
         if (!academy_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Academy ID is required",
-                },
-                { status: 400 }
-            );
+            errors.academy_id = "Please select an academy.";
         }
 
         if (!branch_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Branch ID is required",
-                },
-                { status: 400 }
-            );
+            errors.branch_id = "Please select a branch.";
         }
 
         if (!ground_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground ID is required",
-                },
-                { status: 400 }
-            );
+            errors.ground_id = "Please select a ground.";
         }
 
         if (!slot_name || !slot_name.trim()) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Slot name is required",
-                },
-                { status: 400 }
-            );
+            errors.slot_name = "Slot name is required.";
         }
 
         if (!start_time) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Start time is required",
-                },
-                { status: 400 }
-            );
+            errors.start_time = "Start time is required.";
         }
 
         if (!end_time) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "End time is required",
-                },
-                { status: 400 }
-            );
+            errors.end_time = "End time is required.";
         }
 
-        if (Number(price) < 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Price cannot be negative",
-                },
-                { status: 400 }
-            );
+        if (start_time && end_time && start_time >= end_time) {
+            errors.end_time = "End time must be greater than start time.";
         }
 
-        if (![0, 1].includes(Number(status))) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Status must be 0 or 1",
-                },
-                { status: 400 }
-            );
+        if (price !== undefined && price !== null && Number(price) < 0) {
+            errors.price = "Price cannot be negative.";
         }
 
-        // =====================================================
-        // TIME VALIDATION
-        // =====================================================
+        if (status !== undefined && status !== null && ![0, 1, "0", "1"].includes(status)) {
+            errors.status = "Status must be 0 or 1.";
+        }
 
-        if (start_time >= end_time) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "End time must be greater than start time",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -389,6 +344,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "Slot with this name already exists for this ground",
+                    errors: { slot_name: "A slot with this name already exists for this ground." },
                 },
                 { status: 409 }
             );
@@ -418,10 +374,12 @@ export async function POST(request) {
         );
 
         if (overlap.length > 0) {
+            const clashMsg = `This time overlaps with existing slot "${overlap[0].slot_name}" (${String(overlap[0].start_time).slice(0, 5)} - ${String(overlap[0].end_time).slice(0, 5)}).`;
             return NextResponse.json(
                 {
                     success: false,
-                    message: "This time overlaps with an existing slot",
+                    message: clashMsg,
+                    errors: { start_time: clashMsg },
                     data: overlap[0],
                 },
                 { status: 409 }

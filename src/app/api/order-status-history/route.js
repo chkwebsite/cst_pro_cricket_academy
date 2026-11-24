@@ -17,7 +17,8 @@ const ACTOR_TYPES = ["Public User", "Academy User", "System"];
 
 export async function GET(request) {
     try {
-        const authUser = await getAuthenticatedUser(request);
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         const { searchParams } = new URL(request.url);
 
         const conditions = [];
@@ -190,12 +191,13 @@ export async function POST(request) {
             );
         }
 
-        const authUser = await getAuthenticatedUser(request);
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
 
         await connection.beginTransaction();
 
         const [orders] = await connection.execute(
-            "SELECT id, academy_id, fulfillment_branch_id FROM cst_orders WHERE id = ? FOR UPDATE",
+            "SELECT id, academy_id, fulfillment_branch_id, customer_user_id, public_user_id FROM cst_orders WHERE id = ? FOR UPDATE",
             [Number(order_id)]
         );
 
@@ -208,7 +210,14 @@ export async function POST(request) {
             );
         }
 
-        if (authUser && !verifyRecordAccess(authUser, { academy_id: orders[0].academy_id, branch_id: orders[0].fulfillment_branch_id })) {
+        if (
+            authUser &&
+            !authUser.isSuperAdmin &&
+            !authUser.isPlayer &&
+            actor_type !== "Public User" &&
+            authUser.academy_id &&
+            !verifyRecordAccess(authUser, { academy_id: orders[0].academy_id, branch_id: orders[0].fulfillment_branch_id })
+        ) {
             await connection.rollback();
             return NextResponse.json(
                 { success: false, message: "Forbidden. Order belongs to another academy or branch." },

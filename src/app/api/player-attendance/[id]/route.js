@@ -153,14 +153,12 @@ export async function PUT(request, context) {
             );
         }
 
+        const errors = {};
         if (
             attendance_date !== undefined &&
             (typeof attendance_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(attendance_date))
         ) {
-            return NextResponse.json(
-                { success: false, message: "Invalid attendance_date. Use YYYY-MM-DD." },
-                { status: 400 }
-            );
+            errors.attendance_date = "Invalid attendance date. Use YYYY-MM-DD.";
         }
 
         const allowedStatuses = ["Present", "Absent", "Late", "Leave"];
@@ -168,8 +166,12 @@ export async function PUT(request, context) {
             attendance_status !== undefined &&
             !allowedStatuses.includes(attendance_status)
         ) {
+            errors.attendance_status = "Invalid attendance status.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "Invalid attendance_status." },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -223,7 +225,8 @@ export async function PUT(request, context) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: `Attendance date (${targetDateStr}) cannot be before the player joining/enrollment date (${effectiveStartDate}).`
+                    message: `Attendance date (${targetDateStr}) cannot be before the player joining/enrollment date (${effectiveStartDate}).`,
+                    errors: { attendance_date: `Attendance date cannot be before joining/enrollment date (${effectiveStartDate}).` }
                 },
                 { status: 400 }
             );
@@ -232,7 +235,11 @@ export async function PUT(request, context) {
         if (current.end_date && newDate > current.end_date) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Attendance date is after enrollment end date." },
+                {
+                    success: false,
+                    message: "Attendance date is after enrollment end date.",
+                    errors: { attendance_date: "Attendance date cannot be after enrollment end date." }
+                },
                 { status: 400 }
             );
         }
@@ -254,7 +261,11 @@ export async function PUT(request, context) {
             if (duplicates.length > 0) {
                 await connection.rollback();
                 return NextResponse.json(
-                    { success: false, message: "Attendance already exists for this date." },
+                    {
+                        success: false,
+                        message: "Attendance already exists for this date.",
+                        errors: { attendance_date: "Attendance already exists for this date." }
+                    },
                     { status: 409 }
                 );
             }

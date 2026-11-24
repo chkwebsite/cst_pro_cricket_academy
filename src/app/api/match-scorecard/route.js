@@ -160,12 +160,17 @@ export async function POST(request) {
             fielder_player_id = null,
         } = body;
 
-        if (!match_id || !innings_id || !match_player_id) {
+        const errors = {};
+        if (!match_id) errors.match_id = "Please select a match.";
+        if (!innings_id) errors.innings_id = "Please select an innings.";
+        if (!match_player_id) errors.match_player_id = "Please select a batter.";
+        if (dismissed_by_player_id && Number(dismissed_by_player_id) === Number(match_player_id)) {
+            errors.dismissed_by_player_id = "A batter cannot be their own dismissed_by bowler.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "match_id, innings_id and match_player_id are required",
-                },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -349,6 +354,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: `Balls faced mismatch! Match is ${matchOvers} overs (${matchMaxBalls} balls). A batter cannot face ${newBatterBalls} balls in a ${matchOvers}-over match.`,
+                    errors: { balls: `Balls faced cannot exceed match limit of ${matchMaxBalls} balls.` },
                 },
                 { status: 400 }
             );
@@ -361,6 +367,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: `Balls faced mismatch! Match is ${matchOvers} overs (${matchMaxBalls} balls max, innings total: ${maxBallsForInnings} balls). Other batters have faced ${currentBattersBalls} balls. This batter can face at most ${maxAllowedBalls} ball(s), but ${newBatterBalls} was entered (Total would be ${newTotalBallsFaced}).`,
+                    errors: { balls: `Balls faced cannot exceed remaining innings balls (${maxAllowedBalls}).` },
                 },
                 { status: 400 }
             );
@@ -372,6 +379,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: `Boundary runs mismatch! ${newFours} fours (4s) and ${newSixes} sixes (6s) equal ${newFours * 4 + newSixes * 6} runs, which cannot exceed total runs scored (${newBatterRuns}).`,
+                    errors: { fours: "Boundary runs cannot exceed total runs.", sixes: "Boundary runs cannot exceed total runs." },
                 },
                 { status: 400 }
             );
@@ -382,6 +390,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: `Boundary count mismatch! Total boundaries (${newFours + newSixes}) cannot exceed balls faced (${newBatterBalls}).`,
+                    errors: { fours: "Total boundaries cannot exceed balls faced.", sixes: "Total boundaries cannot exceed balls faced." },
                 },
                 { status: 400 }
             );
@@ -527,6 +536,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "This player already has a scorecard entry for this innings",
+                    errors: { match_player_id: "This player already has a batting scorecard in this innings." },
                 },
                 { status: 409 }
             );

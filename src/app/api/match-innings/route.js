@@ -165,30 +165,13 @@ export async function POST(request) {
         } = body;
 
         // Required field validation
-        if (
-            !match_id ||
-            !innings_no ||
-            !batting_team_id ||
-            !bowling_team_id
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "match_id, innings_no, batting_team_id and bowling_team_id are required",
-                },
-                { status: 400 }
-            );
-        }
-
-        if (Number(batting_team_id) === Number(bowling_team_id)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Batting team and bowling team must be different",
-                },
-                { status: 400 }
-            );
+        const errors = {};
+        if (!match_id) errors.match_id = "Please select a match.";
+        if (!innings_no) errors.innings_no = "Innings number is required.";
+        if (!batting_team_id) errors.batting_team_id = "Please select a batting team.";
+        if (!bowling_team_id) errors.bowling_team_id = "Please select a bowling team.";
+        if (batting_team_id && bowling_team_id && Number(batting_team_id) === Number(bowling_team_id)) {
+            errors.bowling_team_id = "Batting team and bowling team must be different.";
         }
 
         const validStatuses = [
@@ -197,12 +180,13 @@ export async function POST(request) {
             "Completed",
         ];
 
-        if (!validStatuses.includes(innings_status)) {
+        if (innings_status && !validStatuses.includes(innings_status)) {
+            errors.innings_status = "Invalid innings status.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid innings_status",
-                },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -280,7 +264,7 @@ export async function POST(request) {
         const dateCheck = validateMatchDateForScoring(matches[0].match_date, "Innings");
         if (!dateCheck.allowed) {
             return NextResponse.json(
-                { success: false, message: dateCheck.message },
+                { success: false, message: dateCheck.message, errors: { match_id: dateCheck.message } },
                 { status: 400 }
             );
         }
@@ -297,6 +281,7 @@ export async function POST(request) {
                     {
                         success: false,
                         message: "Invalid overs format. Decimal part (balls) must be between .0 and .5 (e.g. 19.5, 20.0).",
+                        errors: { total_overs: "Invalid overs format. Decimal part must be between .0 and .5." },
                     },
                     { status: 400 }
                 );
@@ -308,6 +293,7 @@ export async function POST(request) {
                     {
                         success: false,
                         message: `Overs mismatch! Innings total overs (${total_overs}) cannot exceed the match limit of ${matchOvers} overs (${maxAllowedBalls} balls).`,
+                        errors: { total_overs: `Total overs (${total_overs}) exceeds match limit of ${matchOvers} overs.` },
                     },
                     { status: 400 }
                 );
@@ -436,6 +422,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "This innings number already exists for this match",
+                    errors: { innings_no: "This innings number already exists for this match" },
                 },
                 { status: 409 }
             );

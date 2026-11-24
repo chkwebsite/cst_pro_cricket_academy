@@ -145,13 +145,13 @@ export async function PUT(request, { params }) {
         }
 
         const customerName =
-            body.customer_name ?? existing.customer_name;
+            body.customer_name !== undefined ? String(body.customer_name).trim() : existing.customer_name;
 
         const mobile =
-            body.mobile ?? existing.mobile;
+            body.mobile !== undefined ? String(body.mobile).trim() : existing.mobile;
 
         const email =
-            body.email !== undefined ? body.email : existing.email;
+            body.email !== undefined ? (body.email ? String(body.email).trim() : "") : (existing.email || "");
 
         const groundId =
             body.ground_id ?? existing.ground_id;
@@ -186,29 +186,52 @@ export async function PUT(request, { params }) {
                 ? body.admin_remarks
                 : existing.admin_remarks;
 
-        if (
-            !customerName ||
-            !mobile ||
-            !groundId ||
-            !bookingDate ||
-            !startTime ||
-            !endTime ||
-            !bookingPurpose
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Required fields cannot be empty",
-                },
-                { status: 400 }
-            );
+        const errors = {};
+        if (!customerName) errors.customer_name = "Customer name is required.";
+        if (!mobile) errors.mobile = "Mobile number is required.";
+        else if (mobile.length < 10) errors.mobile = "Please enter a valid 10-digit mobile number.";
+
+        if (!groundId) errors.ground_id = "Please select a ground.";
+        if (!bookingDate) errors.booking_date = "Booking date is required.";
+        if (!startTime) errors.start_time = "Start time is required.";
+        if (!endTime) errors.end_time = "End time is required.";
+        else if (startTime && endTime && startTime >= endTime) {
+            errors.end_time = "End time must be after start time.";
         }
 
-        if (startTime >= endTime) {
+        const validPurposes = [
+            "Practice Session",
+            "Friendly Match",
+            "Tournament",
+            "Corporate Event",
+            "Other",
+        ];
+        if (!bookingPurpose || !validPurposes.includes(bookingPurpose)) {
+            errors.booking_purpose = "Please select a valid booking purpose.";
+        }
+
+        if (!validStatuses.includes(requestStatus)) {
+            errors.request_status = "Invalid booking request status.";
+        }
+
+        if (
+            numberOfPlayers != null &&
+            numberOfPlayers !== "" &&
+            (!Number.isInteger(Number(numberOfPlayers)) || Number(numberOfPlayers) < 1)
+        ) {
+            errors.number_of_players = "Number of players must be a positive integer.";
+        }
+
+        if (email && !/^\S+@\S+\.\S+$/.test(email)) {
+            errors.email = "Please enter a valid email address.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "End time must be after start time",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -222,52 +245,14 @@ export async function PUT(request, { params }) {
             );
             if (targetGroundRows.length === 0 || !isBookingRequestAuthorized(targetGroundRows[0], authUser)) {
                 return NextResponse.json(
-                    { success: false, message: "Target ground does not belong to authorized academy/branch" },
+                    {
+                        success: false,
+                        message: "Target ground does not belong to authorized academy/branch",
+                        errors: { ground_id: "Unauthorized or invalid ground selected." },
+                    },
                     { status: 400 }
                 );
             }
-        }
-
-        const validPurposes = [
-            "Practice Session",
-            "Friendly Match",
-            "Tournament",
-            "Corporate Event",
-            "Other",
-        ];
-
-        if (!validPurposes.includes(bookingPurpose)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid booking purpose",
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!validStatuses.includes(requestStatus)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid booking request status",
-                },
-                { status: 400 }
-            );
-        }
-
-        if (
-            numberOfPlayers != null &&
-            (!Number.isInteger(Number(numberOfPlayers)) ||
-                Number(numberOfPlayers) < 1)
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Number of players must be a positive integer",
-                },
-                { status: 400 }
-            );
         }
 
         // Check availability when the requested slot is active
@@ -297,6 +282,10 @@ export async function PUT(request, { params }) {
                     {
                         success: false,
                         message: "Selected ground and time slot are already requested or booked",
+                        errors: {
+                            start_time: "This time slot is already requested or booked for the selected ground.",
+                            end_time: "This time slot is already requested or booked for the selected ground.",
+                        },
                     },
                     { status: 409 }
                 );

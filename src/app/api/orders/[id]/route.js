@@ -212,7 +212,8 @@ o.*,
         }
 
         const order = orders[0];
-        const authUser = await getAuthenticatedUser(request);
+        const authResult = await getAuthenticatedUser(request);
+        const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
         if (authUser) {
             if (authUser.isPlayer) {
                 if (Number(order.customer_user_id) !== Number(authUser.id) && String(order.customer_email || "").toLowerCase() !== String(authUser.email || "").toLowerCase()) {
@@ -257,7 +258,8 @@ o.*,
 
 // PUT: Update an order
 export async function PUT(request, context) {
-    const authUser = await getAuthenticatedUser(request);
+    const authResult = await getAuthenticatedUser(request);
+    const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
     if (!authUser) {
         return NextResponse.json(
             { success: false, message: "Unauthorized. Authentication required to update orders." },
@@ -542,7 +544,8 @@ export async function PUT(request, context) {
 
 // DELETE: Delete an order
 export async function DELETE(request, context) {
-    const authUser = await getAuthenticatedUser(request);
+    const authResult = await getAuthenticatedUser(request);
+    const authUser = authResult?.user?.id ? authResult.user : (authResult?.id ? authResult : null);
     if (!authUser || authUser.isPlayer) {
         return NextResponse.json(
             { success: false, message: "Unauthorized. Admin authorization required to delete orders." },

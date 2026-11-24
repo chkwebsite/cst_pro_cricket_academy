@@ -17,8 +17,8 @@ import {
     Truck,
 } from "lucide-react";
 
-function getEstimatedDeliveryDate(createdDate, type = "Delivery") {
-    const days = type === "Pickup" ? 2 : 12;
+function getEstimatedDeliveryDate(createdDate, type = "Pickup") {
+    const days = 2; // Academy Branch Pickup ready in 2 days
     const d = createdDate ? new Date(createdDate) : new Date();
     d.setDate(d.getDate() + days);
     return d;
@@ -47,6 +47,17 @@ export default function OrderSuccessPage() {
 
     useEffect(() => {
         if (!orderNo) return;
+
+        // Persist order in browser storage for instant viewing on /orders
+        if (typeof window !== "undefined") {
+            try {
+                const storedOrders = JSON.parse(localStorage.getItem("cst_recent_orders") || "[]");
+                if (!storedOrders.includes(orderNo)) {
+                    storedOrders.unshift(orderNo);
+                    localStorage.setItem("cst_recent_orders", JSON.stringify(storedOrders.slice(0, 25)));
+                }
+            } catch (_) {}
+        }
 
         let cancelled = false;
 
@@ -112,7 +123,7 @@ export default function OrderSuccessPage() {
 
                     <div className="d-flex flex-wrap justify-content-center gap-2">
                         <Link
-                            href="/orders"
+                            href={`/orders?search=${encodeURIComponent(orderNo)}`}
                             className="btn btn-navy px-4 py-2.5 rounded-pill fw-semibold d-inline-flex align-items-center gap-2 shadow-sm"
                         >
                             <Package size={16} /> Track My Orders
@@ -165,11 +176,11 @@ export default function OrderSuccessPage() {
                                     className="rounded-circle bg-lime text-navy d-flex align-items-center justify-content-center flex-shrink-0"
                                     style={{ width: "42px", height: "42px" }}
                                 >
-                                    {order.fulfillment_type === "Pickup" ? <Package size={22} /> : <Truck size={22} />}
+                                    <Package size={22} />
                                 </div>
                                 <div>
                                     <div className="extra-small text-uppercase fw-bold text-lime" style={{ letterSpacing: "0.5px" }}>
-                                        {order.fulfillment_type === "Pickup" ? "Ready for Pickup (+2 Days)" : "Estimated Delivery Date (+12 Days)"}
+                                        {order.fulfillment_type === "Pickup" ? "Ready for Branch Pickup (+2 Days)" : "Estimated Ready Date"}
                                     </div>
                                     <div className="fs-5 fw-bold text-white mb-0">
                                         {formatDeliveryDate(order.estimated_delivery_date || getEstimatedDeliveryDate(order.created_at, order.fulfillment_type))}
@@ -178,7 +189,7 @@ export default function OrderSuccessPage() {
                             </div>
                             <div>
                                 <span className="badge bg-white text-navy px-3 py-1.5 rounded-pill fw-semibold">
-                                    {order.fulfillment_type === "Pickup" ? "⚡ Branch Pickup" : "🚚 Home Delivery"}
+                                    ⚡ Free Academy Branch Pickup
                                 </span>
                             </div>
                         </div>
@@ -197,35 +208,27 @@ export default function OrderSuccessPage() {
 
                                 <div className="col-12 col-md-6">
                                     <div className="text-muted small mb-1 fw-semibold text-uppercase" style={{ letterSpacing: "0.5px" }}>
-                                        {order.fulfillment_type === "Pickup" ? "Branch Pickup Location" : "Delivery Address"}
+                                        Pickup Academy Branch
                                     </div>
-                                    {order.fulfillment_type === "Pickup" ? (
-                                        <div className="small text-navy">
-                                            <div className="fw-bold">{order.branch_name || "CST Pro Main Branch"}</div>
-                                            <div className="text-muted">Collect with your Order Number</div>
+                                    <div className="small text-navy">
+                                        <div className="fw-bold fs-6 text-navy mb-0.5">{order.branch_name || "Academy Branch Counter"}</div>
+                                        {order.delivery_address && <div className="text-muted">{order.delivery_address}</div>}
+                                        <div className="text-success fw-semibold mt-1">
+                                            ✓ Collect gear at branch reception by presenting Order No: <span className="font-monospace">{order.order_no}</span>
                                         </div>
-                                    ) : (
-                                        <div className="small text-navy">
-                                            <div>{order.delivery_address}</div>
-                                            <div>
-                                                {[order.delivery_city, order.delivery_state, order.delivery_pincode]
-                                                    .filter(Boolean)
-                                                    .join(", ")}
-                                            </div>
-                                        </div>
-                                    )}
+                                    </div>
 
-                                    <div className="mt-2 pt-2 border-top">
+                                    <div className="mt-2.5 pt-2 border-top">
                                         <div className="text-muted extra-small text-uppercase fw-semibold">
-                                            {order.fulfillment_type === "Pickup" ? "Expected Collection Date:" : "Expected Delivery Date:"}
+                                            Pickup Ready Date:
                                         </div>
                                         <div className="fw-bold text-navy small d-flex align-items-center gap-1.5 mt-0.5">
                                             <Calendar size={13} className="text-teal" />
                                             <span>
                                                 {formatDeliveryDate(order.estimated_delivery_date || getEstimatedDeliveryDate(order.created_at, order.fulfillment_type))}
                                             </span>
-                                            <span className="text-muted fw-normal extra-small">
-                                                ({order.fulfillment_type === "Pickup" ? "+2 Days" : "+12 Days"})
+                                            <span className="badge bg-success-subtle text-success border border-success-subtle extra-small ms-1">
+                                                Ready in 2 Days
                                             </span>
                                         </div>
                                     </div>
@@ -243,7 +246,7 @@ export default function OrderSuccessPage() {
                                             <div className="fw-bold text-navy small">{item.product_name}</div>
                                             <div className="text-muted extra-small">
                                                 Qty: {item.quantity} × ₹{Number(item.unit_price).toLocaleString("en-IN")}
-                                                {Number(item.tax_amount) > 0 && ` (+₹${Number(item.tax_amount)} GST)`}
+                                                <span className="ms-1 text-success">(Incl. of taxes)</span>
                                             </div>
                                         </div>
                                         <div className="fw-bold text-navy small text-end">
@@ -254,29 +257,32 @@ export default function OrderSuccessPage() {
                             </div>
                         </div>
 
-                        {/* Order Totals */}
+                        {/* Order Totals - Flipkart Style Inclusive GST */}
                         <div className="p-4 bg-light">
                             <div className="row justify-content-end">
                                 <div className="col-12 col-sm-6 col-md-5">
                                     <div className="d-flex justify-content-between py-1 small text-muted">
-                                        <span>Subtotal</span>
+                                        <span>Item Subtotal (Net Base)</span>
                                         <span className="fw-semibold text-navy">₹{Number(order.subtotal || 0).toLocaleString("en-IN")}</span>
                                     </div>
                                     <div className="d-flex justify-content-between py-1 small text-muted">
-                                        <span>Tax &amp; GST</span>
-                                        <span className="fw-semibold text-navy">₹{Number(order.tax_amount || 0).toLocaleString("en-IN")}</span>
+                                        <span>Taxes &amp; GST (Included)</span>
+                                        <span className="fw-semibold text-success">
+                                            {Number(order.tax_amount || 0) > 0 ? `+₹${Number(order.tax_amount || 0).toLocaleString("en-IN")}` : "Included in MRP"}
+                                        </span>
                                     </div>
                                     <div className="d-flex justify-content-between py-1 small text-muted">
-                                        <span>Shipping</span>
-                                        <span className="fw-semibold text-navy">
-                                            {Number(order.delivery_charge || 0) === 0 ? "FREE" : `₹${order.delivery_charge}`}
-                                        </span>
+                                        <span>Academy Branch Pickup</span>
+                                        <span className="fw-bold text-success">FREE</span>
                                     </div>
                                     <div className="d-flex justify-content-between py-2 border-top mt-2">
-                                        <span className="fw-bold text-navy">Grand Total</span>
-                                        <span className="fw-bold text-navy fs-5">
+                                        <span className="fw-bold text-navy">Total Amount</span>
+                                        <span className="fw-bold text-navy fs-5" style={{ color: "#062f38" }}>
                                             ₹{Number(order.grand_total || 0).toLocaleString("en-IN")}
                                         </span>
+                                    </div>
+                                    <div className="extra-small text-muted text-end mt-0.5">
+                                        (Inclusive of all taxes &amp; GST)
                                     </div>
                                 </div>
                             </div>

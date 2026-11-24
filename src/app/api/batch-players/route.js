@@ -233,23 +233,26 @@ export async function POST(request) {
             remarks = null,
         } = body;
 
-        if (!batch_id || !user_program_id || !start_date) {
-            return NextResponse.json(
-                { success: false, message: "batch_id, user_program_id and start_date are required" },
-                { status: 400 }
-            );
+        const errors = {};
+        if (!batch_id) {
+            errors.batch_id = "Training batch is required.";
+        }
+        if (!user_program_id) {
+            errors.user_program_id = "Enrolled player is required.";
+        }
+        if (!start_date) {
+            errors.start_date = "Start date is required.";
+        }
+        if (status && !VALID_STATUSES.includes(status)) {
+            errors.status = "Invalid player assignment status.";
+        }
+        if (end_date && start_date && end_date < start_date) {
+            errors.end_date = "End date cannot be earlier than start date.";
         }
 
-        if (!VALID_STATUSES.includes(status)) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "Invalid player assignment status" },
-                { status: 400 }
-            );
-        }
-
-        if (end_date && end_date < start_date) {
-            return NextResponse.json(
-                { success: false, message: "end_date cannot be before start_date" },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -268,7 +271,11 @@ export async function POST(request) {
 
         if (batches.length === 0) {
             await connection.rollback();
-            return NextResponse.json({ success: false, message: "Active batch not found" }, { status: 404 });
+            return NextResponse.json({
+                success: false,
+                message: "Active batch not found",
+                errors: { batch_id: "Active batch not found." }
+            }, { status: 404 });
         }
 
         const batch = batches[0];
@@ -308,7 +315,11 @@ export async function POST(request) {
         if (enrollments.length === 0) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Player program enrollment not found" },
+                {
+                    success: false,
+                    message: "Player program enrollment not found",
+                    errors: { user_program_id: "Player program enrollment not found." }
+                },
                 { status: 404 }
             );
         }
@@ -323,7 +334,11 @@ export async function POST(request) {
         ) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Player or enrollment is inactive" },
+                {
+                    success: false,
+                    message: "Player or enrollment is inactive",
+                    errors: { user_program_id: "Player or enrollment is inactive." }
+                },
                 { status: 400 }
             );
         }
@@ -335,7 +350,11 @@ export async function POST(request) {
         ) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Player enrollment and batch must belong to the same academy, branch and program" },
+                {
+                    success: false,
+                    message: "Player enrollment and batch must belong to the same academy, branch and program",
+                    errors: { user_program_id: "Player enrollment and batch must belong to the same academy, branch and program." }
+                },
                 { status: 400 }
             );
         }
@@ -356,6 +375,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "This enrollment already has an active batch assignment. Transfer it before assigning another batch.",
+                    errors: { user_program_id: "This enrollment already has an active batch assignment. Transfer it before assigning another batch." },
                     data: existingAssignments[0],
                 },
                 { status: 409 }
@@ -373,7 +393,11 @@ export async function POST(request) {
             if (Number(counts[0].total) >= Number(batch.max_players)) {
                 await connection.rollback();
                 return NextResponse.json(
-                    { success: false, message: "Batch is full. No seats are available." },
+                    {
+                        success: false,
+                        message: "Batch is full. No seats are available.",
+                        errors: { batch_id: "Batch is full. No seats are available." }
+                    },
                     { status: 409 }
                 );
             }
@@ -483,6 +507,7 @@ export async function PUT(request) {
             remarks,
         } = body;
 
+        const errors = {};
         if (!id) {
             return NextResponse.json(
                 { success: false, message: "Assignment id is required" },
@@ -490,9 +515,22 @@ export async function PUT(request) {
             );
         }
 
+        if (batch_id !== undefined && !batch_id) {
+            errors.batch_id = "Training batch is required.";
+        }
+        if (user_program_id !== undefined && !user_program_id) {
+            errors.user_program_id = "Enrolled player is required.";
+        }
+        if (start_date !== undefined && !start_date) {
+            errors.start_date = "Start date is required.";
+        }
         if (status && !VALID_STATUSES.includes(status)) {
+            errors.status = "Invalid player assignment status.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "Invalid player assignment status" },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -536,7 +574,11 @@ export async function PUT(request) {
 
         if (updated.end_date && updated.end_date < updated.start_date) {
             await connection.rollback();
-            return NextResponse.json({ success: false, message: "end_date cannot be before start_date" }, { status: 400 });
+            return NextResponse.json({
+                success: false,
+                message: "end_date cannot be before start_date",
+                errors: { end_date: "End date cannot be earlier than start date." }
+            }, { status: 400 });
         }
 
         const [batches] = await connection.query(
@@ -549,7 +591,11 @@ export async function PUT(request) {
 
         if (batches.length === 0) {
             await connection.rollback();
-            return NextResponse.json({ success: false, message: "Active batch not found" }, { status: 404 });
+            return NextResponse.json({
+                success: false,
+                message: "Active batch not found",
+                errors: { batch_id: "Active batch not found." }
+            }, { status: 404 });
         }
 
         const batch = batches[0];
@@ -582,7 +628,11 @@ export async function PUT(request) {
 
         if (enrollments.length === 0) {
             await connection.rollback();
-            return NextResponse.json({ success: false, message: "Player program enrollment not found" }, { status: 404 });
+            return NextResponse.json({
+                success: false,
+                message: "Player program enrollment not found",
+                errors: { user_program_id: "Player program enrollment not found." }
+            }, { status: 404 });
         }
 
         const enrollment = enrollments[0];
@@ -594,7 +644,11 @@ export async function PUT(request) {
             Number(enrollment.player_status) !== 1
         ) {
             await connection.rollback();
-            return NextResponse.json({ success: false, message: "Player or enrollment is inactive" }, { status: 400 });
+            return NextResponse.json({
+                success: false,
+                message: "Player or enrollment is inactive",
+                errors: { user_program_id: "Player or enrollment is inactive." }
+            }, { status: 400 });
         }
 
         if (
@@ -604,7 +658,11 @@ export async function PUT(request) {
         ) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Player enrollment and batch must belong to the same academy, branch and program" },
+                {
+                    success: false,
+                    message: "Player enrollment and batch must belong to the same academy, branch and program",
+                    errors: { user_program_id: "Player enrollment and batch must belong to the same academy, branch and program." }
+                },
                 { status: 400 }
             );
         }
@@ -621,7 +679,11 @@ export async function PUT(request) {
             if (duplicateRows.length > 0) {
                 await connection.rollback();
                 return NextResponse.json(
-                    { success: false, message: "This enrollment already has another active batch assignment" },
+                    {
+                        success: false,
+                        message: "This enrollment already has another active batch assignment",
+                        errors: { user_program_id: "This enrollment already has another active batch assignment." }
+                    },
                     { status: 409 }
                 );
             }
@@ -636,7 +698,11 @@ export async function PUT(request) {
             if (Number(counts[0].total) >= Number(batch.max_players)) {
                 await connection.rollback();
                 return NextResponse.json(
-                    { success: false, message: "Batch is full. No seats are available." },
+                    {
+                        success: false,
+                        message: "Batch is full. No seats are available.",
+                        errors: { batch_id: "Batch is full. No seats are available." }
+                    },
                     { status: 409 }
                 );
             }

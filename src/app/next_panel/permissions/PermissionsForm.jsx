@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 export default function PermissionsForm({ id = null }) {
     const router = useRouter();
@@ -9,12 +10,63 @@ export default function PermissionsForm({ id = null }) {
     const [formData, setFormData] = useState({
         module_name: "",
         permission_name: "",
-        status: ""
+        status: 1
     });
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const isEdit = Boolean(id);
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        switch (name) {
+            case "module_name":
+                return !String(value || "").trim() ? "Module name is required." : "";
+            case "permission_name":
+                return !String(value || "").trim() ? "Permission name is required." : "";
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        const modErr = validateField("module_name", formData.module_name);
+        if (modErr) errs.module_name = modErr;
+        const permErr = validateField("permission_name", formData.permission_name);
+        if (permErr) errs.permission_name = permErr;
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     //GET SINGLE PERMISSION
     useEffect(() => {
@@ -28,7 +80,7 @@ export default function PermissionsForm({ id = null }) {
                 if (!res.ok || !result.success) {
                     throw new Error(result.message || "Failed to fetch Permission");
                 }
-                const data = result.data || result; // adjust based on actual API response shape
+                const data = result.data || result;
                 setFormData({
                     module_name: data.module_name || "",
                     permission_name: data.permission_name || "",
@@ -49,13 +101,17 @@ export default function PermissionsForm({ id = null }) {
         setFormData((prev) => ({
             ...prev,
             [name]: name === "status" ? Number(value) : value,
-        }))
-    }
+        }));
+        clearError(name);
+    };
 
     // SUBMIT
-
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!validateAll()) {
+            return;
+        }
 
         try {
             setLoading(true);
@@ -77,7 +133,18 @@ export default function PermissionsForm({ id = null }) {
 
             const data = await res.json();
 
-            if (!res.ok) {
+            if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    if (firstKey) {
+                        const el = document.querySelector(`[name="${firstKey}"]`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
+                }
                 throw new Error(
                     data.message || "Something went wrong"
                 );
@@ -94,14 +161,12 @@ export default function PermissionsForm({ id = null }) {
 
         } catch (error) {
             setError(error.message);
-
         } finally {
             setLoading(false);
         }
     };
 
     // LOADING EDIT DATA
-
     if (fetching) {
         return (
             <div className="text-center py-5">
@@ -109,6 +174,7 @@ export default function PermissionsForm({ id = null }) {
             </div>
         );
     }
+
     return (
         <div className="card shadow-sm">
             <div className="card-header">
@@ -118,7 +184,6 @@ export default function PermissionsForm({ id = null }) {
             </div>
 
             <div className="card-body">
-
                 {error && (
                     <div className="alert alert-danger">
                         {error}
@@ -126,38 +191,40 @@ export default function PermissionsForm({ id = null }) {
                 )}
 
                 <form onSubmit={handleSubmit}>
-
-                    {/* Permission Name */}
+                    {/* Module Name */}
                     <div className="mb-3">
                         <label className="form-label">
-                            Module name <span className="text-danger ms-1">*</span>
+                            Module name <RequiredLabel />
                         </label>
 
                         <input
                             type="text"
                             name="module_name"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.module_name ? "is-invalid border-danger" : ""}`}
                             value={formData.module_name}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             placeholder="Enter Module name"
-                            required
                         />
+                        <FormError error={fieldErrors.module_name} />
                     </div>
 
+                    {/* Permission Name */}
                     <div className="mb-3">
                         <label className="form-label">
-                            Permission name <span className="text-danger ms-1">*</span>
+                            Permission name <RequiredLabel />
                         </label>
 
                         <input
                             type="text"
                             name="permission_name"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.permission_name ? "is-invalid border-danger" : ""}`}
                             value={formData.permission_name}
                             onChange={handleChange}
+                            onBlur={handleBlur}
                             placeholder="Enter Permission name"
-                            required
                         />
+                        <FormError error={fieldErrors.permission_name} />
                     </div>
 
                     {/* Status */}
@@ -172,7 +239,6 @@ export default function PermissionsForm({ id = null }) {
                             value={formData.status}
                             onChange={handleChange}
                         >
-                            <option>Select Status</option>
                             <option value={1}>Active</option>
                             <option value={0}>Inactive</option>
                         </select>
@@ -180,7 +246,6 @@ export default function PermissionsForm({ id = null }) {
 
                     {/* Buttons */}
                     <div className="d-flex gap-2">
-
                         <button
                             type="submit"
                             className="btn btn-primary"
@@ -203,11 +268,9 @@ export default function PermissionsForm({ id = null }) {
                         >
                             Cancel
                         </button>
-
                     </div>
-
                 </form>
             </div>
         </div>
-    )
+    );
 }

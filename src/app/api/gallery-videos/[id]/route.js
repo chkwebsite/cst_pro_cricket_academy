@@ -4,8 +4,8 @@ import fs from "fs/promises";
 import path from "path";
 import { getAuthenticatedUser, verifyRecordAccess } from "@/app/components/lib/tenant-isolation";
 
-function jsonError(message, status = 400) {
-  return NextResponse.json({ success: false, message }, { status });
+function jsonError(message, status = 400, errors = null) {
+  return NextResponse.json({ success: false, message, ...(errors ? { errors } : {}) }, { status });
 }
 
 async function getId(context) {
@@ -66,11 +66,16 @@ export async function PUT(request, context) {
     const videoFile = formData.get("video");
     const thumbnailFile = formData.get("thumbnail_image");
 
-    if (!video_title) return jsonError("video_title is required.");
-    if (!["YouTube", "Vimeo", "Upload"].includes(video_type)) {
-      return jsonError("video_type must be YouTube, Vimeo or Upload.");
+    const errors = {};
+    if (!video_title) {
+      errors.video_title = "Video title is required.";
     }
-    if (album_id !== null && (!Number.isInteger(album_id) || album_id < 1)) return jsonError("Invalid album_id.");
+    if (!["YouTube", "Vimeo", "Upload"].includes(video_type)) {
+      errors.video_type = "video_type must be YouTube, Vimeo or Upload.";
+    }
+    if (album_id !== null && (!Number.isInteger(album_id) || album_id < 1)) {
+      errors.album_id = "Invalid album selection.";
+    }
 
     connection = await pool.getConnection();
     const [existing] = await connection.execute(
@@ -93,7 +98,9 @@ export async function PUT(request, context) {
         "SELECT id FROM cst_gallery_albums WHERE id = ? AND is_deleted = 0 LIMIT 1",
         [album_id]
       );
-      if (!albumRows.length) return jsonError("Invalid album_id or album is deleted.");
+      if (!albumRows.length) {
+        errors.album_id = "Selected gallery album does not exist.";
+      }
     }
 
     let finalVideoUrl = submittedVideoUrl || current.video_url;
@@ -101,8 +108,35 @@ export async function PUT(request, context) {
     if (video_type === "Upload") {
       if (videoFile && typeof videoFile.arrayBuffer === "function" && videoFile.size > 0) {
         const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
-        if (!VIDEO_TYPES.includes(videoFile.type)) return jsonError("Only MP4, WEBM and MOV videos are allowed.");
-        if (videoFile.size > 20 * 1024 * 1024) return jsonError("Video file must not exceed 20MB.");
+        if (!VIDEO_TYPES.includes(videoFile.type)) {
+          errors.video = "Only MP4, WEBM and MOV videos are allowed.";
+        } else if (videoFile.size > 20 * 1024 * 1024) {
+          errors.video = "Video file must not exceed 20MB.";
+        }
+      } else if (!finalVideoUrl) {
+        errors.video = "Please choose a video file to upload.";
+      }
+    } else {
+      if (!finalVideoUrl) {
+        errors.video_url = `Video URL is required for ${video_type}.`;
+      }
+    }
+
+    if (thumbnailFile && typeof thumbnailFile.arrayBuffer === "function" && thumbnailFile.size > 0) {
+      const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+      if (!IMAGE_TYPES.includes(thumbnailFile.type)) {
+        errors.thumbnail_image = "Thumbnail must be JPG, PNG or WEBP.";
+      } else if (thumbnailFile.size > 2 * 1024 * 1024) {
+        errors.thumbnail_image = "Thumbnail must not exceed 2MB.";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return jsonError(Object.values(errors)[0], 400, errors);
+    }
+
+    if (video_type === "Upload") {
+      if (videoFile && typeof videoFile.arrayBuffer === "function" && videoFile.size > 0) {
         const uploadDir = path.join(process.cwd(), "public", "images", "uploads", "gallery-videos");
         await fs.mkdir(uploadDir, { recursive: true });
         const ext = path.extname(videoFile.name || "").toLowerCase() || ".mp4";
@@ -111,8 +145,6 @@ export async function PUT(request, context) {
         savedVideoPath = `/images/uploads/gallery-videos/${fileName}`;
         finalVideoUrl = savedVideoPath;
       }
-    } else {
-      if (!finalVideoUrl) return jsonError("video_url is required for YouTube and Vimeo videos.");
     }
 
     let finalThumbnailPath = current.thumbnail_image;

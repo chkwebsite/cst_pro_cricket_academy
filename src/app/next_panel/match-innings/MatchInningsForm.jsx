@@ -12,6 +12,7 @@ import {
     isValidCricketOvers,
     oversToBalls,
 } from "../components/cricketHelpers";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     match_id: "",
@@ -61,8 +62,18 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(isEdit);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
     const [autoSumExtras, setAutoSumExtras] = useState(true);
+
+    const clearError = (fieldName) => {
+        setFieldErrors((prev) => {
+            if (!prev[fieldName]) return prev;
+            const updated = { ...prev };
+            delete updated[fieldName];
+            return updated;
+        });
+    };
 
     const isLockedForCurrentUser = isEdit && formData.innings_status === "Completed" && !canEditCompletedInnings;
 
@@ -358,11 +369,75 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             batting_team_id: prev.bowling_team_id,
             bowling_team_id: prev.batting_team_id,
         }));
+        clearError("batting_team_id");
+        clearError("bowling_team_id");
+    };
+
+    const validateField = (name, value, currentFormData = formData) => {
+        let err = "";
+        if (name === "match_id") {
+            if (!value) err = "Please select a match.";
+        } else if (name === "batting_team_id") {
+            if (!value) err = "Please select a batting team.";
+            else if (currentFormData.bowling_team_id && Number(value) === Number(currentFormData.bowling_team_id)) {
+                err = "Batting team and bowling team must be different.";
+            }
+        } else if (name === "bowling_team_id") {
+            if (!value) err = "Please select a bowling team.";
+            else if (currentFormData.batting_team_id && Number(value) === Number(currentFormData.batting_team_id)) {
+                err = "Bowling team and batting team must be different.";
+            }
+        } else if (name === "innings_no") {
+            if (!value) err = "Please select an innings number.";
+        } else if (name === "total_runs") {
+            if (value === "" || value === null || Number(value) < 0) {
+                err = "Total runs must be a non-negative number.";
+            }
+        } else if (name === "total_wickets") {
+            if (value === "" || value === null || Number(value) < 0 || Number(value) > 10) {
+                err = "Total wickets must be between 0 and 10.";
+            }
+        } else if (name === "total_overs") {
+            if (value === "" || value === null) {
+                err = "Total overs is required.";
+            } else if (!isValidCricketOvers(value)) {
+                err = "Invalid overs format. Decimal part must be between .0 and .5 (e.g. 19.4).";
+            } else {
+                const enteredBalls = oversToBalls(value);
+                const maxBalls = matchOvers * 6;
+                if (maxBalls > 0 && enteredBalls > maxBalls) {
+                    err = `Overs mismatch! Total overs (${value}) exceeds match limit of ${matchOvers} overs.`;
+                }
+            }
+        }
+        return err;
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        const fields = ["match_id", "innings_no", "batting_team_id", "bowling_team_id", "total_runs", "total_wickets", "total_overs"];
+        fields.forEach((f) => {
+            const err = validateField(f, formData[f]);
+            if (err) errors[f] = err;
+        });
+        return errors;
     };
 
     // Handle input change
     const handleChange = (e) => {
         const { name, value } = e.target;
+        clearError(name);
+        if (name === "batting_team_id") clearError("bowling_team_id");
+        if (name === "bowling_team_id") clearError("batting_team_id");
+
         setFormData((prev) => {
             const updated = { ...prev, [name]: value };
 
@@ -409,32 +484,20 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             return;
         }
 
-        if (!formData.match_id) {
-            setError("Please select a match.");
-            return;
-        }
-
-        if (!formData.batting_team_id || !formData.bowling_team_id) {
-            setError("Please select both batting and bowling teams.");
-            return;
-        }
-
-        if (Number(formData.batting_team_id) === Number(formData.bowling_team_id)) {
-            setError("Batting team and Bowling team must be different.");
-            return;
-        }
-
-        if (!isValidCricketOvers(formData.total_overs)) {
-            setError("Invalid overs format. Decimal part must be between 0 and 5 (e.g. 19.4).");
+        const clientErrors = validateAll();
+        if (Object.keys(clientErrors).length > 0) {
+            setFieldErrors(clientErrors);
+            const firstKey = Object.keys(clientErrors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
             return;
         }
 
         const enteredBalls = oversToBalls(formData.total_overs);
         const maxBalls = matchOvers * 6;
-        if (maxBalls > 0 && enteredBalls > maxBalls) {
-            setError(`Overs mismatch! Total overs (${formData.total_overs}) exceeds the match limit of ${matchOvers} overs (${maxBalls} balls).`);
-            return;
-        }
 
         let calculatedStatus = formData.innings_status;
         if (
@@ -478,6 +541,15 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
             const json = await res.json();
 
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 throw new Error(json.message || "Failed to save match innings");
             }
 
@@ -502,7 +574,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
     }
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
             {error && <div className="alert alert-danger">{error}</div>}
             {successMsg && <div className="alert alert-success">{successMsg}</div>}
             {isFutureMatch && (
@@ -526,7 +598,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                 {/* 1. Match Type Dropdown: Match vs Tournament */}
                 <div className="col-md-3">
                     <label className="form-label fw-semibold">
-                        Type <span className="text-danger">*</span>
+                        Type <RequiredLabel />
                     </label>
                     <select
                         className="form-select fw-semibold"
@@ -565,89 +637,104 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                 <div className={selectedType === "Tournament" ? "col-md-5" : "col-md-9"}>
                     <label className="form-label fw-semibold">
                         {selectedType === "Tournament" ? "Tournament Match" : "Match"}{" "}
-                        <span className="text-danger">*</span>
+                        <RequiredLabel />
                     </label>
                     {selectedType === "Tournament" ? (
-                        <select
-                            className="form-select"
-                            value={(() => {
-                                const fixture = tournamentMatches.find(
-                                    (tm) => tm.match_id && String(tm.match_id) === String(formData.match_id)
-                                );
-                                if (fixture) return `tm_${fixture.id}`;
-                                return "";
-                            })()}
-                            onChange={handleTournamentMatchSelect}
-                            disabled={isEdit || tournamentMatchesLoading || initializingFixture}
-                            required
-                        >
-                            <option value="">
-                                {tournamentMatchesLoading
-                                    ? "Loading tournament matches..."
-                                    : initializingFixture
-                                    ? "Initializing fixture scorecard..."
-                                    : tournamentMatches.length === 0
-                                    ? "No matches found in tournament"
-                                    : "Select a tournament match..."}
-                            </option>
-                            {tournamentMatches.map((tm) => {
-                                const effStatus = tm.status || "Scheduled";
-                                return (
-                                    <option key={tm.id} value={`tm_${tm.id}`}>
-                                        Match {tm.match_no}: {tm.team_a_name || "TBD"} vs {tm.team_b_name || "TBD"}{" "}
-                                        {tm.group_name ? `(${tm.group_name})` : ""} · [{effStatus}]
-                                    </option>
-                                );
-                            })}
-                        </select>
-                    ) : (
-                        <select
-                            name="match_id"
-                            className="form-select"
-                            value={formData.match_id}
-                            onChange={(e) => handleMatchChange(e.target.value)}
-                            disabled={isEdit}
-                            required
-                        >
-                            <option value="">Select a match...</option>
-                            {regularMatches.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                    {m.match_no ? `Match ${m.match_no}` : `Match #${m.id}`}: {m.team_a_name} vs {m.team_b_name}
+                        <>
+                            <select
+                                name="match_id"
+                                id="match_id"
+                                className={`form-select ${fieldErrors.match_id ? "is-invalid border-danger" : ""}`}
+                                value={(() => {
+                                    const fixture = tournamentMatches.find(
+                                        (tm) => tm.match_id && String(tm.match_id) === String(formData.match_id)
+                                    );
+                                    if (fixture) return `tm_${fixture.id}`;
+                                    return "";
+                                })()}
+                                onChange={handleTournamentMatchSelect}
+                                onBlur={handleBlur}
+                                disabled={isEdit || tournamentMatchesLoading || initializingFixture}
+                            >
+                                <option value="">
+                                    {tournamentMatchesLoading
+                                        ? "Loading tournament matches..."
+                                        : initializingFixture
+                                        ? "Initializing fixture scorecard..."
+                                        : tournamentMatches.length === 0
+                                        ? "No matches found in tournament"
+                                        : "Select a tournament match..."}
                                 </option>
-                            ))}
-                        </select>
+                                {tournamentMatches.map((tm) => {
+                                    const effStatus = tm.status || "Scheduled";
+                                    return (
+                                        <option key={tm.id} value={`tm_${tm.id}`}>
+                                            Match {tm.match_no}: {tm.team_a_name || "TBD"} vs {tm.team_b_name || "TBD"}{" "}
+                                            {tm.group_name ? `(${tm.group_name})` : ""} · [{effStatus}]
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                            <FormError error={fieldErrors.match_id} />
+                        </>
+                    ) : (
+                        <>
+                            <select
+                                name="match_id"
+                                id="match_id"
+                                className={`form-select ${fieldErrors.match_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.match_id}
+                                onChange={(e) => {
+                                    handleMatchChange(e.target.value);
+                                    clearError("match_id");
+                                }}
+                                onBlur={handleBlur}
+                                disabled={isEdit}
+                            >
+                                <option value="">Select a match...</option>
+                                {regularMatches.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                        {m.match_no ? `Match ${m.match_no}` : `Match #${m.id}`}: {m.team_a_name} vs {m.team_b_name}
+                                    </option>
+                                ))}
+                            </select>
+                            <FormError error={fieldErrors.match_id} />
+                        </>
                     )}
                 </div>
 
                 {/* Innings No & Status */}
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Innings No <span className="text-danger">*</span>
+                        Innings No <RequiredLabel />
                     </label>
                     <select
                         name="innings_no"
-                        className="form-select"
+                        id="innings_no"
+                        className={`form-select ${fieldErrors.innings_no ? "is-invalid border-danger" : ""}`}
                         value={formData.innings_no}
                         onChange={handleChange}
-                        required
+                        onBlur={handleBlur}
                     >
                         <option value="1">1st Innings</option>
                         <option value="2">2nd Innings</option>
                         <option value="3">3rd Innings (Super Over / Multi-day)</option>
                         <option value="4">4th Innings (Super Over / Multi-day)</option>
                     </select>
+                    <FormError error={fieldErrors.innings_no} />
                 </div>
 
                 <div className="col-md-6">
                     <label className="form-label fw-semibold">
-                        Innings Status <span className="text-danger">*</span>
+                        Innings Status <RequiredLabel />
                     </label>
                     <select
                         name="innings_status"
-                        className="form-select"
+                        id="innings_status"
+                        className={`form-select ${fieldErrors.innings_status ? "is-invalid border-danger" : ""}`}
                         value={formData.innings_status}
                         onChange={handleChange}
-                        required
+                        onBlur={handleBlur}
                     >
                         {INNINGS_STATUSES.map((st) => (
                             <option key={st} value={st}>
@@ -655,6 +742,7 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                             </option>
                         ))}
                     </select>
+                    <FormError error={fieldErrors.innings_status} />
                 </div>
 
                 {/* Batting & Bowling Teams */}
@@ -674,58 +762,74 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                         <div className="row g-3">
                             <div className="col-md-6">
                                 <label className="form-label text-muted small">
-                                    Batting Team <span className="text-danger">*</span>
+                                    Batting Team <RequiredLabel />
                                 </label>
                                 {selectedMatch ? (
-                                    <select
-                                        name="batting_team_id"
-                                        className="form-select"
-                                        value={formData.batting_team_id}
-                                        onChange={handleChange}
-                                        required
-                                    >
-                                        <option value="">Select Batting Team</option>
-                                        <option value={selectedMatch.team_a_id}>{selectedMatch.team_a_name}</option>
-                                        <option value={selectedMatch.team_b_id}>{selectedMatch.team_b_name}</option>
-                                    </select>
+                                    <>
+                                        <select
+                                            name="batting_team_id"
+                                            id="batting_team_id"
+                                            className={`form-select ${fieldErrors.batting_team_id ? "is-invalid border-danger" : ""}`}
+                                            value={formData.batting_team_id}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                        >
+                                            <option value="">Select Batting Team</option>
+                                            <option value={selectedMatch.team_a_id}>{selectedMatch.team_a_name}</option>
+                                            <option value={selectedMatch.team_b_id}>{selectedMatch.team_b_name}</option>
+                                        </select>
+                                        <FormError error={fieldErrors.batting_team_id} />
+                                    </>
                                 ) : (
-                                    <input
-                                        type="number"
-                                        name="batting_team_id"
-                                        className="form-control"
-                                        placeholder="Batting Team ID"
-                                        value={formData.batting_team_id}
-                                        onChange={handleChange}
-                                        required
-                                    />
+                                    <>
+                                        <input
+                                            type="number"
+                                            name="batting_team_id"
+                                            id="batting_team_id"
+                                            className={`form-control ${fieldErrors.batting_team_id ? "is-invalid border-danger" : ""}`}
+                                            placeholder="Batting Team ID"
+                                            value={formData.batting_team_id}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                        />
+                                        <FormError error={fieldErrors.batting_team_id} />
+                                    </>
                                 )}
                             </div>
                             <div className="col-md-6">
                                 <label className="form-label text-muted small">
-                                    Bowling Team <span className="text-danger">*</span>
+                                    Bowling Team <RequiredLabel />
                                 </label>
                                 {selectedMatch ? (
-                                    <select
-                                        name="bowling_team_id"
-                                        className="form-select"
-                                        value={formData.bowling_team_id}
-                                        onChange={handleChange}
-                                        required
-                                    >
-                                        <option value="">Select Bowling Team</option>
-                                        <option value={selectedMatch.team_a_id}>{selectedMatch.team_a_name}</option>
-                                        <option value={selectedMatch.team_b_id}>{selectedMatch.team_b_name}</option>
-                                    </select>
+                                    <>
+                                        <select
+                                            name="bowling_team_id"
+                                            id="bowling_team_id"
+                                            className={`form-select ${fieldErrors.bowling_team_id ? "is-invalid border-danger" : ""}`}
+                                            value={formData.bowling_team_id}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                        >
+                                            <option value="">Select Bowling Team</option>
+                                            <option value={selectedMatch.team_a_id}>{selectedMatch.team_a_name}</option>
+                                            <option value={selectedMatch.team_b_id}>{selectedMatch.team_b_name}</option>
+                                        </select>
+                                        <FormError error={fieldErrors.bowling_team_id} />
+                                    </>
                                 ) : (
-                                    <input
-                                        type="number"
-                                        name="bowling_team_id"
-                                        className="form-control"
-                                        placeholder="Bowling Team ID"
-                                        value={formData.bowling_team_id}
-                                        onChange={handleChange}
-                                        required
-                                    />
+                                    <>
+                                        <input
+                                            type="number"
+                                            name="bowling_team_id"
+                                            id="bowling_team_id"
+                                            className={`form-control ${fieldErrors.bowling_team_id ? "is-invalid border-danger" : ""}`}
+                                            placeholder="Bowling Team ID"
+                                            value={formData.bowling_team_id}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                        />
+                                        <FormError error={fieldErrors.bowling_team_id} />
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -735,52 +839,58 @@ export default function MatchInningsForm({ id = null, returnTo = "/next_panel/ma
                 {/* Score & Overs */}
                 <div className="col-md-3">
                     <label className="form-label fw-semibold">
-                        Total Runs <span className="text-danger">*</span>
+                        Total Runs <RequiredLabel />
                     </label>
                     <input
                         type="number"
                         name="total_runs"
-                        className="form-control"
+                        id="total_runs"
+                        className={`form-control ${fieldErrors.total_runs ? "is-invalid border-danger" : ""}`}
                         min="0"
                         placeholder="e.g. 175"
                         value={formData.total_runs}
                         onChange={handleChange}
-                        required
+                        onBlur={handleBlur}
                     />
+                    <FormError error={fieldErrors.total_runs} />
                 </div>
 
                 <div className="col-md-3">
                     <label className="form-label fw-semibold">
-                        Total Wickets <span className="text-danger">*</span>
+                        Total Wickets <RequiredLabel />
                     </label>
                     <input
                         type="number"
                         name="total_wickets"
-                        className="form-control"
+                        id="total_wickets"
+                        className={`form-control ${fieldErrors.total_wickets ? "is-invalid border-danger" : ""}`}
                         min="0"
                         max="10"
                         placeholder="0-10"
                         value={formData.total_wickets}
                         onChange={handleChange}
-                        required
+                        onBlur={handleBlur}
                     />
+                    <FormError error={fieldErrors.total_wickets} />
                 </div>
 
                 <div className="col-md-3">
                     <label className="form-label fw-semibold">
-                        Total Overs <span className="text-danger">*</span>
+                        Total Overs <RequiredLabel />
                     </label>
                     <input
                         type="number"
                         step="0.1"
                         name="total_overs"
-                        className="form-control"
+                        id="total_overs"
+                        className={`form-control ${fieldErrors.total_overs ? "is-invalid border-danger" : ""}`}
                         min="0"
                         placeholder="e.g. 19.4"
                         value={formData.total_overs}
                         onChange={handleChange}
-                        required
+                        onBlur={handleBlur}
                     />
+                    <FormError error={fieldErrors.total_overs} />
                     <small className="form-text text-muted">
                         Max allowed: {matchOvers} overs ({matchOvers * 6} balls)
                     </small>

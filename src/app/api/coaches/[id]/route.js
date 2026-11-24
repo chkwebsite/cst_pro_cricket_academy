@@ -142,16 +142,15 @@ export async function PUT(request, { params }) {
             "All Rounder",
         ];
 
+        const errors = {};
+
         if (
             body.gender !== undefined &&
             body.gender !== null &&
             body.gender !== "" &&
             !validGenders.includes(body.gender)
         ) {
-            return NextResponse.json(
-                { success: false, message: "Invalid gender. Allowed: Male, Female, Other" },
-                { status: 400 }
-            );
+            errors.gender = "Invalid gender. Allowed: Male, Female, Other";
         }
 
         if (
@@ -159,13 +158,7 @@ export async function PUT(request, { params }) {
             body.employment_type !== null &&
             !validEmploymentTypes.includes(body.employment_type)
         ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid employment_type",
-                },
-                { status: 400 }
-            );
+            errors.employment_type = "Invalid employment type.";
         }
 
         if (body.specialization !== undefined && body.specialization !== null && body.specialization !== "") {
@@ -173,18 +166,14 @@ export async function PUT(request, { params }) {
                 ? body.specialization
                 : String(body.specialization).split(",").map((s) => s.trim()).filter(Boolean);
 
-            if (
+            if (specializations.length === 0) {
+                errors.specialization = "Please select at least one specialization.";
+            } else if (
                 specializations.some(
                     (item) => !validSpecializations.includes(item)
                 )
             ) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid specialization. Allowed: " + validSpecializations.join(", "),
-                    },
-                    { status: 400 }
-                );
+                errors.specialization = "Invalid specialization. Allowed: " + validSpecializations.join(", ");
             }
         }
 
@@ -196,13 +185,7 @@ export async function PUT(request, { params }) {
                 experience < 0 ||
                 experience > 999.9
             ) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid experience_years",
-                    },
-                    { status: 400 }
-                );
+                errors.experience_years = "Experience years must be a valid number between 0 and 999.";
             }
         }
 
@@ -212,8 +195,23 @@ export async function PUT(request, { params }) {
             body.salary !== "" &&
             (!Number.isFinite(Number(body.salary)) || Number(body.salary) < 0)
         ) {
+            errors.salary = "Salary must be a valid non-negative number.";
+        }
+
+        if (body.emergency_contact_phone && String(body.emergency_contact_phone).trim()) {
+            const digits = String(body.emergency_contact_phone).replace(/\D/g, "");
+            if (digits.length < 10 || digits.length > 15) {
+                errors.emergency_contact_phone = "Emergency contact phone must be between 10 and 15 digits.";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "Invalid salary" },
+                {
+                    success: false,
+                    message: Object.values(errors)[0],
+                    errors,
+                },
                 { status: 400 }
             );
         }
@@ -347,6 +345,25 @@ export async function PUT(request, { params }) {
                         message: "Branch does not belong to selected academy",
                     },
                     { status: 400 }
+                );
+            }
+        }
+
+        // Check duplicate coach_code within academy
+        if (body.coach_code && String(body.coach_code).trim() && finalAcademyId) {
+            const [existingCode] = await connection.execute(
+                `SELECT id FROM cst_coaches WHERE academy_id = ? AND coach_code = ? AND id != ? AND is_deleted = 0 LIMIT 1`,
+                [finalAcademyId, String(body.coach_code).trim(), id]
+            );
+
+            if (existingCode.length > 0) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Coach code already exists in this academy",
+                        errors: { coach_code: "A coach with this code already exists in this academy." },
+                    },
+                    { status: 409 }
                 );
             }
         }

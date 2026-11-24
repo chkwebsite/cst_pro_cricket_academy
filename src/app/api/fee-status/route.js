@@ -715,13 +715,19 @@ export async function POST(request) {
     try {
         const body = await request.json();
 
-        const validation = validateFeeData(body);
+        const errors = {};
 
-        if (!validation.valid) {
-            return NextResponse.json(
-                { success: false, message: validation.message },
-                { status: 400 }
-            );
+        if (!isPositiveInt(body.academy_id)) {
+            errors.academy_id = "Please select an academy.";
+        }
+        if (!body.fee_type || !FEE_TYPES.includes(body.fee_type)) {
+            errors.fee_type = "Valid fee type is required.";
+        }
+        if (body.fee_amount !== undefined && !isValidAmount(body.fee_amount)) {
+            errors.fee_amount = "Fee amount must be a valid non-negative amount.";
+        }
+        if (body.paid_amount !== undefined && !isValidAmount(body.paid_amount)) {
+            errors.paid_amount = "Paid amount must be a valid non-negative amount.";
         }
 
         const data = {
@@ -773,42 +779,45 @@ export async function POST(request) {
         } else if (data.academy_id && data.branch_id) {
             const isBelong = await validateBranchBelongsToAcademy(data.branch_id, data.academy_id);
             if (!isBelong) {
-                return NextResponse.json(
-                    { success: false, message: "Branch does not belong to selected academy." },
-                    { status: 400 }
-                );
+                errors.branch_id = "Branch does not belong to selected academy.";
             }
         }
 
-        if (
-            Object.values(data).some(
-                (value) => typeof value === "number" && !Number.isFinite(value)
-            )
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "One or more supplied values are invalid.",
-                },
-                { status: 400 }
-            );
-        }
-
         if (data.paid_amount > data.fee_amount) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "paid_amount cannot exceed fee_amount.",
-                },
-                { status: 400 }
-            );
+            errors.paid_amount = "Paid amount cannot exceed fee amount.";
         }
 
-        const referenceError = validateFeeTypeReferences(data);
+        const has = (field) =>
+            data[field] !== undefined &&
+            data[field] !== null &&
+            data[field] !== "" &&
+            Number(data[field]) > 0;
 
-        if (referenceError) {
+        switch (data.fee_type) {
+            case "Tournament Team":
+                if (!has("tournament_id")) errors.tournament_id = "Tournament is required for Tournament Team fees.";
+                if (!has("tournament_team_id")) errors.tournament_team_id = "Tournament Team is required for Tournament Team fees.";
+                break;
+            case "Tournament Player":
+                if (!has("tournament_id")) errors.tournament_id = "Tournament is required for Tournament Player fees.";
+                if (!has("tournament_team_player_id")) errors.tournament_team_player_id = "Tournament Team Player is required for Tournament Player fees.";
+                break;
+            case "Match Team":
+                if (!has("match_id")) errors.match_id = "Match is required for Match Team fees.";
+                if (!has("match_team_id")) errors.match_team_id = "Match Team is required for Match Team fees.";
+                break;
+            case "Match Player":
+                if (!has("match_id")) errors.match_id = "Match is required for Match Player fees.";
+                if (!has("match_player_id")) errors.match_player_id = "Match Player is required for Match Player fees.";
+                break;
+            case "Ground Booking":
+                if (!has("ground_booking_id")) errors.ground_booking_id = "Ground Booking is required for Ground Booking fees.";
+                break;
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: referenceError },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -819,45 +828,50 @@ export async function POST(request) {
         );
 
         if (!FEE_STATUSES.includes(status)) {
+            errors.status = "Invalid fee status.";
             return NextResponse.json(
-                { success: false, message: "Invalid fee status." },
-                { status: 400 }
-            );
-        }
-
-        if (
-            status !== "Cancelled" &&
-            status !== getCalculatedStatus(
-                data.fee_amount,
-                data.paid_amount
-            )
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "Fee status must match fee_amount and paid_amount.",
-                },
+                { success: false, message: errors.status, errors },
                 { status: 400 }
             );
         }
 
         connection = await pool.getConnection();
-        await connection.beginTransaction();
 
-        const referenceErrorFromDb = await validateForeignKeys(
-            connection,
-            data
-        );
+        const dbChecks = [
+            ["academy_id", "cst_academy", "Academy record not found."],
+            ["branch_id", "cst_branch", "Branch record not found."],
+            ["tournament_id", "cst_tournaments", "Tournament record not found."],
+            ["tournament_team_id", "cst_tournament_teams", "Tournament team record not found."],
+            ["tournament_team_player_id", "cst_tournament_team_players", "Tournament team player record not found."],
+            ["match_id", "cst_matches", "Match record not found."],
+            ["match_team_id", "cst_match_teams", "Match team record not found."],
+            ["match_player_id", "cst_match_players", "Match player record not found."],
+            ["ground_booking_id", "cst_ground_bookings", "Ground booking record not found."],
+            ["user_id", "cst_users", "User record not found."],
+            ["outside_player_id", "cst_outside_players", "Outside player record not found."],
+            ["created_by", "cst_users", "Created by user record not found."],
+        ];
 
-        if (referenceErrorFromDb) {
-            await connection.rollback();
+        for (const [field, table, msg] of dbChecks) {
+            const value = data[field];
+            if (value === undefined || value === null || value === "") continue;
+            const [rows] = await connection.execute(
+                `SELECT id FROM ${table} WHERE id = ? LIMIT 1`,
+                [Number(value)]
+            );
+            if (!rows.length) {
+                errors[field] = msg;
+            }
+        }
 
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: referenceErrorFromDb },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
+
+        await connection.beginTransaction();
 
         // Prevent duplicate active fee status records for the same event participant
         if (data.fee_type === "Tournament Player" && data.tournament_team_player_id) {

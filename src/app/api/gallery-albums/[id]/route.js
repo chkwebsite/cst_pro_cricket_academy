@@ -97,14 +97,16 @@ export async function PUT(request, { params }) {
 
         const cover_image = formData.get("cover_image");
 
-        if (!album_title || !slug) {
-            return NextResponse.json({
-                success: false,
-                message: "Album title and slug are required"
-            }, { status: 400 });
+        const errors = {};
+
+        if (!album_title) {
+            errors.album_title = "Album title is required";
+        }
+        if (!slug) {
+            errors.slug = "Album slug is required";
         }
 
-        // Upload new cover image if provided
+        // Validate cover image if uploaded
         if (
             cover_image &&
             typeof cover_image === "object" &&
@@ -113,50 +115,23 @@ export async function PUT(request, { params }) {
         ) {
             const allowedTypes = [
                 "image/jpeg",
+                "image/jpg",
                 "image/png",
                 "image/webp"
             ];
 
             if (!allowedTypes.includes(cover_image.type)) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Only JPG, PNG and WEBP images are allowed"
-                }, { status: 400 });
+                errors.cover_image = "Only JPG, PNG and WEBP images are allowed";
+            } else if (cover_image.size > 2 * 1024 * 1024) {
+                errors.cover_image = "Cover image must not exceed 2MB";
             }
-
-            if (cover_image.size > 2 * 1024 * 1024) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Cover image must not exceed 2MB"
-                }, { status: 400 });
-            }
-
-            const uploadDir = path.join(
-                process.cwd(),
-                "public",
-                "images",
-                "uploads",
-                "gallery-albums"
-            );
-
-            await fs.mkdir(uploadDir, { recursive: true });
-
-            const extension = path.extname(cover_image.name).toLowerCase();
-            const fileName = `${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
-
-            await fs.writeFile(
-                path.join(uploadDir, fileName),
-                Buffer.from(await cover_image.arrayBuffer())
-            );
-
-            newCoverImagePath = `/images/uploads/gallery-albums/${fileName}`;
         }
 
         connection = await pool.getConnection();
 
         const [existingRows] = await connection.execute(
             `SELECT *
-    FROM cst_gallery_albums
+             FROM cst_gallery_albums
              WHERE id = ? AND is_deleted = 0
              LIMIT 1`,
             [id]
@@ -187,10 +162,7 @@ export async function PUT(request, { params }) {
             );
 
             if (academyRows.length === 0) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Invalid academy_id"
-                }, { status: 400 });
+                errors.academy_id = "Selected academy does not exist";
             }
         }
 
@@ -200,25 +172,17 @@ export async function PUT(request, { params }) {
                 `SELECT id, academy_id
                  FROM cst_branch
                  WHERE id = ?
-    LIMIT 1`,
+                 LIMIT 1`,
                 [branch_id]
             );
 
             if (branchRows.length === 0) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Invalid branch_id"
-                }, { status: 400 });
-            }
-
-            if (
+                errors.branch_id = "Selected branch does not exist";
+            } else if (
                 academy_id !== null &&
                 Number(branchRows[0].academy_id) !== Number(academy_id)
             ) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Selected branch does not belong to the selected academy"
-                }, { status: 400 });
+                errors.branch_id = "Selected branch does not belong to the selected academy";
             }
         }
 
@@ -228,44 +192,71 @@ export async function PUT(request, { params }) {
                 `SELECT id, academy_id
                  FROM cst_gallery_categories
                  WHERE id = ?
-    AND is_deleted = 0
+                 AND is_deleted = 0
                  LIMIT 1`,
                 [category_id]
             );
 
             if (categoryRows.length === 0) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Invalid gallery category"
-                }, { status: 400 });
-            }
-
-            if (
+                errors.category_id = "Selected gallery category does not exist";
+            } else if (
                 academy_id !== null &&
                 categoryRows[0].academy_id !== null &&
                 Number(categoryRows[0].academy_id) !== Number(academy_id)
             ) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Selected category does not belong to the selected academy"
-                }, { status: 400 });
+                errors.category_id = "Selected category does not belong to the selected academy";
             }
         }
 
         // Check duplicate slug
-        const [duplicateSlug] = await connection.execute(
-            `SELECT id
-             FROM cst_gallery_albums
-             WHERE slug = ? AND id != ?
-    LIMIT 1`,
-            [slug, id]
-        );
+        if (slug) {
+            const [duplicateSlug] = await connection.execute(
+                `SELECT id
+                 FROM cst_gallery_albums
+                 WHERE slug = ? AND id != ?
+                 LIMIT 1`,
+                [slug, id]
+            );
 
-        if (duplicateSlug.length > 0) {
+            if (duplicateSlug.length > 0) {
+                errors.slug = "This album slug is already in use";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json({
                 success: false,
-                message: "This album slug already exists"
-            }, { status: 409 });
+                message: Object.values(errors)[0],
+                errors
+            }, { status: 400 });
+        }
+
+        // Save new cover image if provided
+        if (
+            cover_image &&
+            typeof cover_image === "object" &&
+            typeof cover_image.arrayBuffer === "function" &&
+            cover_image.size > 0
+        ) {
+            const uploadDir = path.join(
+                process.cwd(),
+                "public",
+                "images",
+                "uploads",
+                "gallery-albums"
+            );
+
+            await fs.mkdir(uploadDir, { recursive: true });
+
+            const extension = path.extname(cover_image.name).toLowerCase();
+            const fileName = `${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
+
+            await fs.writeFile(
+                path.join(uploadDir, fileName),
+                Buffer.from(await cover_image.arrayBuffer())
+            );
+
+            newCoverImagePath = `/images/uploads/gallery-albums/${fileName}`;
         }
 
         await connection.execute(

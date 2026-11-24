@@ -194,23 +194,17 @@ export async function POST(request) {
             permission_id,
         } = body;
 
+        const errors = {};
         if (!menu_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "menu_id is required",
-                },
-                { status: 400 }
-            );
+            errors.menu_id = "Please select a menu.";
+        }
+        if (!permission_id) {
+            errors.permission_id = "Please select a permission.";
         }
 
-        if (!permission_id) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "permission_id is required",
-                },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -278,8 +272,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "This permission is already assigned to this menu",
+                    message: "This permission is already assigned to this menu",
+                    errors: { permission_id: "This permission is already assigned to this menu." },
                 },
                 { status: 409 }
             );

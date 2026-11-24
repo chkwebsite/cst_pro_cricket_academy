@@ -126,7 +126,11 @@ export async function GET(request) {
                 ci.*,
                 p.product_name,
                 p.product_code,
-                p.slug AS product_slug
+                p.slug AS product_slug,
+                p.price,
+                p.sale_price,
+                p.tax_percent,
+                (SELECT pi.image_path FROM cst_product_images pi WHERE pi.product_id = p.id AND pi.status = 1 AND pi.is_primary = 1 LIMIT 1) AS image_path
              FROM cst_cart_items ci
              JOIN cst_cart c ON c.id = ci.cart_id
              LEFT JOIN cst_products p
@@ -276,6 +280,60 @@ ci.*,
             {
                 success: false,
                 message: "Failed to add product to cart",
+            },
+            { status: 500 }
+        );
+    }
+}
+
+// DELETE: Remove item(s) from cart by cart_id, product_id, or user
+export async function DELETE(request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const cart_id = searchParams.get("cart_id");
+        const product_id = searchParams.get("product_id");
+        const customer_user_id = searchParams.get("customer_user_id");
+        const public_user_id = searchParams.get("public_user_id");
+        const clear_all = searchParams.get("clear_all") === "true";
+
+        let targetCartId = cart_id ? Number(cart_id) : null;
+
+        if (!targetCartId && (customer_user_id || public_user_id)) {
+            let sql = "SELECT id FROM cst_cart WHERE ";
+            const vals = [];
+            if (customer_user_id) {
+                sql += "customer_user_id = ? LIMIT 1";
+                vals.push(Number(customer_user_id));
+            } else {
+                sql += "public_user_id = ? LIMIT 1";
+                vals.push(Number(public_user_id));
+            }
+            const [carts] = await db.execute(sql, vals);
+            if (carts.length > 0) {
+                targetCartId = carts[0].id;
+            }
+        }
+
+        if (!targetCartId) {
+            return NextResponse.json({ success: true, message: "No active cart found to clean." });
+        }
+
+        if (clear_all || !product_id) {
+            await db.execute("DELETE FROM cst_cart_items WHERE cart_id = ?", [targetCartId]);
+            return NextResponse.json({ success: true, message: "All cart items removed successfully." });
+        } else {
+            await db.execute("DELETE FROM cst_cart_items WHERE cart_id = ? AND product_id = ?", [
+                targetCartId,
+                Number(product_id),
+            ]);
+            return NextResponse.json({ success: true, message: "Product removed from cart successfully." });
+        }
+    } catch (error) {
+        console.error("Delete cart item error:", error);
+        return NextResponse.json(
+            {
+                success: false,
+                message: "Failed to remove cart items",
             },
             { status: 500 }
         );

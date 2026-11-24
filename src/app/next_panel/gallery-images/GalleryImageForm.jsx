@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     album_id: "",
@@ -33,7 +34,65 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
     const [fetching, setFetching] = useState(false);
     const [uploadProgress, setUploadProgress] = useState("");
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState("");
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        let err = "";
+        const val = typeof value === "string" ? value.trim() : value;
+        switch (name) {
+            case "album_id":
+                if (!val) err = "Please select an album.";
+                break;
+            default:
+                break;
+        }
+        return err;
+    };
+
+    const handleBlur = (field) => {
+        const err = validateField(field, formData[field]);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        const albumErr = validateField("album_id", formData.album_id);
+        if (albumErr) errors.album_id = albumErr;
+
+        if (!isEdit && uploadMode === "single" && !imageFile) {
+            errors.image = "Please select an image file to upload.";
+        }
+
+        if (!isEdit && uploadMode === "bulk" && multipleFiles.length === 0) {
+            errors.image = "Please select at least one image file.";
+        }
+
+        setFieldErrors(errors);
+
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // Load albums
     useEffect(() => {
@@ -87,12 +146,16 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 2 * 1024 * 1024) {
-                setError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`);
+                const msg = `"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed image size is 2MB.`;
+                setFieldErrors((prev) => ({ ...prev, image: msg }));
+                setError(msg);
                 e.target.value = "";
                 setImageFile(null);
                 setImagePreview(null);
                 return;
             }
+            clearError("image");
+            setError("");
             setImageFile(file);
             setImagePreview(URL.createObjectURL(file));
         }
@@ -102,11 +165,15 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
         const files = Array.from(e.target.files || []);
         const oversized = files.filter((f) => f.size > 2 * 1024 * 1024);
         if (oversized.length > 0) {
-            setError(`The following file(s) exceed the 2MB limit: ${oversized.map((f) => f.name).join(", ")}. Please select images up to 2MB.`);
+            const msg = `The following file(s) exceed the 2MB limit: ${oversized.map((f) => f.name).join(", ")}. Please select images up to 2MB.`;
+            setFieldErrors((prev) => ({ ...prev, image: msg }));
+            setError(msg);
             e.target.value = "";
             setMultipleFiles([]);
             return;
         }
+        clearError("image");
+        setError("");
         setMultipleFiles(files);
     };
 
@@ -115,18 +182,7 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
         setError("");
         setSuccessMsg("");
 
-        if (!formData.album_id) {
-            setError("Please select an album.");
-            return;
-        }
-
-        if (!isEdit && uploadMode === "single" && !imageFile) {
-            setError("Please select an image file to upload.");
-            return;
-        }
-
-        if (!isEdit && uploadMode === "bulk" && multipleFiles.length === 0) {
-            setError("Please select at least one image file.");
+        if (!validateAll()) {
             return;
         }
 
@@ -149,6 +205,15 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
                 });
                 const json = await res.json();
                 if (!res.ok || !json.success) {
+                    if (json.errors) {
+                        setFieldErrors(json.errors);
+                        const firstKey = Object.keys(json.errors)[0];
+                        const el = document.querySelector(`[name="${firstKey}"]`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
                     throw new Error(json.message || "Failed to update image.");
                 }
 
@@ -205,6 +270,15 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
                 });
                 const json = await res.json();
                 if (!res.ok || !json.success) {
+                    if (json.errors) {
+                        setFieldErrors(json.errors);
+                        const firstKey = Object.keys(json.errors)[0];
+                        const el = document.querySelector(`[name="${firstKey}"]`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
                     throw new Error(json.message || "Failed to upload image.");
                 }
 
@@ -318,15 +392,17 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
                             <div className="row g-3">
                                 <div className="col-md-6">
                                     <label className="form-label fw-semibold">
-                                        Select Album <span className="text-danger">*</span>
+                                        Select Album <RequiredLabel />
                                     </label>
                                     <select
-                                        className="form-select"
+                                        name="album_id"
+                                        className={`form-select ${fieldErrors.album_id ? "is-invalid border-danger" : ""}`}
                                         value={formData.album_id}
-                                        onChange={(e) =>
-                                            setFormData({ ...formData, album_id: e.target.value })
-                                        }
-                                        required
+                                        onChange={(e) => {
+                                            clearError("album_id");
+                                            setFormData({ ...formData, album_id: e.target.value });
+                                        }}
+                                        onBlur={() => handleBlur("album_id")}
                                     >
                                         <option value="">-- Choose an Album --</option>
                                         {albums.map((al) => (
@@ -336,6 +412,7 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
                                             </option>
                                         ))}
                                     </select>
+                                    <FormError error={fieldErrors.album_id} />
                                 </div>
 
                                 <div className="col-md-3">
@@ -409,14 +486,16 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
                                 <div>
                                     <div className="border border-dashed rounded-3 p-4 text-center bg-light">
                                         <Upload size={36} className="text-secondary opacity-50 mb-2" />
-                                        <p className="mb-2 fw-semibold">Choose one or more image files <span className="text-danger">*</span></p>
+                                        <p className="mb-2 fw-semibold">Choose one or more image files <RequiredLabel /></p>
                                         <input
                                             type="file"
-                                            className="form-control"
+                                            name="image"
+                                            className={`form-control ${fieldErrors.image ? "is-invalid border-danger" : ""}`}
                                             multiple
                                             accept="image/jpeg,image/png,image/webp,image/jpg"
                                             onChange={handleMultipleFilesChange}
                                         />
+                                        <FormError error={fieldErrors.image} />
                                         <small className="text-muted d-block mt-2">
                                             Supported formats: JPG, PNG, WEBP (Max 2MB each).
                                         </small>
@@ -455,14 +534,16 @@ export default function GalleryImageForm({ id = null, defaultAlbumId = "" }) {
 
                                     <div className="col-md-8">
                                         <label className="form-label fw-semibold">
-                                            {isEdit ? "Replace Image" : <>Select Image (Max 2MB) <span className="text-danger">*</span></>}
+                                            {isEdit ? "Replace Image" : <>Select Image (Max 2MB) <RequiredLabel /></>}
                                         </label>
                                         <input
                                             type="file"
-                                            className="form-control"
+                                            name="image"
+                                            className={`form-control ${fieldErrors.image ? "is-invalid border-danger" : ""}`}
                                             accept="image/jpeg,image/png,image/webp,image/jpg"
                                             onChange={handleSingleFileChange}
                                         />
+                                        <FormError error={fieldErrors.image} />
                                         <small className="text-muted d-block mt-1">
                                             Allowed formats: JPG, PNG, WEBP.
                                         </small>

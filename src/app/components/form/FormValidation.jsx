@@ -6,14 +6,17 @@ import React from "react";
  * Renders a form field label with a standardized red (*) indicator when required.
  * Ensures "(Optional)" text is never rendered.
  */
-export function RequiredLabel({ label, required = false, htmlFor, className = "form-label" }) {
-    if (!label) return null;
-    return (
-        <label htmlFor={htmlFor} className={className}>
-            {label}
-            {required && <span className="text-danger ms-1" style={{ color: "#dc3545" }}>*</span>}
-        </label>
-    );
+export function RequiredLabel({ label, children, required = true, htmlFor, className = "form-label" }) {
+    const text = label || children;
+    if (text) {
+        return (
+            <label htmlFor={htmlFor} className={className}>
+                {text}
+                {required && <span className="text-danger ms-1" style={{ color: "#dc3545" }}>*</span>}
+            </label>
+        );
+    }
+    return <span className="text-danger ms-1" style={{ color: "#dc3545" }}>*</span>;
 }
 
 /**

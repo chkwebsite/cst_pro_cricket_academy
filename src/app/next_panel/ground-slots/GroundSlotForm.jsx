@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
 import { getFallbackContext, toApiTime, toInputTime } from "./slotUtils";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
     ground_id: "",
@@ -40,6 +41,7 @@ export default function GroundSlotForm({ id = null }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     // Active grounds for the dropdown
     useEffect(() => {
@@ -107,10 +109,72 @@ export default function GroundSlotForm({ id = null }) {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
         setFormData((prev) => ({
             ...prev,
             [name]: name === "status" ? Number(value) : value,
         }));
+    };
+
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "ground_id" && !formData.ground_id) err = "Please select a ground.";
+        if (field === "slot_name" && !formData.slot_name.trim()) err = "Slot name is required.";
+        if (field === "start_time" && !formData.start_time) err = "Start time is required.";
+        if (field === "end_time") {
+            if (!formData.end_time) err = "End time is required.";
+            else if (formData.start_time && formData.start_time >= formData.end_time) {
+                err = "End time must be greater than start time.";
+            }
+        }
+        if (field === "price" && formData.price !== "" && Number(formData.price) < 0) {
+            err = "Price cannot be negative.";
+        }
+
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!formData.ground_id) errors.ground_id = "Please select a ground.";
+        if (!grounds.some((ground) => Number(ground.id) === Number(formData.ground_id))) {
+            errors.ground_id = "Please select a ground available to your account.";
+        }
+        if (!formData.slot_name.trim()) errors.slot_name = "Slot name is required.";
+        if (!formData.start_time) errors.start_time = "Start time is required.";
+        if (!formData.end_time) errors.end_time = "End time is required.";
+        if (formData.start_time && formData.end_time && formData.start_time >= formData.end_time) {
+            errors.end_time = "End time must be greater than start time.";
+        }
+        if (formData.price !== "" && Number(formData.price) < 0) {
+            errors.price = "Price cannot be negative.";
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
     };
 
     // Create mode: take academy/branch from the chosen ground
@@ -126,18 +190,7 @@ export default function GroundSlotForm({ id = null }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Mirrors the API validation
-        if (!formData.ground_id) return setError("Please select a ground");
-        if (!grounds.some((ground) => Number(ground.id) === Number(formData.ground_id))) {
-            return setError("Please select a ground available to your account");
-        }
-        if (!formData.slot_name.trim()) return setError("Slot name is required");
-        if (!formData.start_time) return setError("Start time is required");
-        if (!formData.end_time) return setError("End time is required");
-        if (formData.start_time >= formData.end_time) {
-            return setError("End time must be greater than start time");
-        }
-        if (Number(formData.price) < 0) return setError("Price cannot be negative");
+        if (!validateAll()) return;
 
         const { academy_id, branch_id } = resolveScope();
         if (!academy_id || !branch_id) {
@@ -167,7 +220,15 @@ export default function GroundSlotForm({ id = null }) {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
-                // 409 overlap responses include the clashing slot
+                if (data.errors) {
+                    setFieldErrors((prev) => ({ ...prev, ...data.errors }));
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 const clash = data.data?.slot_name
                     ? ` (${data.data.slot_name}: ${toInputTime(data.data.start_time)}–${toInputTime(data.data.end_time)})`
                     : "";
@@ -198,17 +259,20 @@ export default function GroundSlotForm({ id = null }) {
             <div className="card-body">
                 {error && <div className="alert alert-danger">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Ground <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label" htmlFor="ground_id">
+                                Ground <span className="text-danger ms-1">*</span>
+                            </label>
                             <select
+                                id="ground_id"
                                 name="ground_id"
-                                className="form-select"
+                                className={`form-select ${fieldErrors.ground_id ? "is-invalid border-danger" : ""}`}
                                 value={formData.ground_id}
                                 onChange={handleChange}
+                                onBlur={handleBlur("ground_id")}
                                 disabled={isEdit}
-                                required
                             >
                                 <option value="">Select ground</option>
                                 {grounds.map((g) => (
@@ -217,67 +281,84 @@ export default function GroundSlotForm({ id = null }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.ground_id} />
                             {isEdit && (
                                 <div className="form-text">A slot cannot be moved to another ground.</div>
                             )}
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Slot Name <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label" htmlFor="slot_name">
+                                Slot Name <span className="text-danger ms-1">*</span>
+                            </label>
                             <input
+                                id="slot_name"
                                 type="text"
                                 name="slot_name"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.slot_name ? "is-invalid border-danger" : ""}`}
                                 value={formData.slot_name}
                                 onChange={handleChange}
+                                onBlur={handleBlur("slot_name")}
                                 placeholder="e.g. Morning Slot"
-                                required
                             />
+                            <FormError error={fieldErrors.slot_name} />
                         </div>
                     </div>
 
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Start Time <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label" htmlFor="start_time">
+                                Start Time <span className="text-danger ms-1">*</span>
+                            </label>
                             <input
+                                id="start_time"
                                 type="time"
                                 name="start_time"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.start_time ? "is-invalid border-danger" : ""}`}
                                 value={formData.start_time}
                                 onChange={handleChange}
-                                required
+                                onBlur={handleBlur("start_time")}
                             />
+                            <FormError error={fieldErrors.start_time} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">End Time <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label" htmlFor="end_time">
+                                End Time <span className="text-danger ms-1">*</span>
+                            </label>
                             <input
+                                id="end_time"
                                 type="time"
                                 name="end_time"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.end_time ? "is-invalid border-danger" : ""}`}
                                 value={formData.end_time}
                                 onChange={handleChange}
-                                required
+                                onBlur={handleBlur("end_time")}
                             />
+                            <FormError error={fieldErrors.end_time} />
                         </div>
 
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">Price (₹)</label>
+                            <label className="form-label" htmlFor="price">Price (₹)</label>
                             <input
+                                id="price"
                                 type="number"
                                 name="price"
-                                className="form-control"
+                                className={`form-control ${fieldErrors.price ? "is-invalid border-danger" : ""}`}
                                 min="0"
                                 step="0.01"
                                 value={formData.price}
                                 onChange={handleChange}
+                                onBlur={handleBlur("price")}
                             />
+                            <FormError error={fieldErrors.price} />
                         </div>
                     </div>
 
                     <div className="mb-3">
-                        <label className="form-label">Status</label>
+                        <label className="form-label" htmlFor="status">Status</label>
                         <select
+                            id="status"
                             name="status"
                             className="form-select"
                             value={formData.status}

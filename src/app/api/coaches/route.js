@@ -199,6 +199,24 @@ export async function POST(request) {
             academy_id = authUser.academy_id;
         }
 
+        const errors = {};
+
+        if (!user_id) {
+            errors.user_id = "Please select a user account for this coach profile.";
+        }
+
+        if (!academy_id) {
+            errors.academy_id = "Please select an academy.";
+        }
+
+        if (!branch_id) {
+            errors.branch_id = "Please select a branch.";
+        }
+
+        if (!coach_code || !String(coach_code).trim()) {
+            errors.coach_code = "Coach code is required.";
+        }
+
         const validGenders = ["Male", "Female", "Other"];
         const validEmploymentTypes = [
             "Full Time",
@@ -216,56 +234,33 @@ export async function POST(request) {
             "All Rounder",
         ];
 
-        if (gender !== null && gender !== "" && !validGenders.includes(gender)) {
-            return NextResponse.json(
-                { success: false, message: "Invalid gender. Allowed: Male, Female, Other" },
-                { status: 400 }
-            );
+        if (!gender || !validGenders.includes(gender)) {
+            errors.gender = "Please select a valid gender (Male, Female, Other).";
         }
 
         if (employment_type && !validEmploymentTypes.includes(employment_type)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid employment_type",
-                },
-                { status: 400 }
-            );
+            errors.employment_type = "Invalid employment type.";
         }
 
         // Normalize specialization
         let selectedSpecializations = null;
-        if (specialization) {
+        if (!specialization || (Array.isArray(specialization) && specialization.length === 0)) {
+            errors.specialization = "Please select at least one specialization.";
+        } else {
             const specs = Array.isArray(specialization)
                 ? specialization
                 : String(specialization).split(",").map((s) => s.trim()).filter(Boolean);
 
             if (specs.some((item) => !validSpecializations.includes(item))) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Invalid specialization. Allowed: " + validSpecializations.join(", "),
-                    },
-                    { status: 400 }
-                );
+                errors.specialization = "Invalid specialization selected. Allowed: " + validSpecializations.join(", ");
+            } else {
+                selectedSpecializations = specs;
             }
-            selectedSpecializations = specs;
         }
 
         const experience = Number(experience_years || 0);
-
-        if (
-            !Number.isFinite(experience) ||
-            experience < 0 ||
-            experience > 999.9
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid experience_years",
-                },
-                { status: 400 }
-            );
+        if (!Number.isFinite(experience) || experience < 0 || experience > 999.9) {
+            errors.experience_years = "Experience years must be a valid number between 0 and 999.";
         }
 
         if (
@@ -273,8 +268,23 @@ export async function POST(request) {
             salary !== "" &&
             (!Number.isFinite(Number(salary)) || Number(salary) < 0)
         ) {
+            errors.salary = "Salary must be a valid non-negative number.";
+        }
+
+        if (emergency_contact_phone && String(emergency_contact_phone).trim()) {
+            const digits = String(emergency_contact_phone).replace(/\D/g, "");
+            if (digits.length < 10 || digits.length > 15) {
+                errors.emergency_contact_phone = "Emergency contact phone must be between 10 and 15 digits.";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "Invalid salary" },
+                {
+                    success: false,
+                    message: Object.values(errors)[0],
+                    errors,
+                },
                 { status: 400 }
             );
         }
@@ -308,6 +318,26 @@ export async function POST(request) {
                     {
                         success: false,
                         message: "Coach profile already exists for this user",
+                        errors: { user_id: "A coach profile already exists for this user account." },
+                    },
+                    { status: 409 }
+                );
+            }
+        }
+
+        // Validate coach_code uniqueness per academy
+        if (coach_code && coach_code.trim()) {
+            const [existingCode] = await connection.execute(
+                `SELECT id FROM cst_coaches WHERE academy_id = ? AND coach_code = ? AND is_deleted = 0 LIMIT 1`,
+                [academy_id, coach_code.trim()]
+            );
+
+            if (existingCode.length > 0) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: "Coach code already exists in this academy",
+                        errors: { coach_code: "A coach with this code already exists in this academy." },
                     },
                     { status: 409 }
                 );
@@ -317,13 +347,13 @@ export async function POST(request) {
         // Validate academy
         if (academy_id !== null && academy_id !== "") {
             const [academies] = await connection.execute(
-                "SELECT id FROM cst_academy WHERE id = ?",
+                "SELECT id FROM cst_academy WHERE id = ? AND is_deleted = 0 AND status = 1",
                 [academy_id]
             );
 
             if (academies.length === 0) {
                 return NextResponse.json(
-                    { success: false, message: "Academy not found" },
+                    { success: false, message: "Academy not found or inactive", errors: { academy_id: "Selected academy not found or inactive." } },
                     { status: 400 }
                 );
             }
@@ -334,13 +364,13 @@ export async function POST(request) {
             const [branches] = await connection.execute(
                 `SELECT id, academy_id
                  FROM cst_branch
-                 WHERE id = ?`,
+                 WHERE id = ? AND is_deleted = 0 AND status = 1`,
                 [branch_id]
             );
 
             if (branches.length === 0) {
                 return NextResponse.json(
-                    { success: false, message: "Branch not found" },
+                    { success: false, message: "Branch not found or inactive", errors: { branch_id: "Selected branch not found or inactive." } },
                     { status: 400 }
                 );
             }
@@ -354,6 +384,7 @@ export async function POST(request) {
                     {
                         success: false,
                         message: "Branch does not belong to selected academy",
+                        errors: { branch_id: "Selected branch does not belong to the chosen academy." },
                     },
                     { status: 400 }
                 );

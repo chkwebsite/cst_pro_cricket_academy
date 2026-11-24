@@ -433,57 +433,48 @@ export async function POST(request) {
         // VALIDATION
         // =====================================================
 
+        const errors = {};
+
         if (!appointment_no) {
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Appointment number is required"
-                },
-                { status: 400 }
-            );
-
+            errors.appointment_no = "Appointment number is required.";
         }
-
 
         if (!first_name) {
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "First name is required"
-                },
-                { status: 400 }
-            );
-
+            errors.first_name = "First name is required.";
         }
-
 
         if (!password) {
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Password is required"
-                },
-                { status: 400 }
-            );
-
+            errors.password = "Password is required.";
+        } else if (password.length < 6) {
+            errors.password = "Password must be at least 6 characters.";
         }
-
 
         if (!user_type) {
+            errors.user_type = "User type is required.";
+        }
 
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (email && !emailRegex.test(email)) {
+            errors.email = "Please enter a valid email address.";
+        }
+
+        if (phone) {
+            const phoneDigits = String(phone).replace(/\D/g, "");
+            if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+                errors.phone = "Please enter a valid phone number (10-15 digits).";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "User type is required"
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
-
         }
-
 
         // =====================================================
         // PLAYER CHECK
@@ -507,8 +498,8 @@ export async function POST(request) {
                 SELECT id
                 FROM cst_users
                 WHERE appointment_no = ?
-    LIMIT 1
-        `,
+                LIMIT 1
+                `,
                 [appointment_no]
             );
 
@@ -518,8 +509,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Appointment number already exists"
+                    message: "Appointment number already exists",
+                    errors: { appointment_no: "A user with this appointment/admission number already exists." }
                 },
                 { status: 409 }
             );
@@ -539,8 +530,8 @@ export async function POST(request) {
                     SELECT id
                     FROM cst_users
                     WHERE email = ?
-    LIMIT 1
-        `,
+                    LIMIT 1
+                    `,
                     [email]
                 );
 
@@ -550,8 +541,8 @@ export async function POST(request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message:
-                            "Email already exists"
+                        message: "Email already exists",
+                        errors: { email: "A user with this email address already exists." }
                     },
                     { status: 409 }
                 );
@@ -593,8 +584,8 @@ export async function POST(request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message:
-                            "Player admission not found"
+                        message: "Player admission not found",
+                        errors: { appointment_no: "Player admission record not found for this admission number." }
                     },
                     { status: 404 }
                 );
@@ -609,8 +600,8 @@ export async function POST(request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message:
-                            "This player is already linked with a user"
+                        message: "This player is already linked with a user",
+                        errors: { appointment_no: "This player admission is already linked to another user account." }
                     },
                     { status: 409 }
                 );
@@ -649,8 +640,8 @@ export async function POST(request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message:
-                            "Staff record not found"
+                        message: "Staff record not found",
+                        errors: { appointment_no: "Staff record not found for this appointment number." }
                     },
                     { status: 404 }
                 );
@@ -665,8 +656,8 @@ export async function POST(request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        message:
-                            "This staff is already linked with a user"
+                        message: "This staff is already linked with a user",
+                        errors: { appointment_no: "This staff member is already linked to another user account." }
                     },
                     { status: 409 }
                 );

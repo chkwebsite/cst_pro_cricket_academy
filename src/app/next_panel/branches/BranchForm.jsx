@@ -31,9 +31,9 @@ export function buildBranchPayload(values) {
         branch_name: values.branch_name.trim(),
         branch_code: values.branch_code.trim(),
         directions: values.directions?.trim() || null,
-        email: values.email?.trim() || null,
-        phone: values.phone?.trim() || null,
-        address: values.address?.trim() || null,
+        email: values.email.trim(),
+        phone: values.phone.trim(),
+        address: values.address.trim(),
         city: values.city?.trim() || null,
         state: values.state?.trim() || null,
         pin_code: values.pin_code?.trim() || null,
@@ -49,6 +49,7 @@ export default function BranchForm({
     error,
     loading = false,
     isEdit = false,
+    branchId = null,
 }) {
     const { user } = useUser() || {};
     const roleStr = String(user?.role || user?.role_name || user?.user_type || "").toLowerCase();
@@ -223,10 +224,36 @@ export default function BranchForm({
     const validateAll = () => {
         const errors = {};
         if (!values.academy_id) errors.academy_id = "Please select an academy.";
-        if (!values.branch_name?.trim()) errors.branch_name = "Branch name is required.";
+        if (!values.branch_name?.trim()) {
+            errors.branch_name = "Branch name is required.";
+        } else if (
+            academyBranches.some(
+                (b) =>
+                    (!isEdit || Number(b.id) !== Number(branchId || values.id)) &&
+                    b.branch_name?.trim().toLowerCase() === values.branch_name.trim().toLowerCase()
+            )
+        ) {
+            errors.branch_name = "A branch with this name already exists in this academy.";
+        }
+
         if (!values.branch_code?.trim()) errors.branch_code = "Branch code is required.";
-        if (values.email && validateEmail(values.email)) errors.email = validateEmail(values.email);
-        if (values.phone && validatePhone(values.phone)) errors.phone = validatePhone(values.phone);
+
+        if (!values.email?.trim()) {
+            errors.email = "Email is required.";
+        } else if (validateEmail(values.email)) {
+            errors.email = validateEmail(values.email);
+        }
+
+        if (!values.phone?.trim()) {
+            errors.phone = "Phone number is required.";
+        } else if (validatePhone(values.phone)) {
+            errors.phone = validatePhone(values.phone);
+        }
+
+        if (!values.address?.trim()) {
+            errors.address = "Address is required.";
+        }
+
         if (values.pin_code && validatePinCode(values.pin_code)) errors.pin_code = validatePinCode(values.pin_code);
 
         setFieldErrors(errors);
@@ -263,14 +290,39 @@ export default function BranchForm({
     const handleBlur = (field) => () => {
         let err = null;
         if (field === "academy_id" && !values.academy_id) err = "Please select an academy.";
-        if (field === "branch_name" && !values.branch_name?.trim()) err = "Branch name is required.";
+        if (field === "branch_name") {
+            if (!values.branch_name?.trim()) {
+                err = "Branch name is required.";
+            } else if (
+                academyBranches.some(
+                    (b) =>
+                        (!isEdit || Number(b.id) !== Number(branchId || values.id)) &&
+                        b.branch_name?.trim().toLowerCase() === values.branch_name.trim().toLowerCase()
+                )
+            ) {
+                err = "A branch with this name already exists in this academy.";
+            }
+        }
         if (field === "branch_code" && !values.branch_code?.trim()) err = "Branch code is required.";
-        if (field === "email" && values.email) err = validateEmail(values.email);
-        if (field === "phone" && values.phone) err = validatePhone(values.phone);
+        if (field === "email") {
+            if (!values.email?.trim()) err = "Email is required.";
+            else if (validateEmail(values.email)) err = validateEmail(values.email);
+        }
+        if (field === "phone") {
+            if (!values.phone?.trim()) err = "Phone number is required.";
+            else if (validatePhone(values.phone)) err = validatePhone(values.phone);
+        }
+        if (field === "address" && !values.address?.trim()) err = "Address is required.";
         if (field === "pin_code" && values.pin_code) err = validatePinCode(values.pin_code);
 
         if (err) {
             setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
         }
     };
 
@@ -345,6 +397,7 @@ export default function BranchForm({
                         onChange={handleChange("branch_name")}
                         onBlur={handleBlur("branch_name")}
                         disabled={loading}
+                        maxLength="50"
                     />
                     <FormError error={fieldErrors.branch_name} />
                 </div>
@@ -411,7 +464,7 @@ export default function BranchForm({
                 </div>
 
                 <div className="col-md-6">
-                    <label className="form-label" htmlFor="email">Email</label>
+                    <label className="form-label" htmlFor="email">Email <span className="text-danger ms-1">*</span></label>
                     <input
                         type="email"
                         id="email"
@@ -427,7 +480,7 @@ export default function BranchForm({
                 </div>
 
                 <div className="col-md-6">
-                    <label className="form-label" htmlFor="phone">Phone</label>
+                    <label className="form-label" htmlFor="phone">Phone <span className="text-danger ms-1">*</span></label>
                     <input
                         id="phone"
                         name="phone"
@@ -442,8 +495,19 @@ export default function BranchForm({
                 </div>
 
                 <div className="col-12">
-                    <label className="form-label" htmlFor="address">Address</label>
-                    <textarea id="address" name="address" className="form-control" rows={3} placeholder="Street address, locality" value={values.address || ""} onChange={handleChange("address")} disabled={loading} />
+                    <label className="form-label" htmlFor="address">Address <span className="text-danger ms-1">*</span></label>
+                    <textarea
+                        id="address"
+                        name="address"
+                        className={`form-control ${fieldErrors.address ? "is-invalid border-danger" : ""}`}
+                        rows={3}
+                        placeholder="Street address, locality"
+                        value={values.address || ""}
+                        onChange={handleChange("address")}
+                        onBlur={handleBlur("address")}
+                        disabled={loading}
+                    />
+                    <FormError error={fieldErrors.address} />
                 </div>
 
                 <div className="col-12">

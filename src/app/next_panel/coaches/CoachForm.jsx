@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel, validatePhone } from "@/app/components/form";
 
 const SPECIALIZATION_OPTIONS = [
     "Batting",
@@ -52,6 +53,7 @@ export default function CoachForm({ id = null }) {
     const [fetching, setFetching] = useState(false);
     const [optionsLoading, setOptionsLoading] = useState(true);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successNotice, setSuccessNotice] = useState("");
 
     const hasSessionUser = Boolean(user);
@@ -180,6 +182,14 @@ export default function CoachForm({ id = null }) {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
 
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+
         if (name === "academy_id") {
             const newAcadId = value === "" ? "" : Number(value);
             setFormData((prev) => {
@@ -211,7 +221,76 @@ export default function CoachForm({ id = null }) {
         }));
     };
 
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "user_id" && !isEdit && !formData.user_id) err = "Please select a user account.";
+        if (field === "coach_code" && !formData.coach_code?.trim()) err = "Coach code is required.";
+        if (field === "academy_id" && !formData.academy_id) err = "Please select an academy.";
+        if (field === "branch_id" && !formData.branch_id) err = "Please select a branch.";
+        if (field === "gender" && !formData.gender) err = "Please select gender.";
+        if (field === "experience_years" && formData.experience_years !== "" && (isNaN(Number(formData.experience_years)) || Number(formData.experience_years) < 0)) {
+            err = "Experience years must be a valid non-negative number.";
+        }
+        if (field === "salary" && formData.salary !== "" && formData.salary !== null && (isNaN(Number(formData.salary)) || Number(formData.salary) < 0)) {
+            err = "Salary must be a valid non-negative number.";
+        }
+        if (field === "emergency_contact_phone" && formData.emergency_contact_phone?.trim()) {
+            err = validatePhone(formData.emergency_contact_phone, "Emergency contact phone");
+        }
+
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!isEdit && !formData.user_id) errors.user_id = "Please select a user account for this coach profile.";
+        if (!formData.coach_code?.trim()) errors.coach_code = "Coach code is required.";
+        if (!formData.academy_id) errors.academy_id = "Please select an academy.";
+        if (!formData.branch_id) errors.branch_id = "Please select a branch.";
+        if (!formData.specialization || formData.specialization.length === 0) {
+            errors.specialization = "Please select at least one specialization.";
+        }
+        if (!formData.gender) errors.gender = "Please select gender.";
+        if (formData.experience_years !== "" && (isNaN(Number(formData.experience_years)) || Number(formData.experience_years) < 0)) {
+            errors.experience_years = "Experience years must be a valid non-negative number.";
+        }
+        if (formData.salary !== "" && formData.salary !== null && (isNaN(Number(formData.salary)) || Number(formData.salary) < 0)) {
+            errors.salary = "Salary must be a valid non-negative number.";
+        }
+        if (formData.emergency_contact_phone?.trim()) {
+            const phoneErr = validatePhone(formData.emergency_contact_phone, "Emergency contact phone");
+            if (phoneErr) errors.emergency_contact_phone = phoneErr;
+        }
+
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
     const handleSpecializationToggle = (spec) => {
+        if (fieldErrors.specialization) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.specialization;
+                return next;
+            });
+        }
         setFormData((prev) => {
             const current = prev.specialization || [];
             if (current.includes(spec)) {
@@ -232,10 +311,7 @@ export default function CoachForm({ id = null }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!isEdit && !formData.user_id) {
-            setError("Please select a User account for this coach profile.");
-            return;
-        }
+        if (!validateAll()) return;
 
         setLoading(true);
         setError("");
@@ -266,6 +342,15 @@ export default function CoachForm({ id = null }) {
 
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors((prev) => ({ ...prev, ...json.errors }));
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save coach profile");
             }
 
@@ -336,11 +421,12 @@ export default function CoachForm({ id = null }) {
                         </h6>
                         <div className="row g-3">
                             <div className="col-md-6">
-                                <label className="form-label fw-semibold">
+                                <label className="form-label fw-semibold" htmlFor="user_id">
                                     Linked User Account {!isEdit && <span className="text-danger">*</span>}
                                 </label>
                                 {isEdit ? (
                                     <input
+                                        id="user_id"
                                         type="text"
                                         className="form-control bg-light"
                                         value={formData.coach_name || `User ID: ${formData.user_id}`}
@@ -349,11 +435,12 @@ export default function CoachForm({ id = null }) {
                                     />
                                 ) : (
                                     <select
+                                        id="user_id"
                                         name="user_id"
-                                        className="form-select"
+                                        className={`form-select ${fieldErrors.user_id ? "is-invalid border-danger" : ""}`}
                                         value={formData.user_id}
                                         onChange={handleInputChange}
-                                        required
+                                        onBlur={handleBlur("user_id")}
                                     >
                                         <option value="">Select User Account...</option>
                                         {coachesUsers.map((u) => (
@@ -364,31 +451,41 @@ export default function CoachForm({ id = null }) {
                                         ))}
                                     </select>
                                 )}
+                                <FormError error={fieldErrors.user_id} />
                                 <div className="form-text">
                                     Coach profile is mapped to this user account in CST Crickinfo.
                                 </div>
                             </div>
 
                             <div className="col-md-6">
-                                <label className="form-label fw-semibold">Coach Code</label>
+                                <label className="form-label fw-semibold" htmlFor="coach_code">
+                                    Coach Code <span className="text-danger">*</span>
+                                </label>
                                 <input
+                                    id="coach_code"
                                     type="text"
                                     name="coach_code"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.coach_code ? "is-invalid border-danger" : ""}`}
                                     placeholder="e.g. CCH-001 or STF-2026-0004"
                                     value={formData.coach_code}
                                     onChange={handleInputChange}
+                                    onBlur={handleBlur("coach_code")}
                                 />
+                                <FormError error={fieldErrors.coach_code} />
                                 <div className="form-text">Unique identification code for this coach.</div>
                             </div>
 
                             <div className="col-md-6">
-                                <label className="form-label fw-semibold">Academy</label>
+                                <label className="form-label fw-semibold" htmlFor="academy_id">
+                                    Academy <span className="text-danger">*</span>
+                                </label>
                                 <select
+                                    id="academy_id"
                                     name="academy_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.academy_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.academy_id}
                                     onChange={handleInputChange}
+                                    onBlur={handleBlur("academy_id")}
                                     disabled={hasAssignedAcademy && !isAcademyAdmin}
                                 >
                                     <option value="">Select Academy...</option>
@@ -398,15 +495,20 @@ export default function CoachForm({ id = null }) {
                                         </option>
                                     ))}
                                 </select>
+                                <FormError error={fieldErrors.academy_id} />
                             </div>
 
                             <div className="col-md-6">
-                                <label className="form-label fw-semibold">Branch</label>
+                                <label className="form-label fw-semibold" htmlFor="branch_id">
+                                    Branch <span className="text-danger">*</span>
+                                </label>
                                 <select
+                                    id="branch_id"
                                     name="branch_id"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.branch_id ? "is-invalid border-danger" : ""}`}
                                     value={formData.branch_id}
                                     onChange={handleInputChange}
+                                    onBlur={handleBlur("branch_id")}
                                     disabled={isBranchRestricted && hasAssignedBranch}
                                 >
                                     <option value="">Select Branch...</option>
@@ -422,6 +524,7 @@ export default function CoachForm({ id = null }) {
                                             </option>
                                         ))}
                                 </select>
+                                <FormError error={fieldErrors.branch_id} />
                             </div>
                         </div>
                     </div>
@@ -457,6 +560,7 @@ export default function CoachForm({ id = null }) {
                                     );
                                 })}
                             </div>
+                            <FormError error={fieldErrors.specialization} />
                             <div className="form-text mt-1">
                                 Select one or multiple areas of coaching expertise.
                             </div>
@@ -464,22 +568,26 @@ export default function CoachForm({ id = null }) {
 
                         <div className="row g-3">
                             <div className="col-md-4">
-                                <label className="form-label fw-semibold">Experience (Years)</label>
+                                <label className="form-label fw-semibold" htmlFor="experience_years">Experience (Years)</label>
                                 <input
+                                    id="experience_years"
                                     type="number"
                                     step="0.5"
                                     min="0"
                                     max="99"
                                     name="experience_years"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.experience_years ? "is-invalid border-danger" : ""}`}
                                     value={formData.experience_years}
                                     onChange={handleInputChange}
+                                    onBlur={handleBlur("experience_years")}
                                 />
+                                <FormError error={fieldErrors.experience_years} />
                             </div>
 
                             <div className="col-md-4">
-                                <label className="form-label fw-semibold">Educational / Cricket Qualification</label>
+                                <label className="form-label fw-semibold" htmlFor="qualification">Educational / Cricket Qualification</label>
                                 <input
+                                    id="qualification"
                                     type="text"
                                     name="qualification"
                                     className="form-control"
@@ -490,8 +598,9 @@ export default function CoachForm({ id = null }) {
                             </div>
 
                             <div className="col-md-4">
-                                <label className="form-label fw-semibold">Previous Academy / Club</label>
+                                <label className="form-label fw-semibold" htmlFor="previous_academy">Previous Academy / Club</label>
                                 <input
+                                    id="previous_academy"
                                     type="text"
                                     name="previous_academy"
                                     className="form-control"
@@ -502,8 +611,9 @@ export default function CoachForm({ id = null }) {
                             </div>
 
                             <div className="col-12">
-                                <label className="form-label fw-semibold">Certifications & Accreditations</label>
+                                <label className="form-label fw-semibold" htmlFor="certifications">Certifications & Accreditations</label>
                                 <textarea
+                                    id="certifications"
                                     name="certifications"
                                     className="form-control"
                                     rows={2}
@@ -524,8 +634,9 @@ export default function CoachForm({ id = null }) {
                         </h6>
                         <div className="row g-3">
                             <div className="col-md-3">
-                                <label className="form-label fw-semibold">Employment Type</label>
+                                <label className="form-label fw-semibold" htmlFor="employment_type">Employment Type</label>
                                 <select
+                                    id="employment_type"
                                     name="employment_type"
                                     className="form-select"
                                     value={formData.employment_type}
@@ -540,22 +651,28 @@ export default function CoachForm({ id = null }) {
                             </div>
 
                             <div className="col-md-3">
-                                <label className="form-label fw-semibold">Gender</label>
+                                <label className="form-label fw-semibold" htmlFor="gender">
+                                    Gender <span className="text-danger">*</span>
+                                </label>
                                 <select
+                                    id="gender"
                                     name="gender"
-                                    className="form-select"
+                                    className={`form-select ${fieldErrors.gender ? "is-invalid border-danger" : ""}`}
                                     value={formData.gender}
                                     onChange={handleInputChange}
+                                    onBlur={handleBlur("gender")}
                                 >
                                     <option value="Male">Male</option>
                                     <option value="Female">Female</option>
                                     <option value="Other">Other</option>
                                 </select>
+                                <FormError error={fieldErrors.gender} />
                             </div>
 
                             <div className="col-md-3">
-                                <label className="form-label fw-semibold">Date of Birth</label>
+                                <label className="form-label fw-semibold" htmlFor="date_of_birth">Date of Birth</label>
                                 <input
+                                    id="date_of_birth"
                                     type="date"
                                     name="date_of_birth"
                                     className="form-control"
@@ -565,8 +682,9 @@ export default function CoachForm({ id = null }) {
                             </div>
 
                             <div className="col-md-3">
-                                <label className="form-label fw-semibold">Joining Date</label>
+                                <label className="form-label fw-semibold" htmlFor="joining_date">Joining Date</label>
                                 <input
+                                    id="joining_date"
                                     type="date"
                                     name="joining_date"
                                     className="form-control"
@@ -576,21 +694,25 @@ export default function CoachForm({ id = null }) {
                             </div>
 
                             <div className="col-md-4">
-                                <label className="form-label fw-semibold">Monthly Salary (₹)</label>
+                                <label className="form-label fw-semibold" htmlFor="salary">Monthly Salary (₹)</label>
                                 <input
+                                    id="salary"
                                     type="number"
                                     step="100"
                                     name="salary"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.salary ? "is-invalid border-danger" : ""}`}
                                     placeholder="e.g. 25000"
                                     value={formData.salary}
                                     onChange={handleInputChange}
+                                    onBlur={handleBlur("salary")}
                                 />
+                                <FormError error={fieldErrors.salary} />
                             </div>
 
                             <div className="col-md-4">
-                                <label className="form-label fw-semibold">Emergency Contact Name</label>
+                                <label className="form-label fw-semibold" htmlFor="emergency_contact_name">Emergency Contact Name</label>
                                 <input
+                                    id="emergency_contact_name"
                                     type="text"
                                     name="emergency_contact_name"
                                     className="form-control"
@@ -601,20 +723,24 @@ export default function CoachForm({ id = null }) {
                             </div>
 
                             <div className="col-md-4">
-                                <label className="form-label fw-semibold">Emergency Contact Phone</label>
+                                <label className="form-label fw-semibold" htmlFor="emergency_contact_phone">Emergency Contact Phone</label>
                                 <input
+                                    id="emergency_contact_phone"
                                     type="tel"
                                     name="emergency_contact_phone"
-                                    className="form-control"
+                                    className={`form-control ${fieldErrors.emergency_contact_phone ? "is-invalid border-danger" : ""}`}
                                     placeholder="e.g. +91 9876543210"
                                     value={formData.emergency_contact_phone}
                                     onChange={handleInputChange}
+                                    onBlur={handleBlur("emergency_contact_phone")}
                                 />
+                                <FormError error={fieldErrors.emergency_contact_phone} />
                             </div>
 
                             <div className="col-md-6">
-                                <label className="form-label fw-semibold">Status</label>
+                                <label className="form-label fw-semibold" htmlFor="status">Status</label>
                                 <select
+                                    id="status"
                                     name="status"
                                     className="form-select"
                                     value={formData.status}
@@ -626,8 +752,9 @@ export default function CoachForm({ id = null }) {
                             </div>
 
                             <div className="col-12">
-                                <label className="form-label fw-semibold">Coach Bio & Achievements</label>
+                                <label className="form-label fw-semibold" htmlFor="bio">Coach Bio & Achievements</label>
                                 <textarea
+                                    id="bio"
                                     name="bio"
                                     className="form-control"
                                     rows={4}

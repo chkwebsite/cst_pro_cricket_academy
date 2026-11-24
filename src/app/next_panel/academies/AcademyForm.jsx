@@ -83,8 +83,23 @@ export default function AcademyForm({
         const errors = {};
         if (!values.academy_name?.trim()) errors.academy_name = "Academy name is required.";
         if (!values.academy_code?.trim()) errors.academy_code = "Academy code is required.";
-        if (values.email && validateEmail(values.email)) errors.email = validateEmail(values.email);
-        if (values.phone && validatePhone(values.phone)) errors.phone = validatePhone(values.phone);
+        if (!values.contact_person?.trim()) errors.contact_person = "Contact person is required.";
+
+        if (!values.email?.trim()) {
+            errors.email = "Email is required.";
+        } else if (validateEmail(values.email)) {
+            errors.email = validateEmail(values.email);
+        }
+
+        if (!values.phone?.trim()) {
+            errors.phone = "Phone number is required.";
+        } else if (validatePhone(values.phone)) {
+            errors.phone = validatePhone(values.phone);
+        }
+
+        if (!values.address?.trim()) errors.address = "Address is required.";
+        if (!values.city?.trim()) errors.city = "City is required.";
+        if (!values.state?.trim()) errors.state = "State is required.";
         if (values.pin_code && validatePinCode(values.pin_code)) errors.pin_code = validatePinCode(values.pin_code);
 
         setFieldErrors(errors);
@@ -122,12 +137,28 @@ export default function AcademyForm({
         let err = null;
         if (field === "academy_name" && !values.academy_name?.trim()) err = "Academy name is required.";
         if (field === "academy_code" && !values.academy_code?.trim()) err = "Academy code is required.";
-        if (field === "email" && values.email) err = validateEmail(values.email);
-        if (field === "phone" && values.phone) err = validatePhone(values.phone);
+        if (field === "contact_person" && !values.contact_person?.trim()) err = "Contact person is required.";
+        if (field === "email") {
+            if (!values.email?.trim()) err = "Email is required.";
+            else if (validateEmail(values.email)) err = validateEmail(values.email);
+        }
+        if (field === "phone") {
+            if (!values.phone?.trim()) err = "Phone number is required.";
+            else if (validatePhone(values.phone)) err = validatePhone(values.phone);
+        }
+        if (field === "address" && !values.address?.trim()) err = "Address is required.";
+        if (field === "city" && !values.city?.trim()) err = "City is required.";
+        if (field === "state" && !values.state?.trim()) err = "State is required.";
         if (field === "pin_code" && values.pin_code) err = validatePinCode(values.pin_code);
 
         if (err) {
             setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
         }
     };
 
@@ -228,6 +259,7 @@ export default function AcademyForm({
                         onChange={handleChange("academy_name")}
                         onBlur={handleBlur("academy_name")}
                         disabled={loading}
+                        maxLength="50"
                     />
                     <FormError error={fieldErrors.academy_name} />
                 </div>
@@ -247,12 +279,22 @@ export default function AcademyForm({
                 </div>
 
                 <div className="col-md-4">
-                    <label className="form-label" htmlFor="contact_person">Contact Person</label>
-                    <input id="contact_person" name="contact_person" className="form-control" value={values.contact_person} onChange={handleChange("contact_person")} disabled={loading} />
+                    <label className="form-label" htmlFor="contact_person">Contact Person <span className="text-danger ms-1">*</span></label>
+                    <input
+                        id="contact_person"
+                        name="contact_person"
+                        className={`form-control ${fieldErrors.contact_person ? "is-invalid border-danger" : ""}`}
+                        value={values.contact_person}
+                        onChange={handleChange("contact_person")}
+                        onBlur={handleBlur("contact_person")}
+                        disabled={loading}
+                        maxLength="50"
+                    />
+                    <FormError error={fieldErrors.contact_person} />
                 </div>
 
                 <div className="col-md-4">
-                    <label className="form-label" htmlFor="email">Email</label>
+                    <label className="form-label" htmlFor="email">Email <span className="text-danger ms-1">*</span></label>
                     <input
                         type="email"
                         id="email"
@@ -267,7 +309,7 @@ export default function AcademyForm({
                 </div>
 
                 <div className="col-md-4">
-                    <label className="form-label" htmlFor="phone">Phone</label>
+                    <label className="form-label" htmlFor="phone">Phone <span className="text-danger ms-1">*</span></label>
                     <input
                         id="phone"
                         name="phone"
@@ -300,18 +342,46 @@ export default function AcademyForm({
                 </div>
 
                 <div className="col-12">
-                    <label className="form-label" htmlFor="address">Address</label>
-                    <textarea id="address" name="address" className="form-control" rows={3} value={values.address} onChange={handleChange("address")} disabled={loading} />
+                    <label className="form-label" htmlFor="address">Address <span className="text-danger ms-1">*</span></label>
+                    <textarea
+                        id="address"
+                        name="address"
+                        className={`form-control ${fieldErrors.address ? "is-invalid border-danger" : ""}`}
+                        rows={3}
+                        value={values.address}
+                        onChange={handleChange("address")}
+                        onBlur={handleBlur("address")}
+                        disabled={loading}
+                    />
+                    <FormError error={fieldErrors.address} />
                 </div>
 
                 <div className="col-md-6">
-                    <label className="form-label" htmlFor="city">City</label>
-                    <input id="city" name="city" className="form-control" value={values.city} onChange={handleChange("city")} disabled={loading} />
+                    <label className="form-label" htmlFor="city">City <span className="text-danger ms-1">*</span></label>
+                    <input
+                        id="city"
+                        name="city"
+                        className={`form-control ${fieldErrors.city ? "is-invalid border-danger" : ""}`}
+                        value={values.city}
+                        onChange={handleChange("city")}
+                        onBlur={handleBlur("city")}
+                        disabled={loading}
+                    />
+                    <FormError error={fieldErrors.city} />
                 </div>
 
                 <div className="col-md-6">
-                    <label className="form-label" htmlFor="state">State</label>
-                    <input id="state" name="state" className="form-control" value={values.state} onChange={handleChange("state")} disabled={loading} />
+                    <label className="form-label" htmlFor="state">State <span className="text-danger ms-1">*</span></label>
+                    <input
+                        id="state"
+                        name="state"
+                        className={`form-control ${fieldErrors.state ? "is-invalid border-danger" : ""}`}
+                        value={values.state}
+                        onChange={handleChange("state")}
+                        onBlur={handleBlur("state")}
+                        disabled={loading}
+                    />
+                    <FormError error={fieldErrors.state} />
                 </div>
 
                 <div className="col-md-4">

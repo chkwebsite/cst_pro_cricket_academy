@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 // NOTE: apna actual endpoint yahan set karein (list + create dono ke liye)
 const MENU_PERMISSION_API = "/api/menu-permissions";
@@ -94,6 +95,34 @@ export default function MenuPermissionForm({
     const [assignedIds, setAssignedIds] = useState([]);
     const [search, setSearch] = useState("");
     const [optionsError, setOptionsError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (fieldName) => {
+        setFieldErrors((prev) => {
+            if (!prev[fieldName]) return prev;
+            const updated = { ...prev };
+            delete updated[fieldName];
+            return updated;
+        });
+    };
+
+    const handleFormSubmit = (e) => {
+        e.preventDefault();
+        const errs = {};
+        if (!values.menu_id) errs.menu_id = "Please select a menu.";
+        if (selectedIds.length === 0) errs.permission_id = "Please select at least one permission.";
+        if (Object.keys(errs).length > 0) {
+            setFieldErrors(errs);
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return;
+        }
+        if (onSubmit) onSubmit(e);
+    };
 
     useEffect(() => {
         async function loadOptions() {
@@ -172,6 +201,7 @@ export default function MenuPermissionForm({
     const isAssigned = (pid) => assignedIds.includes(Number(pid));
 
     const setSelected = (ids) => {
+        clearError("permission_id");
         onChange({
             ...values,
             permission_ids: ids,
@@ -238,7 +268,7 @@ export default function MenuPermissionForm({
     const moduleNames = Object.keys(groupedPermissions);
 
     return (
-        <form id={formId} onSubmit={onSubmit}>
+        <form id={formId} onSubmit={handleFormSubmit} noValidate>
             {error && <div className="alert alert-danger">{error}</div>}
 
             {optionsError && (
@@ -248,20 +278,22 @@ export default function MenuPermissionForm({
             {/* Menu */}
             <div className="mb-4" style={{ maxWidth: 420 }}>
                 <label className="form-label fw-semibold">
-                    Menu <span className="text-danger">*</span>
+                    Menu <RequiredLabel />
                 </label>
 
                 <select
-                    className="form-select"
+                    name="menu_id"
+                    id="menu_id"
+                    className={`form-select ${fieldErrors.menu_id ? "is-invalid border-danger" : ""}`}
                     value={values.menu_id}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                        clearError("menu_id");
                         onChange({
                             ...values,
                             menu_id: e.target.value,
                             ...(isEdit ? {} : { permission_id: "", permission_ids: [] }),
-                        })
-                    }
-                    required
+                        });
+                    }}
                     disabled={loading}
                 >
                     <option value="">Select menu</option>
@@ -272,17 +304,19 @@ export default function MenuPermissionForm({
                         </option>
                     ))}
                 </select>
+                <FormError error={fieldErrors.menu_id} />
             </div>
 
             {/* Toolbar */}
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
                 <div>
-                    <label className="form-label fw-semibold mb-0">
-                        Permissions <span className="text-danger">*</span>
+                    <label className="form-label fw-semibold mb-0" id="permission_id">
+                        Permissions <RequiredLabel />
                         <span className="badge text-bg-primary ms-2">
                             {selectedIds.length} selected
                         </span>
                     </label>
+                    <FormError error={fieldErrors.permission_id} />
                     {!isEdit && !values.menu_id && (
                         <div className="form-text">
                             Pehle menu select karein, phir permissions choose karein.

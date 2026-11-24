@@ -84,30 +84,28 @@ function normalizeBody(body) {
 }
 
 function validate(data) {
-    const positiveFields = [
-        "academy_id",
-        "branch_id",
-        "user_program_id",
-        "coach_user_id",
-        "session_duration",
-    ];
+    const errors = {};
 
-    for (const field of positiveFields) {
-        if (data[field] !== undefined) {
-            if (
-                !Number.isInteger(data[field]) ||
-                data[field] <= 0
-            ) {
-                return `${field} must be a positive integer.`;
-            }
-        }
+    if (data.academy_id !== undefined && (!Number.isInteger(data.academy_id) || data.academy_id <= 0)) {
+        errors.academy_id = "Please select an academy.";
+    }
+    if (data.branch_id !== undefined && (!Number.isInteger(data.branch_id) || data.branch_id <= 0)) {
+        errors.branch_id = "Please select a branch.";
+    }
+    if (data.user_program_id !== undefined && (!Number.isInteger(data.user_program_id) || data.user_program_id <= 0)) {
+        errors.user_program_id = "Please select a player program enrollment.";
+    }
+    if (data.coach_user_id !== undefined && (!Number.isInteger(data.coach_user_id) || data.coach_user_id <= 0)) {
+        errors.coach_user_id = "Please select a personal coach.";
+    }
+    if (data.session_duration !== undefined && (!Number.isInteger(data.session_duration) || data.session_duration <= 0)) {
+        errors.session_duration = "Session duration must be a positive integer.";
     }
 
     if (data.training_days !== undefined) {
         const days = parseDays(data.training_days);
-
         if (!days.length || days.some((day) => !VALID_DAYS.includes(day))) {
-            return "Please provide valid training_days.";
+            errors.training_days = "Please select valid training days.";
         }
     }
 
@@ -116,14 +114,14 @@ function validate(data) {
         data.end_time !== undefined &&
         data.start_time >= data.end_time
     ) {
-        return "end_time must be later than start_time.";
+        errors.end_time = "End time must be later than start time.";
     }
 
     if (
         data.start_date !== undefined &&
         !/^\d{4}-\d{2}-\d{2}$/.test(data.start_date)
     ) {
-        return "start_date must be in YYYY-MM-DD format.";
+        errors.start_date = "Start date must be in YYYY-MM-DD format.";
     }
 
     if (
@@ -131,7 +129,7 @@ function validate(data) {
         data.end_date !== null &&
         !/^\d{4}-\d{2}-\d{2}$/.test(data.end_date)
     ) {
-        return "end_date must be in YYYY-MM-DD format.";
+        errors.end_date = "End date must be in YYYY-MM-DD format.";
     }
 
     if (
@@ -139,20 +137,22 @@ function validate(data) {
         data.end_date &&
         data.end_date < data.start_date
     ) {
-        return "end_date cannot be before start_date.";
+        errors.end_date = "End date cannot be before start date.";
     }
 
     if (
         data.status !== undefined &&
         !VALID_STATUSES.includes(data.status)
     ) {
-        return "Invalid status.";
+        errors.status = "Invalid training status.";
     }
 
-    return null;
+    return errors;
 }
 
 async function validateRelations(connection, data) {
+    const errors = {};
+
     const [branches] = await connection.execute(
         `SELECT id
          FROM cst_branch
@@ -162,7 +162,7 @@ async function validateRelations(connection, data) {
     );
 
     if (!branches.length) {
-        return "Selected branch does not belong to this academy.";
+        errors.branch_id = "Selected branch does not belong to this academy.";
     }
 
     const [enrollments] = await connection.execute(
@@ -185,14 +185,12 @@ async function validateRelations(connection, data) {
     );
 
     if (!enrollments.length) {
-        return "Active enrollment not found for the selected academy and branch.";
-    }
-
-    if (
+        errors.user_program_id = "Active enrollment not found for the selected academy and branch.";
+    } else if (
         enrollments[0].program_branch_id !== null &&
         Number(enrollments[0].program_branch_id) !== data.branch_id
     ) {
-        return "Selected program does not belong to this branch.";
+        errors.user_program_id = "Selected program does not belong to this branch.";
     }
 
     const [coaches] = await connection.execute(
@@ -212,10 +210,10 @@ async function validateRelations(connection, data) {
     );
 
     if (!coaches.length) {
-        return "Active coach not found for the selected academy and branch.";
+        errors.coach_user_id = "Active coach not found for the selected academy and branch.";
     }
 
-    return null;
+    return errors;
 }
 
 function checkAuthorization(user, record) {
@@ -413,7 +411,7 @@ export async function PUT(request, { params }) {
             ...data,
         };
 
-        const fullValidationError = validate({
+        const errors = validate({
             ...updated,
             academy_id: Number(updated.academy_id),
             branch_id: Number(updated.branch_id),
@@ -422,25 +420,14 @@ export async function PUT(request, { params }) {
             session_duration: Number(updated.session_duration),
         });
 
-        if (fullValidationError) {
-            await connection.rollback();
-            transactionStarted = false;
-            return errorResponse(fullValidationError, 422);
-        }
-
-        const relationError = await validateRelations(connection, {
+        const relationErrors = await validateRelations(connection, {
             ...updated,
             academy_id: Number(updated.academy_id),
             branch_id: Number(updated.branch_id),
             user_program_id: Number(updated.user_program_id),
             coach_user_id: Number(updated.coach_user_id),
         });
-
-        if (relationError) {
-            await connection.rollback();
-            transactionStarted = false;
-            return errorResponse(relationError, 422);
-        }
+        Object.assign(errors, relationErrors);
 
         if (["Scheduled", "Active"].includes(updated.status)) {
             const days = parseDays(updated.training_days);
@@ -475,13 +462,17 @@ export async function PUT(request, { params }) {
             );
 
             if (hasConflict) {
-                await connection.rollback();
-                transactionStarted = false;
-                return errorResponse(
-                    "Coach already has an overlapping training schedule.",
-                    409
-                );
+                errors.coach_user_id = "Coach already has an overlapping training schedule.";
             }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            await connection.rollback();
+            transactionStarted = false;
+            return NextResponse.json(
+                { success: false, message: Object.values(errors)[0], errors },
+                { status: 400 }
+            );
         }
 
         const fields = Object.keys(data);

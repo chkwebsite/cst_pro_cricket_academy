@@ -342,114 +342,45 @@ export async function POST(request) {
         // VALIDATION
         // ==========================================
 
-        if (!academy_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Academy ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!branch_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Branch ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!ground_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!slot_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Slot ID is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!customer_name) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Customer name is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!booking_date) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Booking date is required"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (!purpose) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Purpose is required"
-                },
-                { status: 400 }
-            );
-        }
+        const errors = {};
+        if (!academy_id) errors.academy_id = "Academy ID is required";
+        if (!branch_id) errors.branch_id = "Branch ID is required";
+        if (!ground_id) errors.ground_id = "Ground ID is required";
+        if (!slot_id) errors.slot_id = "Slot ID is required";
+        if (!customer_name || !String(customer_name).trim()) errors.customer_name = "Customer name is required";
+        if (!booking_date) errors.booking_date = "Booking date is required";
+        if (!purpose || !String(purpose).trim()) errors.purpose = "Purpose is required";
 
         const totalAmount = Number(total_amount);
         const paidAmount = Number(paid_amount);
 
-        if (totalAmount < 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Total amount cannot be negative"
-                },
-                { status: 400 }
-            );
+        if (isNaN(totalAmount) || totalAmount < 0) {
+            errors.total_amount = "Total amount cannot be negative";
         }
-
-        if (paidAmount < 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Paid amount cannot be negative"
-                },
-                { status: 400 }
-            );
-        }
-
-        if (paidAmount > totalAmount) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Paid amount cannot be greater than total amount"
-                },
-                { status: 400 }
-            );
+        if (isNaN(paidAmount) || paidAmount < 0) {
+            errors.paid_amount = "Paid amount cannot be negative";
+        } else if (paidAmount > totalAmount) {
+            errors.paid_amount = "Paid amount cannot be greater than total amount";
         }
 
         if (paidAmount > 0 && !payment_mode) {
+            errors.payment_mode = "Payment mode is required when paid amount is greater than 0";
+        }
+
+        if (customer_email && String(customer_email).trim() && !/^\S+@\S+\.\S+$/.test(String(customer_email).trim())) {
+            errors.customer_email = "Please enter a valid email address";
+        }
+
+        if (customer_phone && String(customer_phone).trim() && !/^[0-9+\-\s()]{7,20}$/.test(String(customer_phone).trim())) {
+            errors.customer_phone = "Please enter a valid phone number";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Payment mode is required when paid amount is greater than 0"
+                    message: Object.values(errors)[0],
+                    errors
                 },
                 { status: 400 }
             );
@@ -507,7 +438,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Ground does not belong to selected academy/branch"
+                    message: "Ground does not belong to selected academy/branch",
+                    errors: { ground_id: "Ground does not belong to selected academy/branch" }
                 },
                 { status: 400 }
             );
@@ -519,7 +451,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Ground is inactive"
+                    message: "Ground is inactive",
+                    errors: { ground_id: "Ground is inactive" }
                 },
                 { status: 400 }
             );
@@ -563,7 +496,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Invalid slot for selected ground"
+                    message: "Invalid slot for selected ground",
+                    errors: { slot_id: "Invalid slot for selected ground" }
                 },
                 { status: 400 }
             );
@@ -596,8 +530,9 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "This ground slot is already booked for selected date",
-                    booking_no: duplicateRows[0].booking_no
+                    message: `This ground slot is already booked for selected date (${duplicateRows[0].booking_no})`,
+                    booking_no: duplicateRows[0].booking_no,
+                    errors: { slot_id: `This ground slot is already booked for selected date (${duplicateRows[0].booking_no})` }
                 },
                 { status: 409 }
             );

@@ -82,11 +82,13 @@ export async function PUT(request, { params }) {
         const created_by = formData.get("created_by");
         const featured_image = formData.get("featured_image");
 
-        if (!category_name || !slug) {
-            return NextResponse.json({
-                success: false,
-                message: "Category name and slug are required"
-            }, { status: 400 });
+        const errors = {};
+
+        if (!category_name) {
+            errors.category_name = "Category name is required";
+        }
+        if (!slug) {
+            errors.slug = "Slug is required";
         }
 
         // Upload new image if provided
@@ -104,19 +106,84 @@ export async function PUT(request, { params }) {
             ];
 
             if (!allowedTypes.includes(featured_image.type)) {
+                errors.featured_image = "Only JPG, JPEG, PNG and WEBP images are allowed";
+            } else if (featured_image.size > 2 * 1024 * 1024) {
+                errors.featured_image = "Image size must be less than or equal to 2MB";
+            }
+        }
+
+        connection = await pool.getConnection();
+
+        const [existingRows] = await connection.execute(
+            `SELECT id, academy_id, featured_image
+             FROM cst_gallery_categories
+             WHERE id = ? AND is_deleted = 0
+             LIMIT 1`,
+            [id]
+        );
+
+        if (existingRows.length === 0) {
+            return NextResponse.json({
+                success: false,
+                message: "Gallery category not found"
+            }, { status: 404 });
+        }
+
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && Number(authUser.role_id) !== 1) {
+            if (existingRows[0].academy_id && authUser.academy_id && Number(existingRows[0].academy_id) !== Number(authUser.academy_id)) {
                 return NextResponse.json({
                     success: false,
-                    message: "Only JPG, JPEG, PNG and WEBP images are allowed"
-                }, { status: 400 });
+                    message: "Forbidden. Gallery category belongs to another academy."
+                }, { status: 403 });
             }
+        }
 
-            if (featured_image.size > 2 * 1024 * 1024) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Image size must be less than or equal to 2MB"
-                }, { status: 400 });
+        if (slug) {
+            const [duplicateSlug] = await connection.execute(
+                `SELECT id
+                 FROM cst_gallery_categories
+                 WHERE slug = ? AND id != ?
+                 LIMIT 1`,
+                [slug, id]
+            );
+
+            if (duplicateSlug.length > 0) {
+                errors.slug = "This category slug is already in use";
             }
+        }
 
+        const finalAcademyId =
+            academy_id === null || academy_id === "" ? null : academy_id;
+
+        if (finalAcademyId !== null) {
+            const [academy] = await connection.execute(
+                `SELECT id FROM cst_academy WHERE id = ? LIMIT 1`,
+                [finalAcademyId]
+            );
+
+            if (academy.length === 0) {
+                errors.academy_id = "Selected academy does not exist";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json({
+                success: false,
+                message: Object.values(errors)[0],
+                errors
+            }, { status: 400 });
+        }
+
+        const oldImagePath = existingRows[0].featured_image;
+
+        // Process image saving if provided and valid
+        if (
+            featured_image &&
+            typeof featured_image === "object" &&
+            typeof featured_image.arrayBuffer === "function" &&
+            featured_image.size > 0
+        ) {
             const uploadDir = path.join(
                 process.cwd(),
                 "public",
@@ -136,86 +203,6 @@ export async function PUT(request, { params }) {
             );
 
             newImagePath = `/images/uploads/gallery-categories/${fileName}`;
-        }
-
-        connection = await pool.getConnection();
-
-        const [existingRows] = await connection.execute(
-            `SELECT id, academy_id, featured_image
-             FROM cst_gallery_categories
-             WHERE id = ? AND is_deleted = 0
-             LIMIT 1`,
-            [id]
-        );
-
-        if (existingRows.length === 0) {
-            if (newImagePath) {
-                await fs.unlink(
-                    path.join(process.cwd(), "public", newImagePath.replace(/^\//, ""))
-                ).catch(() => { });
-            }
-
-            return NextResponse.json({
-                success: false,
-                message: "Gallery category not found"
-            }, { status: 404 });
-        }
-
-        const authUser = await getAuthenticatedUser(request);
-        if (authUser && Number(authUser.role_id) !== 1) {
-            if (existingRows[0].academy_id && authUser.academy_id && Number(existingRows[0].academy_id) !== Number(authUser.academy_id)) {
-                return NextResponse.json({
-                    success: false,
-                    message: "Forbidden. Gallery category belongs to another academy."
-                }, { status: 403 });
-            }
-        }
-
-        const oldImagePath = existingRows[0].featured_image;
-
-        // Check duplicate slug
-        const [duplicateSlug] = await connection.execute(
-            `SELECT id
-             FROM cst_gallery_categories
-             WHERE slug = ? AND id != ?
-    LIMIT 1`,
-            [slug, id]
-        );
-
-        if (duplicateSlug.length > 0) {
-            if (newImagePath) {
-                await fs.unlink(
-                    path.join(process.cwd(), "public", newImagePath.replace(/^\//, ""))
-                ).catch(() => { });
-            }
-
-            return NextResponse.json({
-                success: false,
-                message: "This slug already exists"
-            }, { status: 409 });
-        }
-
-        const finalAcademyId =
-            academy_id === null || academy_id === "" ? null : academy_id;
-
-        if (finalAcademyId !== null) {
-            const [academy] = await connection.execute(
-                `SELECT id FROM cst_academy WHERE id = ? LIMIT 1`,
-                [finalAcademyId]
-            );
-
-            if (academy.length === 0) {
-                if (newImagePath) {
-                    await fs.unlink(
-                        path.join(process.cwd(), "public", newImagePath.replace(/^\//, ""))
-                    ).catch(() => { });
-                }
-
-                return NextResponse.json({
-                    success: false,
-                    message: "Invalid academy_id"
-                }, { status: 400 });
-            }
         }
 
         await connection.execute(

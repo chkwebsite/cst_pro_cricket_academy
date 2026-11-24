@@ -395,6 +395,44 @@ export async function POST(request) {
         }
 
         // =================================================
+        // CHECK DUPLICATE PROGRAM NAME (ACADEMY + BRANCH)
+        // =================================================
+
+        let nameCheckSql = `
+            SELECT id
+            FROM cst_programs
+            WHERE academy_id = ?
+              AND LOWER(TRIM(program_name)) = LOWER(TRIM(?))
+              AND is_deleted = 0
+        `;
+        const nameCheckParams = [Number(academy_id), program_name.trim()];
+
+        if (branch_id) {
+            nameCheckSql += " AND branch_id = ?";
+            nameCheckParams.push(Number(branch_id));
+        } else {
+            nameCheckSql += " AND (branch_id IS NULL OR branch_id = 0)";
+        }
+
+        nameCheckSql += " LIMIT 1";
+
+        const [existingName] = await connection.query(nameCheckSql, nameCheckParams);
+
+        if (existingName.length > 0) {
+            return NextResponse.json({
+                success: false,
+                message: branch_id
+                    ? "A program with this name already exists for the selected branch"
+                    : "A program with this name already exists for this academy",
+                errors: {
+                    program_name: branch_id
+                        ? "A program with this name already exists for the selected branch."
+                        : "A program with this name already exists for this academy."
+                }
+            }, { status: 409 });
+        }
+
+        // =================================================
         // HANDLE IMAGE UPLOAD
         // =================================================
 
@@ -509,6 +547,22 @@ export async function POST(request) {
         }
 
         console.error("CREATE PROGRAM ERROR:", error);
+
+        if (error.code === "ER_DUP_ENTRY") {
+            const isNameDup = error.message?.includes("uq_program_academy_branch_name") || error.sqlMessage?.includes("uq_program_academy_branch_name");
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: isNameDup
+                        ? "A program with this name already exists for the selected branch"
+                        : "Program code already exists in this academy",
+                    errors: isNameDup
+                        ? { program_name: "A program with this name already exists for the selected branch." }
+                        : { program_code: "Program code already exists in this academy." },
+                },
+                { status: 409 }
+            );
+        }
 
         return NextResponse.json({
             success: false,

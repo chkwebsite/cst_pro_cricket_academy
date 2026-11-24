@@ -250,6 +250,63 @@ export async function PUT(request, { params }) {
             );
         }
 
+        if (!email?.trim()) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Email is required",
+                    errors: { email: "Email is required." },
+                },
+                { status: 400 }
+            );
+        }
+
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(email.trim())) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Please enter a valid email address",
+                    errors: { email: "Please enter a valid email address (e.g. name@example.com)." },
+                },
+                { status: 400 }
+            );
+        }
+
+        if (!phone?.trim()) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Phone number is required",
+                    errors: { phone: "Phone number is required." },
+                },
+                { status: 400 }
+            );
+        }
+
+        const phoneDigits = String(phone).replace(/\D/g, "");
+        if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Please enter a valid phone number (at least 10 digits)",
+                    errors: { phone: "Please enter a valid phone number (at least 10 digits)." },
+                },
+                { status: 400 }
+            );
+        }
+
+        if (!address?.trim()) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Address is required",
+                    errors: { address: "Address is required." },
+                },
+                { status: 400 }
+            );
+        }
+
 
         /* =========================================
            CHECK ACADEMY
@@ -312,6 +369,40 @@ export async function PUT(request, { params }) {
                     success: false,
                     message:
                         "Branch code already exists for this academy",
+                    errors: { branch_code: "Branch code already exists for this academy." },
+                },
+                { status: 409 }
+            );
+        }
+
+        /* =========================================
+           DUPLICATE BRANCH NAME
+           Exclude current branch
+        ========================================= */
+
+        const [existingName] =
+            await connection.query(
+                `
+                SELECT id
+                FROM cst_branch
+                WHERE academy_id = ?
+                AND LOWER(TRIM(branch_name)) = LOWER(TRIM(?))
+                AND id != ?
+                LIMIT 1
+                `,
+                [
+                    academyIdNumber,
+                    branch_name.trim(),
+                    id,
+                ]
+            );
+
+        if (existingName.length > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "A branch with this name already exists in this academy",
+                    errors: { branch_name: "A branch with this name already exists in this academy." },
                 },
                 { status: 409 }
             );
@@ -347,12 +438,12 @@ export async function PUT(request, { params }) {
                 branch_name.trim(),
                 branch_code.trim(),
                 directions !== undefined && directions !== null ? (typeof directions === "string" ? directions.trim() || null : null) : null,
-                email,
-                phone,
-                address,
-                city,
-                state,
-                pin_code,
+                email.trim(),
+                phone.trim(),
+                address.trim(),
+                city ? city.trim() : null,
+                state ? state.trim() : null,
+                pin_code ? pin_code.trim() : null,
                 Number(status),
                 id,
             ]
@@ -408,6 +499,22 @@ export async function PUT(request, { params }) {
             "UPDATE BRANCH ERROR:",
             error
         );
+
+        if (error.code === "ER_DUP_ENTRY") {
+            const isNameDup = error.message?.includes("uq_branch_name") || error.sqlMessage?.includes("uq_branch_name");
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: isNameDup
+                        ? "A branch with this name already exists in this academy"
+                        : "Branch code already exists for this academy",
+                    errors: isNameDup
+                        ? { branch_name: "A branch with this name already exists in this academy." }
+                        : { branch_code: "Branch code already exists for this academy." },
+                },
+                { status: 409 }
+            );
+        }
 
         return NextResponse.json(
             {

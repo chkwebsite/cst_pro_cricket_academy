@@ -15,6 +15,7 @@ import {
     UserCheck,
     ArrowRightLeft,
 } from "lucide-react";
+import { FormError } from "@/app/components/form";
 
 const VALID_STATUSES = ["Active", "Transferred", "Completed", "Left"];
 
@@ -40,6 +41,7 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
     const [fetching, setFetching] = useState(isEdit);
     const [loadingEnrollments, setLoadingEnrollments] = useState(false);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [successMsg, setSuccessMsg] = useState(null);
 
     // 1. Load active batches
@@ -131,17 +133,66 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
         };
     }, [batchId, selectedBatch]);
 
+    const validateAll = () => {
+        const errs = {};
+        if (!batchId) {
+            errs.batch_id = "Please select a training batch.";
+        }
+        if (!userProgramId) {
+            errs.user_program_id = "Please select an enrolled player.";
+        }
+        if (!startDate) {
+            errs.start_date = "Please enter assignment start date.";
+        }
+        if (endDate && startDate && endDate < startDate) {
+            errs.end_date = "End date cannot be earlier than start date.";
+        }
+        if (!status) {
+            errs.status = "Please select assignment status.";
+        }
+
+        setFieldErrors(errs);
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return false;
+        }
+        return true;
+    };
+
+    const handleBlur = (field) => () => {
+        let err = null;
+        if (field === "batch_id" && !batchId) err = "Please select a training batch.";
+        if (field === "user_program_id" && !userProgramId) err = "Please select an enrolled player.";
+        if (field === "start_date" && !startDate) err = "Please enter assignment start date.";
+        if (field === "end_date" && endDate && startDate && endDate < startDate) {
+            err = "End date cannot be earlier than start date.";
+        }
+        if (field === "status" && !status) err = "Please select assignment status.";
+
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [field]: err }));
+        } else {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
     // Submit handler
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
         setSuccessMsg(null);
 
-        if (!batchId) return setError("Please select a training batch.");
-        if (!userProgramId) return setError("Please select an enrolled player.");
-        if (!startDate) return setError("Please enter assignment start date.");
-        if (endDate && endDate < startDate) {
-            return setError("End date cannot be earlier than start date.");
+        if (!validateAll()) {
+            return;
         }
 
         setLoading(true);
@@ -168,6 +219,15 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
 
             const json = await res.json();
             if (!res.ok || !json.success) {
+                if (json.errors) {
+                    setFieldErrors(json.errors);
+                    const firstKey = Object.keys(json.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(json.message || "Failed to save player batch assignment.");
             }
 
@@ -224,20 +284,29 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     {/* Row 1: Batch Selection */}
                     <div className="mb-3">
-                        <label className="form-label fw-semibold">
+                        <label className="form-label fw-semibold" htmlFor="batch_id">
                             Training Batch <span className="text-danger">*</span>
                         </label>
                         <select
-                            className="form-select"
+                            id="batch_id"
+                            name="batch_id"
+                            className={`form-select ${fieldErrors.batch_id ? "is-invalid border-danger" : ""}`}
                             value={batchId}
                             onChange={(e) => {
                                 setBatchId(e.target.value);
                                 if (!isEdit) setUserProgramId("");
+                                if (fieldErrors.batch_id) {
+                                    setFieldErrors((prev) => {
+                                        const next = { ...prev };
+                                        delete next.batch_id;
+                                        return next;
+                                    });
+                                }
                             }}
-                            required
+                            onBlur={handleBlur("batch_id")}
                         >
                             <option value="">-- Select Training Batch --</option>
                             {batches.map((b) => (
@@ -246,6 +315,7 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
                                 </option>
                             ))}
                         </select>
+                        <FormError error={fieldErrors.batch_id} />
                         {selectedBatch && (
                             <div className="form-text d-flex align-items-center gap-3 mt-2 text-muted small">
                                 <span>Program: <strong className="text-dark">{selectedBatch.program_name}</strong></span>
@@ -258,13 +328,15 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
 
                     {/* Row 2: Enrolled Player Selection */}
                     <div className="mb-3">
-                        <label className="form-label fw-semibold">
+                        <label className="form-label fw-semibold" htmlFor="user_program_id">
                             Enrolled Player (Matching Branch & Program) <span className="text-danger">*</span>
                         </label>
                         {isEdit && existingAssignment ? (
                             <div className="input-group">
                                 <input
                                     type="text"
+                                    id="user_program_id"
+                                    name="user_program_id"
                                     className="form-control bg-light"
                                     readOnly
                                     value={`${existingAssignment.first_name} ${existingAssignment.last_name} (${existingAssignment.admission_no})`}
@@ -275,11 +347,22 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
                             </div>
                         ) : (
                             <select
-                                className="form-select"
+                                id="user_program_id"
+                                name="user_program_id"
+                                className={`form-select ${fieldErrors.user_program_id ? "is-invalid border-danger" : ""}`}
                                 value={userProgramId}
-                                onChange={(e) => setUserProgramId(e.target.value)}
+                                onChange={(e) => {
+                                    setUserProgramId(e.target.value);
+                                    if (fieldErrors.user_program_id) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.user_program_id;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("user_program_id")}
                                 disabled={!batchId || loadingEnrollments}
-                                required
                             >
                                 <option value="">
                                     {loadingEnrollments
@@ -297,6 +380,7 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
                                 ))}
                             </select>
                         )}
+                        <FormError error={fieldErrors.user_program_id} />
                         <div className="form-text" style={{ fontSize: "0.75rem" }}>
                             Only players with active enrollment in the same Academy, Branch, and Program are eligible.
                         </div>
@@ -313,11 +397,23 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
                     {/* Row 3: Status & Dates */}
                     <div className="row g-3 mb-3">
                         <div className="col-md-4">
-                            <label className="form-label fw-semibold">Assignment Status</label>
+                            <label className="form-label fw-semibold" htmlFor="status">Assignment Status</label>
                             <select
-                                className="form-select"
+                                id="status"
+                                name="status"
+                                className={`form-select ${fieldErrors.status ? "is-invalid border-danger" : ""}`}
                                 value={status}
-                                onChange={(e) => setStatus(e.target.value)}
+                                onChange={(e) => {
+                                    setStatus(e.target.value);
+                                    if (fieldErrors.status) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.status;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("status")}
                             >
                                 {VALID_STATUSES.map((st) => (
                                     <option key={st} value={st}>
@@ -325,41 +421,72 @@ export default function BatchPlayerForm({ id = null, initialBatchId = "" }) {
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.status} />
                         </div>
 
                         <div className="col-md-4">
-                            <label className="form-label fw-semibold d-flex align-items-center gap-1">
+                            <label className="form-label fw-semibold d-flex align-items-center gap-1" htmlFor="start_date">
                                 <Calendar size={15} /> Start Date <span className="text-danger">*</span>
                             </label>
                             <input
                                 type="date"
-                                className="form-control"
+                                id="start_date"
+                                name="start_date"
+                                className={`form-control ${fieldErrors.start_date ? "is-invalid border-danger" : ""}`}
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                required
+                                onChange={(e) => {
+                                    setStartDate(e.target.value);
+                                    if (fieldErrors.start_date || (fieldErrors.end_date && (!endDate || endDate >= e.target.value))) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.start_date;
+                                            if (next.end_date && (!endDate || endDate >= e.target.value)) {
+                                                delete next.end_date;
+                                            }
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("start_date")}
                             />
+                            <FormError error={fieldErrors.start_date} />
                         </div>
 
                         <div className="col-md-4">
-                            <label className="form-label fw-semibold d-flex align-items-center gap-1">
+                            <label className="form-label fw-semibold d-flex align-items-center gap-1" htmlFor="end_date">
                                 <Calendar size={15} /> End Date
                             </label>
                             <input
                                 type="date"
-                                className="form-control"
+                                id="end_date"
+                                name="end_date"
+                                className={`form-control ${fieldErrors.end_date ? "is-invalid border-danger" : ""}`}
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(e) => {
+                                    setEndDate(e.target.value);
+                                    if (fieldErrors.end_date) {
+                                        setFieldErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next.end_date;
+                                            return next;
+                                        });
+                                    }
+                                }}
+                                onBlur={handleBlur("end_date")}
                             />
                             <div className="form-text" style={{ fontSize: "0.75rem" }}>
                                 Fill if player transferred, completed, or left.
                             </div>
+                            <FormError error={fieldErrors.end_date} />
                         </div>
                     </div>
 
                     {/* Row 4: Remarks */}
                     <div className="mb-4">
-                        <label className="form-label fw-semibold">Remarks / Transfer Notes</label>
+                        <label className="form-label fw-semibold" htmlFor="remarks">Remarks / Transfer Notes</label>
                         <textarea
+                            id="remarks"
+                            name="remarks"
                             className="form-control"
                             rows={3}
                             placeholder="Notes regarding player progress, kit allotment, timing adjustment, or reason for transfer."

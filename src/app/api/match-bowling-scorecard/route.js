@@ -158,13 +158,14 @@ export async function POST(request) {
             no_balls = 0,
         } = body;
 
-        if (!match_id || !innings_id || !match_player_id) {
+        const errors = {};
+        if (!match_id) errors.match_id = "Please select a match.";
+        if (!innings_id) errors.innings_id = "Please select an innings.";
+        if (!match_player_id) errors.match_player_id = "Please select a bowler.";
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "match_id, innings_id and match_player_id are required",
-                },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -232,6 +233,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "Invalid overs format. Use values like 12.4, not 12.7",
+                    errors: { overs: "Invalid overs format. Decimal part must be between .0 and .5." },
                 },
                 { status: 400 }
             );
@@ -521,8 +523,8 @@ export async function POST(request) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "This bowler already has a record for this innings",
+                    message: "This bowler already has a record for this innings",
+                    errors: { match_player_id: "This bowler already has a scorecard in this innings." },
                 },
                 { status: 409 }
             );

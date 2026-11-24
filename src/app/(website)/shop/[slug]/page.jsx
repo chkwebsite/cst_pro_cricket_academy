@@ -358,8 +358,9 @@ export default function ProductDetailPage() {
                                         </span>
                                     )}
                                 </div>
-                                <div className="text-muted small mt-1">
-                                    Inclusive of all taxes ({product.tax_percent || 0}% GST applied at checkout)
+                                <div className="text-muted small mt-1 d-flex align-items-center gap-1.5">
+                                    <CheckCircle2 size={14} className="text-success" />
+                                    <span>Inclusive of all taxes ({product.tax_percent || 0}% GST included in MRP) • Free Academy Pickup</span>
                                 </div>
                             </div>
 
@@ -462,16 +463,16 @@ export default function ProductDetailPage() {
                                     ) : (
                                         <div className="p-3 bg-white rounded-3 border text-center text-muted small">
                                             <Package size={20} className="mb-1 opacity-50" />
-                                            <div>Stock details for branches are being synced. Available for online delivery.</div>
+                                            <div>Stock details for branches are being synced. Ready for Free Academy Branch Pickup.</div>
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Branch pickup note */}
                                 <div className="mt-2.5 pt-2 border-top extra-small text-muted d-flex align-items-center gap-1.5">
-                                    <Truck size={13} className="text-navy flex-shrink-0" />
+                                    <Building2 size={13} className="text-teal flex-shrink-0" />
                                     <span>
-                                        Order online and collect within <strong>2 days</strong> via Academy Pickup, or choose doorstep delivery in <strong>12 days</strong>.
+                                        Order online and collect within <strong>2 days</strong> via Free Academy Branch Pickup.
                                     </span>
                                 </div>
                             </div>
@@ -548,8 +549,8 @@ export default function ProductDetailPage() {
                                         <span>100% Genuine Gear</span>
                                     </div>
                                     <div className="col-6 d-flex align-items-center gap-2">
-                                        <Truck size={18} className="text-primary flex-shrink-0" />
-                                        <span>Home Delivery / Academy Pickup</span>
+                                        <Building2 size={18} className="text-primary flex-shrink-0" />
+                                        <span>Free Academy Branch Pickup</span>
                                     </div>
                                     <div className="col-6 d-flex align-items-center gap-2">
                                         <CheckCircle2 size={18} className="text-teal flex-shrink-0" />

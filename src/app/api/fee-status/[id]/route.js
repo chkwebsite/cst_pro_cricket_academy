@@ -423,33 +423,23 @@ export async function PUT(request, context) {
                     );
                 }
             }
-        } else if (data.academy_id && data.branch_id) {
+        }
+
+        const errors = {};
+
+        if (data.academy_id && data.branch_id) {
             const isBelong = await validateBranchBelongsToAcademy(data.branch_id, data.academy_id);
             if (!isBelong) {
-                await connection.rollback();
-                return NextResponse.json(
-                    { success: false, message: "Branch does not belong to selected academy." },
-                    { status: 400 }
-                );
+                errors.branch_id = "Branch does not belong to selected academy.";
             }
         }
 
         if (!isPositiveInt(data.academy_id)) {
-            await connection.rollback();
-
-            return NextResponse.json(
-                { success: false, message: "Invalid academy_id." },
-                { status: 400 }
-            );
+            errors.academy_id = "Valid academy is required.";
         }
 
         if (!FEE_TYPES.includes(data.fee_type)) {
-            await connection.rollback();
-
-            return NextResponse.json(
-                { success: false, message: "Invalid fee_type." },
-                { status: 400 }
-            );
+            errors.fee_type = "Invalid fee type.";
         }
 
         for (const field of nullableFields) {
@@ -457,15 +447,7 @@ export async function PUT(request, context) {
                 data[field] !== null &&
                 !Number.isInteger(data[field])
             ) {
-                await connection.rollback();
-
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: `${field} must be a positive integer or null.`,
-                    },
-                    { status: 400 }
-                );
+                errors[field] = `${field} must be a positive integer or null.`;
             }
         }
 
@@ -473,75 +455,77 @@ export async function PUT(request, context) {
             !isValidAmount(data.fee_amount) ||
             !isValidAmount(data.paid_amount)
         ) {
-            await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Fee amounts must be non-negative numbers.",
-                },
-                { status: 400 }
-            );
+            if (!isValidAmount(data.fee_amount)) errors.fee_amount = "Fee amount must be a non-negative number.";
+            if (!isValidAmount(data.paid_amount)) errors.paid_amount = "Paid amount must be a non-negative number.";
         }
 
         if (data.paid_amount > data.fee_amount) {
-            await connection.rollback();
-
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "paid_amount cannot exceed fee_amount.",
-                },
-                { status: 400 }
-            );
+            errors.paid_amount = "Paid amount cannot exceed fee amount.";
         }
 
         if (!FEE_STATUSES.includes(data.status)) {
-            await connection.rollback();
-
-            return NextResponse.json(
-                { success: false, message: "Invalid fee status." },
-                { status: 400 }
-            );
+            errors.status = "Invalid fee status.";
         }
 
-        if (
-            data.status !== "Cancelled" &&
-            data.status !== getCalculatedStatus(
-                data.fee_amount,
-                data.paid_amount
-            )
-        ) {
-            await connection.rollback();
+        const has = (field) =>
+            data[field] !== undefined &&
+            data[field] !== null &&
+            data[field] !== "" &&
+            Number(data[field]) > 0;
 
-            return NextResponse.json(
-                {
-                    success: false,
-                    message:
-                        "Fee status must match fee_amount and paid_amount.",
-                },
-                { status: 400 }
-            );
+        switch (data.fee_type) {
+            case "Tournament Team":
+                if (!has("tournament_id")) errors.tournament_id = "Tournament is required for Tournament Team fees.";
+                if (!has("tournament_team_id")) errors.tournament_team_id = "Tournament Team is required for Tournament Team fees.";
+                break;
+            case "Tournament Player":
+                if (!has("tournament_id")) errors.tournament_id = "Tournament is required for Tournament Player fees.";
+                if (!has("tournament_team_player_id")) errors.tournament_team_player_id = "Tournament Team Player is required for Tournament Player fees.";
+                break;
+            case "Match Team":
+                if (!has("match_id")) errors.match_id = "Match is required for Match Team fees.";
+                if (!has("match_team_id")) errors.match_team_id = "Match Team is required for Match Team fees.";
+                break;
+            case "Match Player":
+                if (!has("match_id")) errors.match_id = "Match is required for Match Player fees.";
+                if (!has("match_player_id")) errors.match_player_id = "Match Player is required for Match Player fees.";
+                break;
+            case "Ground Booking":
+                if (!has("ground_booking_id")) errors.ground_booking_id = "Ground Booking is required for Ground Booking fees.";
+                break;
         }
 
-        const referenceError = validateFeeTypeReferences(data);
+        const dbChecks = [
+            ["academy_id", "cst_academy", "Academy record not found."],
+            ["branch_id", "cst_branch", "Branch record not found."],
+            ["tournament_id", "cst_tournaments", "Tournament record not found."],
+            ["tournament_team_id", "cst_tournament_teams", "Tournament team record not found."],
+            ["tournament_team_player_id", "cst_tournament_team_players", "Tournament team player record not found."],
+            ["match_id", "cst_matches", "Match record not found."],
+            ["match_team_id", "cst_match_teams", "Match team record not found."],
+            ["match_player_id", "cst_match_players", "Match player record not found."],
+            ["ground_booking_id", "cst_ground_bookings", "Ground booking record not found."],
+            ["user_id", "cst_users", "User record not found."],
+            ["outside_player_id", "cst_outside_players", "Outside player record not found."],
+            ["created_by", "cst_users", "Created by user record not found."],
+        ];
 
-        if (referenceError) {
-            await connection.rollback();
-
-            return NextResponse.json(
-                { success: false, message: referenceError },
-                { status: 400 }
+        for (const [field, table, msg] of dbChecks) {
+            const value = data[field];
+            if (value === undefined || value === null || value === "") continue;
+            const [chkRows] = await connection.execute(
+                `SELECT id FROM ${table} WHERE id = ? LIMIT 1`,
+                [Number(value)]
             );
+            if (!chkRows.length) {
+                errors[field] = msg;
+            }
         }
 
-        const dbError = await validateForeignKeys(connection, data);
-
-        if (dbError) {
+        if (Object.keys(errors).length > 0) {
             await connection.rollback();
-
             return NextResponse.json(
-                { success: false, message: dbError },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }

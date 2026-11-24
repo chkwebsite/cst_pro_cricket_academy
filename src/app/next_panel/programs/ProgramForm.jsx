@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { Upload, X, Image as ImageIcon } from "lucide-react";
+import { Upload, X, Image as ImageIcon, Sparkles } from "lucide-react";
 import { FormError, RequiredLabel } from "@/app/components/form";
 
 const EMPTY_FORM = {
@@ -29,6 +29,8 @@ export default function ProgramForm({ id = null }) {
 
     const [academies, setAcademies] = useState([]);
     const [branches, setBranches] = useState([]);
+    const [existingPrograms, setExistingPrograms] = useState([]);
+    const [generatingCode, setGeneratingCode] = useState(false);
 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
@@ -82,6 +84,26 @@ export default function ProgramForm({ id = null }) {
             }
         };
         loadBranches();
+    }, [formData.academy_id]);
+
+    // LOAD EXISTING PROGRAMS FOR DUPLICATE CHECKING
+    useEffect(() => {
+        if (!formData.academy_id) {
+            setExistingPrograms([]);
+            return;
+        }
+        const loadPrograms = async () => {
+            try {
+                const res = await fetch(`/api/programs?academy_id=${formData.academy_id}`);
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    setExistingPrograms(json.data || []);
+                }
+            } catch (_) {
+                setExistingPrograms([]);
+            }
+        };
+        loadPrograms();
     }, [formData.academy_id]);
 
     // GET SINGLE PROGRAM (edit mode)
@@ -168,7 +190,32 @@ export default function ProgramForm({ id = null }) {
     const handleBlur = (field) => () => {
         let err = null;
         if (field === "academy_id" && !formData.academy_id) err = "Please select an academy.";
-        if (field === "program_name" && !formData.program_name?.trim()) err = "Program name is required.";
+        if (field === "program_name") {
+            if (!formData.program_name?.trim()) {
+                err = "Program name is required.";
+            } else {
+                const trimmedName = formData.program_name.trim().toLowerCase();
+                const branchMatches = (p) => {
+                    if (formData.branch_id) {
+                        return Number(p.branch_id) === Number(formData.branch_id);
+                    }
+                    return !p.branch_id || Number(p.branch_id) === 0;
+                };
+
+                const isDuplicate = existingPrograms.some(
+                    (p) =>
+                        (!isEdit || Number(p.id) !== Number(id)) &&
+                        branchMatches(p) &&
+                        p.program_name?.trim().toLowerCase() === trimmedName
+                );
+
+                if (isDuplicate) {
+                    err = formData.branch_id
+                        ? "A program with this name already exists for the selected branch."
+                        : "A program with this name already exists for this academy.";
+                }
+            }
+        }
         if (field === "program_fee") {
             if (formData.program_fee === "" || formData.program_fee === null || formData.program_fee === undefined) {
                 err = "Program fee is required.";
@@ -186,7 +233,30 @@ export default function ProgramForm({ id = null }) {
     const validateAll = () => {
         const errs = {};
         if (!formData.academy_id) errs.academy_id = "Please select an academy.";
-        if (!formData.program_name?.trim()) errs.program_name = "Program name is required.";
+        if (!formData.program_name?.trim()) {
+            errs.program_name = "Program name is required.";
+        } else {
+            const trimmedName = formData.program_name.trim().toLowerCase();
+            const branchMatches = (p) => {
+                if (formData.branch_id) {
+                    return Number(p.branch_id) === Number(formData.branch_id);
+                }
+                return !p.branch_id || Number(p.branch_id) === 0;
+            };
+
+            const isDuplicate = existingPrograms.some(
+                (p) =>
+                    (!isEdit || Number(p.id) !== Number(id)) &&
+                    branchMatches(p) &&
+                    p.program_name?.trim().toLowerCase() === trimmedName
+            );
+
+            if (isDuplicate) {
+                errs.program_name = formData.branch_id
+                    ? "A program with this name already exists for the selected branch."
+                    : "A program with this name already exists for this academy.";
+            }
+        }
         if (formData.program_fee === "" || formData.program_fee === null || formData.program_fee === undefined) {
             errs.program_fee = "Program fee is required.";
         } else if (isNaN(Number(formData.program_fee))) {
@@ -215,6 +285,46 @@ export default function ProgramForm({ id = null }) {
             return false;
         }
         return true;
+    };
+
+    // AUTO GENERATE PROGRAM CODE
+    const handleGenerateCode = async () => {
+        if (!formData.academy_id) {
+            setFieldErrors((prev) => ({
+                ...prev,
+                academy_id: "Please select an academy first to generate program code.",
+            }));
+            return;
+        }
+
+        try {
+            setGeneratingCode(true);
+            const res = await fetch(`/api/programs/next-code?academy_id=${formData.academy_id}`);
+            const result = await res.json();
+            if (result.success && result.next_program_code) {
+                setFormData((prev) => ({
+                    ...prev,
+                    program_code: result.next_program_code,
+                }));
+                if (fieldErrors.program_code) {
+                    setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.program_code;
+                        return next;
+                    });
+                }
+            } else {
+                throw new Error(result.message || "Failed to generate program code");
+            }
+        } catch (err) {
+            console.error("Failed to generate program code:", err);
+            setFieldErrors((prev) => ({
+                ...prev,
+                program_code: err.message || "Could not auto-generate code.",
+            }));
+        } finally {
+            setGeneratingCode(false);
+        }
     };
 
     // HANDLE IMAGE PICK
@@ -474,21 +584,44 @@ export default function ProgramForm({ id = null }) {
                                 onBlur={handleBlur("program_name")}
                                 placeholder="Enter Program name"
                                 required
+                                maxLength="50"
                             />
                             <FormError error={fieldErrors.program_name} />
                         </div>
 
                         {/* Program Code */}
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Program Code</label>
-                            <input
-                                type="text"
-                                name="program_code"
-                                className={`form-control ${fieldErrors.program_code ? "is-invalid border-danger" : ""}`}
-                                value={formData.program_code}
-                                onChange={handleChange}
-                                placeholder="Enter Program code"
-                            />
+                            <label className="form-label" htmlFor="program_code">Program Code</label>
+                            <div className="input-group">
+                                <input
+                                    id="program_code"
+                                    type="text"
+                                    name="program_code"
+                                    className={`form-control ${fieldErrors.program_code ? "is-invalid border-danger" : ""}`}
+                                    value={formData.program_code}
+                                    onChange={handleChange}
+                                    placeholder="Enter or auto-generate code"
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-primary d-inline-flex align-items-center gap-1"
+                                    onClick={handleGenerateCode}
+                                    disabled={generatingCode || loading}
+                                    title="Auto generate program code"
+                                >
+                                    {generatingCode ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                                            <span>Generating...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles size={16} />
+                                            <span>Auto Generate</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                             <FormError error={fieldErrors.program_code} />
                         </div>
                     </div>

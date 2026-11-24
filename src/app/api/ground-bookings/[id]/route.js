@@ -269,33 +269,39 @@ export async function PUT(request, { params }) {
         } = body;
 
         // Validation
-        if (!ground_id || !slot_id || !customer_name || !booking_date) {
-            return NextResponse.json(
-                { success: false, message: "Required fields missing (ground_id, slot_id, customer_name, booking_date)" },
-                { status: 400 }
-            );
-        }
+        const errors = {};
+        if (!ground_id) errors.ground_id = "Ground is required";
+        if (!slot_id) errors.slot_id = "Ground slot is required";
+        if (!customer_name || !String(customer_name).trim()) errors.customer_name = "Customer name is required";
+        if (!booking_date) errors.booking_date = "Booking date is required";
 
         const totalAmount = Number(total_amount);
         const paidAmount = Number(paid_amount);
 
-        if (totalAmount < 0 || paidAmount < 0) {
-            return NextResponse.json(
-                { success: false, message: "Amount cannot be negative" },
-                { status: 400 }
-            );
+        if (isNaN(totalAmount) || totalAmount < 0) {
+            errors.total_amount = "Total amount cannot be negative";
         }
-
-        if (paidAmount > totalAmount) {
-            return NextResponse.json(
-                { success: false, message: "Paid amount cannot be greater than total amount" },
-                { status: 400 }
-            );
+        if (isNaN(paidAmount) || paidAmount < 0) {
+            errors.paid_amount = "Paid amount cannot be negative";
+        } else if (paidAmount > totalAmount) {
+            errors.paid_amount = "Paid amount cannot be greater than total amount";
         }
 
         if (paidAmount > 0 && !payment_mode) {
+            errors.payment_mode = "Payment mode is required when paid amount is greater than 0";
+        }
+
+        if (customer_email && String(customer_email).trim() && !/^\S+@\S+\.\S+$/.test(String(customer_email).trim())) {
+            errors.customer_email = "Please enter a valid email address";
+        }
+
+        if (customer_phone && String(customer_phone).trim() && !/^[0-9+\-\s()]{7,20}$/.test(String(customer_phone).trim())) {
+            errors.customer_phone = "Please enter a valid phone number";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
-                { success: false, message: "Payment mode is required when paid amount is greater than 0" },
+                { success: false, message: Object.values(errors)[0], errors },
                 { status: 400 }
             );
         }
@@ -325,7 +331,7 @@ export async function PUT(request, { params }) {
         if (groundRows.length === 0) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Ground does not belong to authorized academy/branch" },
+                { success: false, message: "Ground does not belong to authorized academy/branch", errors: { ground_id: "Ground does not belong to authorized academy/branch" } },
                 { status: 400 }
             );
         }
@@ -333,7 +339,7 @@ export async function PUT(request, { params }) {
         if (groundRows[0].status !== 1) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Ground is inactive" },
+                { success: false, message: "Ground is inactive", errors: { ground_id: "Ground is inactive" } },
                 { status: 400 }
             );
         }
@@ -353,7 +359,7 @@ export async function PUT(request, { params }) {
         if (slotRows.length === 0) {
             await connection.rollback();
             return NextResponse.json(
-                { success: false, message: "Invalid slot for selected ground" },
+                { success: false, message: "Invalid slot for selected ground", errors: { slot_id: "Invalid slot for selected ground" } },
                 { status: 400 }
             );
         }
@@ -376,8 +382,9 @@ export async function PUT(request, { params }) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "This ground slot is already booked for selected date",
-                    booking_no: duplicateRows[0].booking_no
+                    message: `This ground slot is already booked for selected date (${duplicateRows[0].booking_no})`,
+                    booking_no: duplicateRows[0].booking_no,
+                    errors: { slot_id: `This ground slot is already booked for selected date (${duplicateRows[0].booking_no})` }
                 },
                 { status: 409 }
             );

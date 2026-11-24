@@ -573,6 +573,15 @@ export default function AdmissionPlayerForm({ id = null }) {
                 !res.ok ||
                 !data.success
             ) {
+                if (data.errors && typeof data.errors === "object") {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                }
                 throw new Error(
                     data.message ||
                     "Something went wrong"

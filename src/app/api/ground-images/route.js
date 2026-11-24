@@ -139,21 +139,20 @@ export async function POST(request) {
         const ground_id = formData.get("ground_id");
         const files = formData.getAll("ground_images");
 
+        const errors = {};
         if (!ground_id) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Ground ID is required",
-                },
-                { status: 400 }
-            );
+            errors.ground_id = "Please select a ground.";
+        }
+        if (!files || files.length === 0) {
+            errors.ground_images = "At least one image is required.";
         }
 
-        if (!files || files.length === 0) {
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "At least one image is required",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -166,6 +165,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: ownership.notFound ? "Ground not found" : "Unauthorized: Ground does not belong to your academy/branch",
+                    errors: { ground_id: ownership.notFound ? "Ground not found" : "Unauthorized: Ground does not belong to your academy/branch" },
                 },
                 { status: ownership.notFound ? 404 : 403 }
             );

@@ -185,57 +185,26 @@ export async function POST(request) {
         } = body;
 
         // Required field validation
-        if (
-            booking_id === undefined ||
-            booking_id === null ||
-            booking_id === "" ||
-            !payment_date ||
-            amount === undefined ||
-            amount === null ||
-            amount === "" ||
-            !payment_mode
-        ) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "booking_id, payment_date, amount and payment_mode are required",
-                },
-                { status: 400 }
-            );
-        }
-
+        const errors = {};
         const bookingId = Number(booking_id);
         const paymentAmount = Number(amount);
 
-        if (!Number.isInteger(bookingId) || bookingId <= 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Invalid booking_id",
-                },
-                { status: 400 }
-            );
+        if (booking_id === undefined || booking_id === null || booking_id === "") {
+            errors.booking_id = "Booking is required.";
+        } else if (!Number.isInteger(bookingId) || bookingId <= 0) {
+            errors.booking_id = "Invalid booking ID.";
         }
 
-        if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "Payment amount must be greater than zero",
-                },
-                { status: 400 }
-            );
+        if (!payment_date) {
+            errors.payment_date = "Payment date is required.";
+        } else if (!/^\d{4}-\d{2}-\d{2}$/.test(payment_date)) {
+            errors.payment_date = "Payment date must be in YYYY-MM-DD format.";
         }
 
-        // Validate payment date: YYYY-MM-DD
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(payment_date)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "payment_date must be in YYYY-MM-DD format",
-                },
-                { status: 400 }
-            );
+        if (amount === undefined || amount === null || amount === "") {
+            errors.amount = "Payment amount is required.";
+        } else if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+            errors.amount = "Payment amount must be greater than zero.";
         }
 
         const validPaymentModes = [
@@ -246,11 +215,18 @@ export async function POST(request) {
             "Cheque",
         ];
 
-        if (!validPaymentModes.includes(payment_mode)) {
+        if (!payment_mode) {
+            errors.payment_mode = "Payment mode is required.";
+        } else if (!validPaymentModes.includes(payment_mode)) {
+            errors.payment_mode = "Invalid payment mode.";
+        }
+
+        if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Invalid payment_mode",
+                    message: Object.values(errors)[0],
+                    errors,
                 },
                 { status: 400 }
             );
@@ -265,6 +241,7 @@ export async function POST(request) {
                 {
                     success: false,
                     message: access.notFound ? "Ground booking not found" : "Access denied for this booking",
+                    errors: { booking_id: access.notFound ? "Ground booking not found" : "Access denied for this booking" },
                 },
                 { status: access.notFound ? 404 : 403 }
             );
@@ -283,18 +260,21 @@ export async function POST(request) {
                 {
                     success: false,
                     message: "Ground booking not found",
+                    errors: { booking_id: "Ground booking not found" },
                 },
                 { status: 404 }
             );
         }
 
-        if (toCents(paymentAmount) > getOutstandingCents(booking)) {
+        const outstandingCents = getOutstandingCents(booking);
+        if (toCents(paymentAmount) > outstandingCents) {
             await connection.rollback();
             transactionStarted = false;
             return NextResponse.json(
                 {
                     success: false,
-                    message: "Payment amount cannot exceed the booking balance",
+                    message: `Payment amount cannot exceed the booking balance of ₹${(outstandingCents / 100).toFixed(2)}`,
+                    errors: { amount: `Payment amount cannot exceed the booking balance of ₹${(outstandingCents / 100).toFixed(2)}` },
                 },
                 { status: 400 }
             );

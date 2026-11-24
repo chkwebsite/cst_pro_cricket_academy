@@ -4,6 +4,7 @@ import { Star, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useUser } from "../components/UserContext";
+import { FormError, RequiredLabel } from "@/app/components/form";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const MAX_SIZE = 2 * 1024 * 1024; // 2 MB (same limit as the API)
@@ -36,6 +37,40 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (field) => {
+        if (fieldErrors[field]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[field];
+                return next;
+            });
+        }
+    };
+
+    const validateAll = () => {
+        const errors = {};
+        if (!groundId || !grounds.some((ground) => Number(ground.id) === Number(groundId))) {
+            errors.ground_id = "Please select a ground available to your account.";
+        }
+        if (!isEdit && selected.length === 0) {
+            errors.ground_images = "Please select at least one image.";
+        }
+
+        setFieldErrors(errors);
+
+        if (Object.keys(errors).length > 0) {
+            const firstKey = Object.keys(errors)[0];
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     // Grounds for the dropdown
     useEffect(() => {
@@ -120,6 +155,7 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
             }
         }
         setError("");
+        clearError("ground_images");
 
         const entries = picked.map((file) => ({ file, preview: URL.createObjectURL(file) }));
 
@@ -141,12 +177,10 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError("");
 
-        if (!groundId || !grounds.some((ground) => Number(ground.id) === Number(groundId))) {
-            return setError("Please select a ground available to your account");
-        }
-        if (!isEdit && selected.length === 0) {
-            return setError("Please select at least one image");
+        if (!validateAll()) {
+            return;
         }
 
         try {
@@ -171,6 +205,15 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    const el = document.querySelector(`[name="${firstKey}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.focus();
+                    }
+                }
                 throw new Error(data.message || "Something went wrong");
             }
 
@@ -200,12 +243,15 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
 
                 <form onSubmit={handleSubmit}>
                     <div className="mb-3">
-                        <label className="form-label">Ground <span className="text-danger ms-1">*</span></label>
+                        <label className="form-label">Ground <RequiredLabel /></label>
                         <select
-                            className="form-select"
+                            name="ground_id"
+                            className={`form-select ${fieldErrors.ground_id ? "is-invalid border-danger" : ""}`}
                             value={groundId}
-                            onChange={(e) => setGroundId(e.target.value)}
-                            required
+                            onChange={(e) => {
+                                clearError("ground_id");
+                                setGroundId(e.target.value);
+                            }}
                         >
                             <option value="">Select ground</option>
                             {grounds.map((g) => (
@@ -214,6 +260,7 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
                                 </option>
                             ))}
                         </select>
+                        <FormError error={fieldErrors.ground_id} />
                     </div>
 
                     {/* Current image (edit mode) */}
@@ -232,16 +279,18 @@ export default function GroundImageForm({ id = null, defaultGroundId = "" }) {
 
                     <div className="mb-3">
                         <label className="form-label">
-                            {isEdit ? "Replace Image" : <>Images <span className="text-danger ms-1">*</span></>}
+                            {isEdit ? "Replace Image" : <>Images <RequiredLabel /></>}
                         </label>
                         <input
                             ref={fileInputRef}
+                            name="ground_images"
                             type="file"
-                            className="form-control"
+                            className={`form-control ${fieldErrors.ground_images ? "is-invalid border-danger" : ""}`}
                             accept="image/jpeg,image/png,image/webp"
                             multiple={!isEdit}
                             onChange={handleFiles}
                         />
+                        <FormError error={fieldErrors.ground_images} />
                         <div className="form-text">JPG, PNG or WEBP, up to 2MB each.</div>
                     </div>
 

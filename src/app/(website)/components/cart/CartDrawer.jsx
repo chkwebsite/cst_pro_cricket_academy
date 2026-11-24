@@ -74,8 +74,9 @@ export default function CartDrawer() {
                     ) : (
                         <div className="d-flex flex-column gap-3">
                             {items.map((item) => {
-                                const unitPrice = Number(item.sale_price ?? item.price ?? 0);
-                                const lineTotal = unitPrice * item.quantity;
+                                const rawUnit = Number(item.sale_price ?? item.price ?? 0);
+                                const unitPrice = !isNaN(rawUnit) ? Math.max(0, rawUnit) : 0;
+                                const lineTotal = unitPrice * (Number(item.quantity) || 1);
 
                                 return (
                                     <div key={item.product_id} className="d-flex gap-3 p-2 rounded-3 border bg-light align-items-center">
@@ -145,24 +146,31 @@ export default function CartDrawer() {
                     )}
                 </div>
 
-                {/* Footer Summary */}
+                {/* Footer Summary (Flipkart Style Inclusive GST) */}
                 {items.length > 0 && (
                     <div className="p-3 border-top bg-light">
                         <div className="d-flex justify-content-between align-items-center mb-1 small">
-                            <span className="text-muted">Subtotal:</span>
-                            <span className="fw-semibold text-dark">₹{subtotal.toLocaleString("en-IN")}</span>
+                            <span className="text-muted">Item Subtotal (Net):</span>
+                            <span className="fw-semibold text-dark">₹{Math.round(!isNaN(subtotal) ? subtotal : 0).toLocaleString("en-IN")}</span>
                         </div>
                         {taxTotal > 0 && (
-                            <div className="d-flex justify-content-between align-items-center mb-2 small">
-                                <span className="text-muted">Estimated GST:</span>
-                                <span className="fw-semibold text-dark">₹{taxTotal.toLocaleString("en-IN")}</span>
+                            <div className="d-flex justify-content-between align-items-center mb-1 small">
+                                <span className="text-muted">Taxes &amp; GST (Included):</span>
+                                <span className="fw-semibold text-success">+₹{Math.round(!isNaN(taxTotal) ? taxTotal : 0).toLocaleString("en-IN")}</span>
                             </div>
                         )}
-                        <div className="d-flex justify-content-between align-items-center mb-3 fs-6">
-                            <span className="fw-bold text-dark">Total:</span>
+                        <div className="d-flex justify-content-between align-items-center mb-2 small">
+                            <span className="text-muted">Branch Pickup:</span>
+                            <span className="fw-bold text-success">FREE</span>
+                        </div>
+                        <div className="d-flex justify-content-between align-items-center mb-1 fs-6">
+                            <span className="fw-bold text-dark">Total Payable:</span>
                             <span className="fw-bold" style={{ color: "#062f38", fontSize: "1.2rem" }}>
-                                ₹{grandTotal.toLocaleString("en-IN")}
+                                ₹{Math.round(!isNaN(grandTotal) ? grandTotal : 0).toLocaleString("en-IN")}
                             </span>
+                        </div>
+                        <div className="extra-small text-muted text-end mb-3">
+                            (Inclusive of all taxes)
                         </div>
 
                         <div className="d-grid gap-2">

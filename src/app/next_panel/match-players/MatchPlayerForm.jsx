@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FormError, RequiredLabel } from "@/app/components/form";
 import OutsidePlayerForm from "../outside-players/OutsidePlayerForm";
 import useCurrentUser from "../teams/useCurrentUser";
 
@@ -51,6 +52,85 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const clearError = (name) => {
+        if (fieldErrors[name]) {
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    const validateField = (name, value) => {
+        switch (name) {
+            case "match_id":
+                return !value ? "Please choose a match." : "";
+            case "team_id":
+                return !value ? "Please choose a team." : "";
+            case "player_ref":
+                return !value ? "Please choose a player." : "";
+            case "player_fee": {
+                const num = Number(value);
+                if (isNaN(num) || num < 0) {
+                    return "Player fee must be zero or greater.";
+                }
+                return "";
+            }
+            case "paid_amount": {
+                const num = Number(value);
+                const fee = Number(formData.player_fee) || 0;
+                if (isNaN(num) || num < 0 || num > fee) {
+                    return "Paid amount must be between zero and player fee.";
+                }
+                return "";
+            }
+            default:
+                return "";
+        }
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const err = validateField(name, value);
+        if (err) {
+            setFieldErrors((prev) => ({ ...prev, [name]: err }));
+        }
+    };
+
+    const validateAll = () => {
+        const errs = {};
+        const mErr = validateField("match_id", formData.match_id);
+        if (mErr) errs.match_id = mErr;
+
+        const tErr = validateField("team_id", formData.team_id);
+        if (tErr) errs.team_id = tErr;
+
+        const pErr = validateField("player_ref", formData.player_ref);
+        if (pErr) errs.player_ref = pErr;
+
+        if (!isExternalTeam) {
+            const fErr = validateField("player_fee", formData.player_fee);
+            if (fErr) errs.player_fee = fErr;
+            const pdErr = validateField("paid_amount", formData.paid_amount);
+            if (pdErr) errs.paid_amount = pdErr;
+        }
+
+        setFieldErrors(errs);
+
+        if (Object.keys(errs).length > 0) {
+            const firstKey = Object.keys(errs)[0];
+            const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.focus();
+            }
+            return false;
+        }
+        return true;
+    };
 
     const selectedMatch = matches.find((m) => Number(m.id) === Number(formData.match_id));
     const isSelectedTeamA = selectedMatch && Number(formData.team_id) === Number(selectedMatch.team_a_id);
@@ -228,6 +308,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
+        clearError(name);
         const registeredPlayer = name === "player_ref" && formData.player_source === "user_id"
             ? registeredPlayerOptions.find((player) => Number(player.user_id) === Number(value))
             : null;
@@ -320,25 +401,16 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        if (!validateAll()) {
+            return;
+        }
+
         const matchId = Number(formData.match_id);
         const teamId = Number(formData.team_id);
         const ref = Number(formData.player_ref);
 
-        if (!Number.isInteger(matchId) || matchId <= 0) return setError("Please choose a match");
-        if (!Number.isInteger(teamId) || teamId <= 0) return setError("Please choose a team");
-        if (!Number.isInteger(ref) || ref <= 0) return setError(`Enter a valid ${source.label} ID`);
-
         const playerFee = isExternalTeam ? 0 : Number(formData.player_fee);
-        if (!isExternalTeam && (!Number.isFinite(playerFee) || playerFee < 0)) return setError("Player match fee must be zero or greater");
         const paidAmount = isExternalTeam || isEdit ? 0 : Number(formData.paid_amount);
-        if (!isExternalTeam && !isEdit) {
-            if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > playerFee) {
-                return setError("Paid amount must be between zero and player match fee");
-            }
-            if (paidAmount > 0 && !formData.payment_mode) {
-                return setError("Payment mode is required when an initial amount is paid");
-            }
-        }
 
         const alreadyPlaying = matchExistingPlayers.find((mp) => {
             if (isEdit && Number(mp.id) === Number(id)) return false;
@@ -384,7 +456,20 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                 }),
             });
             const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.message || "Something went wrong");
+            if (!res.ok || !data.success) {
+                if (data.errors) {
+                    setFieldErrors(data.errors);
+                    const firstKey = Object.keys(data.errors)[0];
+                    if (firstKey) {
+                        const el = document.querySelector(`[name="${firstKey}"], #${firstKey}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            el.focus();
+                        }
+                    }
+                }
+                throw new Error(data.message || "Something went wrong");
+            }
 
             alert(isEdit ? "Match player updated successfully" : "Match player added successfully");
             router.push(returnTo);
@@ -411,8 +496,15 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                 <form onSubmit={handleSubmit}>
                     <div className="row">
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Match <span className="text-danger ms-1">*</span></label>
-                            <select name="match_id" className="form-select" value={formData.match_id} onChange={handleChange} required>
+                            <label className="form-label">Match <RequiredLabel /></label>
+                            <select
+                                name="match_id"
+                                id="match_id"
+                                className={`form-select ${fieldErrors.match_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.match_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                            >
                                 <option value="">Choose Match</option>
                                 {matches.map((m) => (
                                     <option key={m.id} value={m.id}>
@@ -420,11 +512,20 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                                     </option>
                                 ))}
                             </select>
+                            <FormError error={fieldErrors.match_id} />
                         </div>
 
                         <div className="col-md-6 mb-3">
-                            <label className="form-label">Team <span className="text-danger ms-1">*</span></label>
-                            <select name="team_id" className="form-select" value={formData.team_id} onChange={handleChange} required disabled={!selectedMatch}>
+                            <label className="form-label">Team <RequiredLabel /></label>
+                            <select
+                                name="team_id"
+                                id="team_id"
+                                className={`form-select ${fieldErrors.team_id ? "is-invalid border-danger" : ""}`}
+                                value={formData.team_id}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                                disabled={!selectedMatch}
+                            >
                                 <option value="">Choose Team</option>
                                 {selectedMatch && (
                                     <>
@@ -433,6 +534,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                                     </>
                                 )}
                             </select>
+                            <FormError error={fieldErrors.team_id} />
                             <div className="form-text">Only the two teams playing this match.</div>
                         </div>
                     </div>
@@ -519,16 +621,26 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                             )}
                         </div>
                         <div className="col-md-4 mb-3">
-                            <label className="form-label">{source.label} <span className="text-danger ms-1">*</span></label>
+                            <label className="form-label">{source.label} <RequiredLabel /></label>
                             {formData.player_source === "tournament_team_player_id" ? (
-                                <input type="number" min="1" name="player_ref" className="form-control" value={formData.player_ref} onChange={handleChange} required />
+                                <input
+                                    type="number"
+                                    min="1"
+                                    name="player_ref"
+                                    id="player_ref"
+                                    className={`form-control ${fieldErrors.player_ref ? "is-invalid border-danger" : ""}`}
+                                    value={formData.player_ref}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                />
                             ) : (
                                 <select
                                     name="player_ref"
-                                    className="form-select"
+                                    id="player_ref"
+                                    className={`form-select ${fieldErrors.player_ref ? "is-invalid border-danger" : ""}`}
                                     value={formData.player_ref}
                                     onChange={handleChange}
-                                    required
+                                    onBlur={handleBlur}
                                     disabled={!formData.team_id || (formData.player_source === "user_id" && registeredPlayersLoading) || (formData.player_source === "outside_player_id" && outsidePlayersLoading)}
                                 >
                                     <option value="">
@@ -585,6 +697,7 @@ export default function MatchPlayerForm({ id = null, returnTo = "/next_panel/mat
                                     )}
                                 </select>
                             )}
+                            <FormError error={fieldErrors.player_ref} />
                             {formData.player_source === "tournament_team_player_id" && (
                                 <div className="form-text">Tournament team player ID.</div>
                             )}

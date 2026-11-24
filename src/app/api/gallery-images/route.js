@@ -118,11 +118,26 @@ export async function POST(request) {
         const status = formData.get("status")?.toString() || "1";
         const uploaded_by = formData.get("uploaded_by")?.toString() || null;
 
+        const errors = {};
         if (!album_id) {
-            return NextResponse.json({ success: false, message: "album_id is required" }, { status: 400 });
+            errors.album_id = "Please select an album.";
         }
         if (!image || typeof image.arrayBuffer !== "function" || image.size <= 0) {
-            return NextResponse.json({ success: false, message: "Image file is required" }, { status: 400 });
+            errors.image = "Image file is required.";
+        } else {
+            if (!ALLOWED_TYPES[image.type]) {
+                errors.image = "Only JPG, PNG and WEBP images are allowed.";
+            } else if (image.size > MAX_IMAGE_SIZE) {
+                errors.image = "Image must not exceed 2MB.";
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            return NextResponse.json({
+                success: false,
+                message: Object.values(errors)[0],
+                errors
+            }, { status: 400 });
         }
 
         connection = await pool.getConnection();
@@ -131,7 +146,11 @@ export async function POST(request) {
             [album_id]
         );
         if (!albumRows.length) {
-            return NextResponse.json({ success: false, message: "Gallery album not found" }, { status: 404 });
+            return NextResponse.json({
+                success: false,
+                message: "Selected gallery album does not exist.",
+                errors: { album_id: "Selected gallery album does not exist." }
+            }, { status: 400 });
         }
 
         const authUser = await getAuthenticatedUser(request);
