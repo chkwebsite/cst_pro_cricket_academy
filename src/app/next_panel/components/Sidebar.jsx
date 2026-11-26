@@ -41,6 +41,7 @@ import Header from "./Header";
 import { useUser } from "./UserContext";
 import { getUserRole, ROLES } from "../../components/lib/rbac-rules";
 import PageLoader, { PageProgressBar, PageLoadingContext } from "./PageLoader";
+import GracePeriodModal from "./GracePeriodModal";
 
 const iconMap = {
     "player-dashboard": LayoutDashboard,
@@ -106,6 +107,12 @@ const iconMap = {
     "gallery-albums": Film,
     "gallery-images": Image,
     "gallery-videos": Video,
+    subscriptions: Award,
+    "subscription-plans": Layers,
+    "academy-subscriptions": ShieldCheck,
+    "subscription-payments": CreditCard,
+    "subscription-history": Calendar,
+    "subscription-reports": DollarSign,
 };
 
 function normalizePath(value) {
@@ -144,14 +151,25 @@ function MenuIcon({ name }) {
     return <Icon size={17} strokeWidth={1.8} aria-hidden="true" />;
 }
 
-function MenuNode({ menu, siblingMenus, pathname, openMenus, setOpenMenus, closeSidebar, onNavigate }) {
+function MenuNode({ menu, siblingMenus, pathname, openMenus, setOpenMenus, closeSidebar, onNavigate, isReadOnlyPlayer }) {
     const menuPath = normalizePath(menu.menu_url);
     const hasChildren = menu.children.length > 0;
     const isActive = menuPath !== "/" && (pathname === menuPath || pathname.startsWith(`${menuPath}/`));
     const hasOpenSibling = siblingMenus.some((sibling) => sibling.id !== menu.id && openMenus.has(sibling.id));
     const isOpen = openMenus.has(menu.id) || (isActive && !hasOpenSibling);
 
+    const isRestrictedForPlayer = Boolean(
+        isReadOnlyPlayer &&
+        menuPath &&
+        menuPath !== "/next_panel/player-dashboard" &&
+        menuPath !== "next_panel/player-dashboard"
+    );
+
     function toggleMenu() {
+        if (isRestrictedForPlayer) {
+            alert("Contact to Academy Administrator");
+            return;
+        }
         setOpenMenus((current) => {
             const next = new Set(current);
             if (next.has(menu.id)) next.delete(menu.id);
@@ -182,9 +200,14 @@ function MenuNode({ menu, siblingMenus, pathname, openMenus, setOpenMenus, close
                 </button>
             ) : (
                 <Link
-                    href={menuPath}
+                    href={isRestrictedForPlayer ? "#" : menuPath}
                     className={`${styles.menuButton} ${isActive ? styles.active : ""}`}
-                    onClick={() => {
+                    onClick={(e) => {
+                        if (isRestrictedForPlayer) {
+                            e.preventDefault();
+                            alert("Contact to Academy Administrator");
+                            return;
+                        }
                         closeSidebar();
                         if (onNavigate && menuPath !== pathname) {
                             onNavigate(menuPath);
@@ -210,6 +233,7 @@ function MenuNode({ menu, siblingMenus, pathname, openMenus, setOpenMenus, close
                             setOpenMenus={setOpenMenus}
                             closeSidebar={closeSidebar}
                             onNavigate={onNavigate}
+                            isReadOnlyPlayer={isReadOnlyPlayer}
                         />
                     ))}
                 </ul>
@@ -969,6 +993,7 @@ export default function Sidebar({ children }) {
                                     setOpenMenus={setOpenMenus}
                                     closeSidebar={closeSidebar}
                                     onNavigate={handleNavigate}
+                                    isReadOnlyPlayer={isPlayer && Boolean(user?.is_read_only)}
                                 />
                             ))}
                         </ul>
@@ -977,11 +1002,29 @@ export default function Sidebar({ children }) {
 
                 <div className={styles.sidebarFooter}>
                     <div className={styles.statusIndicator}>
-                        <span className={styles.statusDot} />
-                        <span>Academy Active</span>
+                        <span
+                            className={styles.statusDot}
+                            style={{
+                                backgroundColor: user?.is_grace_period
+                                    ? "#ffc107"
+                                    : user?.is_read_only
+                                    ? "#dc3545"
+                                    : "#198754",
+                            }}
+                        />
+                        <span>
+                            {user?.is_grace_period
+                                ? `Grace (${user?.grace_days_remaining || 0}d left)`
+                                : user?.is_read_only
+                                ? "Read-Only Mode"
+                                : "Academy Active"}
+                        </span>
                     </div>
                 </div>
             </aside>
+
+            {/* Subscription Grace Period Warning Modal */}
+            <GracePeriodModal />
 
             {/* Main Page Content */}
             <main className={styles.content}>

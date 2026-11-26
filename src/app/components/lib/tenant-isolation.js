@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "./db.js";
 import { getAuthUser, ROLES } from "./rbac.js";
+import { validateAcademyAccess } from "./subscription-service.js";
 
 /**
  * Tenant Isolation & Access Control Security Module
@@ -63,6 +64,20 @@ export async function getAuthenticatedUser(request, options = {}) {
                     ),
                 };
             }
+        }
+
+        // Subscription & Academy status check (unless explicitly skipped e.g. for subscription management/public APIs)
+        if (!options.skipSubscriptionCheck) {
+            const accessResult = await validateAcademyAccess(request, user);
+            if (accessResult.errorResponse) {
+                return {
+                    ...user,
+                    user,
+                    errorResponse: accessResult.errorResponse,
+                };
+            }
+            user.is_read_only = accessResult.isReadOnly;
+            user.subscription = accessResult.subscription;
         }
 
         return {

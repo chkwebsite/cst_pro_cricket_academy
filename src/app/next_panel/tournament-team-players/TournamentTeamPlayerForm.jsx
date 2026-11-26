@@ -19,7 +19,7 @@ const EMPTY_FORM = {
     outside_player_id: "",
     jersey_no: "",
     player_role: "Player",
-    player_fee: 0,
+    player_fee: null,
     paid_amount: 0,
     payment_mode: "Cash",
     transaction_no: "",
@@ -591,7 +591,7 @@ export default function TournamentTeamPlayerForm({ id = null, returnTo = "/next_
                                     <label className="form-label">Player Tournament Fee (₹)</label>
                                     <input
                                         type="number"
-                                        min="0"
+                                        min=""
                                         step="0.01"
                                         name="player_fee"
                                         id="player_fee"

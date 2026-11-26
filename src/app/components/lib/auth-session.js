@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import pool from "./db";
 import { getUserRole, ROLES, ROLE_ALLOWED_ROUTES } from "./rbac";
+import { getAcademySubscription } from "./subscription-service";
 
 const JWT_SECRET = process.env.JWT_SECRET || "cricketAcademy_2026@Admin#Panel$Role%Secure123";
 
@@ -88,6 +89,24 @@ export async function getServerSession() {
                                     }
                                 }
 
+                                // Fetch subscription status for academy users
+                                let subInfo = null;
+                                if (!isSuper && u.academy_id) {
+                                    try {
+                                        subInfo = await getAcademySubscription(u.academy_id, pool);
+                                    } catch (sErr) {
+                                        console.warn("getServerSession: subscription check failed:", sErr.message);
+                                    }
+                                }
+
+                                const isPlayer = role === ROLES.PLAYER;
+                                // If academy is inactive or subscription expired/suspended and user is not player, deny session
+                                if (subInfo && !subInfo.is_access_allowed && !isPlayer) {
+                                    return null;
+                                }
+
+                                const isReadOnly = isPlayer && subInfo ? subInfo.is_read_only : false;
+
                                 return {
                                     user: {
                                         id: u.id,
@@ -102,15 +121,28 @@ export async function getServerSession() {
                                         profile_image: u.profile_image || null,
                                         user_type: u.user_type || "Academy User",
                                         role,
-                                        isSuperAdmin: role === ROLES.SUPER_ADMIN,
+                                        isSuperAdmin: isSuper,
                                         isAcademyAdmin: role === ROLES.ACADEMY_ADMIN,
                                         isBranchAdmin: role === ROLES.BRANCH_ADMIN,
                                         isAccountant: role === ROLES.ACCOUNTANT,
                                         isCoach: role === ROLES.COACH,
-                                        isPlayer: role === ROLES.PLAYER,
+                                        isPlayer,
                                         isUmpire: role === ROLES.UMPIRE,
                                         umpire_id: umpireId,
                                         is_public: false,
+                                        subscription: subInfo,
+                                        is_read_only: isReadOnly,
+                                        is_subscription_active: subInfo ? subInfo.is_subscription_active : true,
+                                        is_grace_period: subInfo ? subInfo.is_grace_period : false,
+                                        is_academy_active: subInfo ? subInfo.is_academy_active : true,
+                                        grace_days_remaining: subInfo ? subInfo.grace_days_remaining : 0,
+                                        show_subscription_alert: subInfo ? subInfo.show_subscription_alert : false,
+                                        subscription_status: subInfo ? subInfo.subscription_status : "active",
+                                        plan_name: subInfo ? subInfo.plan_name : null,
+                                        subscription_start_date: subInfo ? subInfo.subscription_start_date : null,
+                                        subscription_end_date: subInfo ? subInfo.subscription_end_date : null,
+                                        grace_end_date: subInfo ? subInfo.grace_end_date : null,
+                                        is_access_allowed: subInfo ? subInfo.is_access_allowed : true,
                                     },
                                     permissions: livePermissions.length > 0 ? livePermissions : (Array.isArray(decoded.permissions) ? decoded.permissions : []),
                                 };

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { getAuthenticatedUser } from "@/app/components/lib/tenant-isolation";
+import { recordSubscriptionHistory } from "@/app/components/lib/subscription-service";
 
 // GET SINGLE ACADEMY LIST
 
@@ -343,6 +344,74 @@ export async function DELETE(request, { params }) {
                 message: "Failed to delete academy",
                 error: error.message,
             },
+            { status: 500 }
+        );
+    } finally {
+        connection.release();
+    }
+}
+
+// PATCH: Toggle Academy Status (Super Admin only)
+export async function PATCH(req, { params }) {
+    const { user: authUser, errorResponse } = await getAuthenticatedUser(req, { skipSubscriptionCheck: true });
+    if (errorResponse) return errorResponse;
+
+    if (!authUser.isSuperAdmin) {
+        return NextResponse.json(
+            { success: false, message: "Forbidden: Only Super Admin can change academy active status" },
+            { status: 403 }
+        );
+    }
+
+    const { id } = await params;
+    const body = await req.json();
+    const newStatus = body.status !== undefined ? (Number(body.status) === 1 ? 1 : 0) : 1;
+    const remarks = body.remarks || (newStatus === 1 ? "Manually activated by Super Admin" : "Manually deactivated by Super Admin");
+
+    const connection = await pool.getConnection();
+    try {
+        const [existing] = await connection.query(
+            "SELECT id, academy_name, status FROM cst_academy WHERE id = ? AND is_deleted = 0 LIMIT 1",
+            [id]
+        );
+
+        if (existing.length === 0) {
+            return NextResponse.json({ success: false, message: "Academy not found" }, { status: 404 });
+        }
+
+        const prev = existing[0];
+
+        await connection.query(
+            "UPDATE cst_academy SET status = ?, updated_at = NOW() WHERE id = ?",
+            [newStatus, id]
+        );
+
+        // Record audit in subscription history
+        await recordSubscriptionHistory({
+            connection,
+            academyId: Number(id),
+            subscriptionId: null,
+            eventType: newStatus === 1 ? "manual_academy_activated" : "manual_academy_deactivated",
+            planId: null,
+            previousValues: { status: prev.status },
+            newValues: { status: newStatus },
+            changedBy: authUser.id,
+            remarks: `${remarks} (${prev.academy_name})`,
+        });
+
+        return NextResponse.json({
+            success: true,
+            message: `Academy "${prev.academy_name}" has been ${newStatus === 1 ? "activated" : "deactivated"} successfully`,
+            data: {
+                id: Number(id),
+                academy_name: prev.academy_name,
+                status: newStatus,
+            },
+        });
+    } catch (error) {
+        console.error("PATCH Academy Error:", error);
+        return NextResponse.json(
+            { success: false, message: "Failed to update academy status", error: error.message },
             { status: 500 }
         );
     } finally {

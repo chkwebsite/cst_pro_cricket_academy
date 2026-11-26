@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import pool from "@/app/components/lib/db";
 import { ensurePlayerAccess } from "@/app/components/lib/playerAccessInit.js";
 import { getUserRole, ROLES, ROLE_ALLOWED_ROUTES } from "@/app/components/lib/rbac.js";
+import { getAcademySubscription } from "@/app/components/lib/subscription-service.js";
 
 export async function POST(request) {
     let connection;
@@ -166,6 +167,63 @@ export async function POST(request) {
             );
         }
 
+        const userRole = getUserRole(user);
+        const isSuperAdmin = userRole === ROLES.SUPER_ADMIN;
+        const isPlayer =
+            user.user_type === "7" ||
+            userRole === ROLES.PLAYER ||
+            String(user.user_type || "").toLowerCase().includes("player") ||
+            String(user.role_name || "").toLowerCase().includes("player");
+        const isUmpire =
+            userRole === ROLES.UMPIRE ||
+            String(user.user_type || "").toLowerCase().includes("umpire") ||
+            String(user.role_name || "").toLowerCase().includes("umpire");
+
+        // Subscription & Academy Status Validation
+        let subInfo = null;
+        if (!isSuperAdmin && user.academy_id) {
+            subInfo = await getAcademySubscription(user.academy_id, connection);
+
+            // A. Manual Academy Deactivation Check
+            if (!subInfo.is_academy_active) {
+                if (!isPlayer) {
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: "Your academy is currently inactive. Please contact the system administrator.",
+                            code: "ACADEMY_INACTIVE",
+                            subscription: subInfo,
+                        },
+                        { status: 403 }
+                    );
+                }
+                // Player continues in read-only mode
+            }
+
+            // B. Subscription Expiry / Restriction Check
+            if (!subInfo.is_subscription_active) {
+                if (!isPlayer) {
+                    const blockMsg =
+                        subInfo.subscription_status === "suspended"
+                            ? "Your academy subscription has been suspended. Please contact the system administrator."
+                            : subInfo.subscription_status === "cancelled"
+                            ? "Your academy subscription has been cancelled. Please contact the system administrator."
+                            : "Your academy subscription has expired. Please contact the system administrator to renew.";
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            message: blockMsg,
+                            code: "SUBSCRIPTION_RESTRICTED",
+                            subscription_status: subInfo.subscription_status,
+                            subscription: subInfo,
+                        },
+                        { status: 403 }
+                    );
+                }
+                // Player continues in read-only mode
+            }
+        }
+
 
         const [permissions] = await connection.query(
             `
@@ -306,23 +364,19 @@ export async function POST(request) {
             }
         }
 
-        const userRole = getUserRole(user);
-        const isPlayer =
-            user.user_type === "7" ||
-            userRole === ROLES.PLAYER ||
-            String(user.user_type || "").toLowerCase().includes("player") ||
-            String(user.role_name || "").toLowerCase().includes("player");
-        const isUmpire =
-            userRole === ROLES.UMPIRE ||
-            String(user.user_type || "").toLowerCase().includes("umpire") ||
-            String(user.role_name || "").toLowerCase().includes("umpire");
-
         if (isPlayer) {
+            // If academy is inactive or subscription expired/restricted, player is in strict read-only mode
+            const isRestrictedReadOnly = subInfo && subInfo.is_read_only;
+
             // Remove general dashboard and administrative product management menus from sidebar for player
             const filteredPlayerPerms = uniquePermissions.filter((item) => {
                 if (item.menu_url === "/next_panel/dashboard" || item.menu_key === "dashboard") return false;
                 if (item.menu_id === 54 || item.menu_key === "Product_Master") return false;
                 if ([55, 56, 57, 58, 60].includes(item.menu_id)) return false;
+                // If inactive academy, only keep player-dashboard
+                if (isRestrictedReadOnly && item.menu_key !== "player-dashboard" && item.menu_url !== "/next_panel/player-dashboard") {
+                    return false;
+                }
                 return true;
             });
             uniquePermissions.length = 0;
@@ -491,15 +545,29 @@ export async function POST(request) {
         }
 
         /*
-         * JWT with Full Role & Scope Context
+         * Subscription Metadata Context
          */
-        const isSuperAdmin = userRole === ROLES.SUPER_ADMIN;
-
         userData.permissions = uniquePermissions;
         userData.role = userRole;
         userData.isSuperAdmin = isSuperAdmin;
         userData.isAcademyAdmin = userRole === ROLES.ACADEMY_ADMIN;
         userData.isBranchAdmin = userRole === ROLES.BRANCH_ADMIN;
+
+        // Populate SaaS Subscription fields
+        userData.subscription = subInfo;
+        userData.academy_status = subInfo ? (subInfo.is_academy_active ? 1 : 0) : 1;
+        userData.subscription_status = subInfo ? subInfo.subscription_status : "active";
+        userData.plan_name = subInfo ? subInfo.plan_name : (isSuperAdmin ? "Super Admin Plan" : "Standard Plan");
+        userData.subscription_start_date = subInfo ? subInfo.subscription_start_date : null;
+        userData.subscription_end_date = subInfo ? subInfo.subscription_end_date : null;
+        userData.grace_end_date = subInfo ? subInfo.grace_end_date : null;
+        userData.grace_days_remaining = subInfo ? subInfo.grace_days_remaining : 0;
+        userData.is_subscription_active = isSuperAdmin ? true : (subInfo ? subInfo.is_subscription_active : true);
+        userData.is_grace_period = isSuperAdmin ? false : (subInfo ? subInfo.is_grace_period : false);
+        userData.is_academy_active = isSuperAdmin ? true : (subInfo ? subInfo.is_academy_active : true);
+        userData.is_read_only = isSuperAdmin ? false : (isPlayer && subInfo ? subInfo.is_read_only : false);
+        userData.show_subscription_alert = isSuperAdmin ? false : (subInfo ? subInfo.show_subscription_alert : false);
+        userData.is_access_allowed = isSuperAdmin ? true : (subInfo ? subInfo.is_access_allowed : true);
 
         const roleAllowed = ROLE_ALLOWED_ROUTES[userRole] || [];
         const tokenPermissions = isSuperAdmin
@@ -568,6 +636,22 @@ export async function POST(request) {
                 },
 
                 permission_count: uniquePermissions.length,
+
+                // Explicit Section 6 Subscription Response Fields
+                academy_status: userData.academy_status,
+                subscription_status: userData.subscription_status,
+                plan_name: userData.plan_name,
+                subscription_start_date: userData.subscription_start_date,
+                subscription_end_date: userData.subscription_end_date,
+                grace_end_date: userData.grace_end_date,
+                grace_days_remaining: userData.grace_days_remaining,
+                is_subscription_active: userData.is_subscription_active,
+                is_grace_period: userData.is_grace_period,
+                is_academy_active: userData.is_academy_active,
+                is_read_only: userData.is_read_only,
+                show_subscription_alert: userData.show_subscription_alert,
+                is_access_allowed: userData.is_access_allowed,
+                subscription: subInfo,
             },
             { status: 200 }
         );

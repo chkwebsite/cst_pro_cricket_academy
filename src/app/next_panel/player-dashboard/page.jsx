@@ -38,8 +38,20 @@ import {
     Zap,
 } from "lucide-react";
 import PageLoader, { usePageLoading } from "../components/PageLoader";
+import { useUser } from "../components/UserContext";
 
 export default function PlayerDashboardPage() {
+    const { user: authUser } = useUser();
+    const isReadOnly = Boolean(authUser?.is_read_only);
+
+    const handleRestrictedAction = (e) => {
+        if (isReadOnly) {
+            if (e && e.preventDefault) e.preventDefault();
+            alert("Contact to Academy Administrator");
+            return true;
+        }
+        return false;
+    };
     const searchParams = useSearchParams();
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -176,6 +188,30 @@ export default function PlayerDashboardPage() {
 
     return (
         <div className="container-fluid py-4 px-md-4">
+            {/* Read-Only Banner for Inactive Academy / Expired SaaS Subscription */}
+            {isReadOnly && (
+                <div className="alert alert-warning border-2 border-warning-subtle rounded-4 p-3 mb-4 shadow-sm">
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="p-2.5 bg-warning text-dark rounded-circle shadow-sm flex-shrink-0">
+                            <AlertCircle size={26} />
+                        </div>
+                        <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2 mb-1">
+                                <h6 className="fw-bold mb-0 text-dark">
+                                    Academy Inactive — Player Dashboard (Read-Only Mode)
+                                </h6>
+                                <span className="badge bg-warning text-dark border border-warning-subtle rounded-pill">
+                                    Read-Only
+                                </span>
+                            </div>
+                            <p className="small text-secondary mb-0">
+                                Your academy’s subscription has expired or is currently inactive. You can review all your profile records, match stats, fee status, and attendance in read-only mode. For new enrollments, bookings, or data updates, please <strong>Contact to Academy Administrator</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Top Bar for Staff / Admin preview picker */}
             {isStaffView && (
                 <div className="card border-0 rounded-4 shadow-sm mb-4 bg-white overflow-hidden border-start border-4 border-primary">
@@ -959,6 +995,7 @@ export default function PlayerDashboardPage() {
                                     </div>
                                     <Link
                                         href="/next_panel/ground-availability"
+                                        onClick={handleRestrictedAction}
                                         className="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm d-inline-flex align-items-center gap-1.5"
                                     >
                                         <Calendar size={13} /> Check Ground Availability
@@ -1058,6 +1095,7 @@ export default function PlayerDashboardPage() {
                                 <div className="d-flex flex-wrap align-items-center gap-2">
                                     <Link
                                         href="/next_panel/fee-status"
+                                        onClick={handleRestrictedAction}
                                         className="btn btn-sm btn-primary rounded-pill px-3 shadow-sm d-inline-flex align-items-center gap-1.5"
                                     >
                                         <CreditCard size={14} /> View All Fee Records
