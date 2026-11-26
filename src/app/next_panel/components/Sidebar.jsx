@@ -946,6 +946,11 @@ export default function Sidebar({ children }) {
                     <span className={styles.portalBadge}>
                         {isPlayer ? "Player Portal" : isSuperAdmin ? "Super Admin Portal" : (user?.user_type || "Admin Portal")}
                     </span>
+                    {user?.academy_name && !isSuperAdmin && (
+                        <div className={styles.academyBadge} title={user.academy_name}>
+                            {user.academy_name}
+                        </div>
+                    )}
                 </div>
 
                 <div className={styles.navigationTitle}>Workspace Menu</div>

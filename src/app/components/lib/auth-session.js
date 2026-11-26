@@ -25,20 +25,26 @@ export async function getServerSession() {
                     try {
                         const [rows] = await pool.query(
                             `SELECT
-                                id,
-                                appointment_no,
-                                academy_id,
-                                branch_id,
-                                first_name,
-                                last_name,
-                                email,
-                                phone,
-                                profile_image,
-                                user_type,
-                                status,
-                                is_deleted
-                            FROM cst_users
-                            WHERE id = ?
+                                u.id,
+                                u.appointment_no,
+                                u.academy_id,
+                                u.branch_id,
+                                u.first_name,
+                                u.last_name,
+                                u.email,
+                                u.phone,
+                                u.profile_image,
+                                u.user_type,
+                                u.status,
+                                u.is_deleted,
+                                a.academy_name,
+                                a.academy_code,
+                                a.logo AS academy_logo,
+                                b.branch_name
+                            FROM cst_users u
+                            LEFT JOIN cst_academy a ON a.id = u.academy_id
+                            LEFT JOIN cst_branch b ON b.id = u.branch_id
+                            WHERE u.id = ?
                             LIMIT 1`,
                             [decoded.id]
                         );
@@ -113,6 +119,10 @@ export async function getServerSession() {
                                         appointment_no: u.appointment_no,
                                         academy_id: u.academy_id ? Number(u.academy_id) : null,
                                         branch_id: u.branch_id ? Number(u.branch_id) : null,
+                                        academy_name: u.academy_name || (isSuper ? "Super Admin Portal" : "CST Pro Cricket Academy"),
+                                        academy_code: u.academy_code || null,
+                                        academy_logo: u.academy_logo || null,
+                                        branch_name: u.branch_name || null,
                                         first_name: u.first_name,
                                         last_name: u.last_name,
                                         name: fullName,
@@ -157,6 +167,10 @@ export async function getServerSession() {
                         user: {
                             id: decoded.id,
                             appointment_no: decoded.appointment_no,
+                            academy_id: decoded.academy_id ? Number(decoded.academy_id) : null,
+                            branch_id: decoded.branch_id ? Number(decoded.branch_id) : null,
+                            academy_name: decoded.academy_name || null,
+                            branch_name: decoded.branch_name || null,
                             first_name: decoded.appointment_no || "Academy",
                             last_name: "User",
                             name: decoded.appointment_no || decoded.email || "Academy User",

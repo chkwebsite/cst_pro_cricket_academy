@@ -173,6 +173,16 @@
     text-transform: capitalize;
 }
 
+.userAcademyText {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #009688;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 130px;
+}
+
 .chevron {
     color: #64748b;
     transition: transform 0.2s ease;
@@ -251,6 +261,24 @@
     font-size: 0.72rem;
     font-weight: 700;
     color: #d7263d;
+}
+
+.detailAcademy {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 5px;
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #062f38;
+    background: #e0f2f1;
+    border: 1px solid #b2dfdb;
+    border-radius: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
 }
 
 .closeButton {

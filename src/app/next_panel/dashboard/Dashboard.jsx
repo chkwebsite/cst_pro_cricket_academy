@@ -118,6 +118,7 @@ export default function Dashboard() {
                             <div className="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-3" style={{ background: "rgba(255, 255, 255, 0.15)", backdropFilter: "blur(4px)" }}>
                                 <Sparkles size={14} className="text-warning" />
                                 <span className="small fw-semibold text-white">
+                                    {user?.academy_name && !user?.isSuperAdmin ? `${user.academy_name} • ` : ""}
                                     {isCoach ? "Coach Workspace Portal" : isAccountant ? "Accounts & Finance Portal" : isBranchAdmin ? "Branch Admin Portal" : isAcademyAdmin ? "Academy Admin Portal" : "CST Pro Cricket Academy Workspace"}
                                 </span>
                             </div>
@@ -125,13 +126,15 @@ export default function Dashboard() {
                                 Welcome back, {displayName}!
                             </h2>
                             <p className="text-white-50 mb-4" style={{ maxWidth: "620px", fontSize: "0.95rem" }}>
-                                {isCoach
-                                    ? "Manage your assigned batches, view enrolled players, record attendance, and monitor players with pending or partial fee dues."
-                                    : isAccountant
-                                    ? "Track player program fee invoices, monthly collection matrices, ground payments, and fee receipts in real-time."
-                                    : isBranchAdmin
-                                    ? "Manage your branch batches, players, ground bookings, and fee statuses seamlessly."
-                                    : "Monitor player admissions, coaching batch assignments, 1:1 training schedules, and track monthly fee collections in real-time."}
+                                {user?.academy_name && !user?.isSuperAdmin
+                                    ? `Welcome to ${user.academy_name}${user?.branch_name ? ` (${user.branch_name})` : ""}. Monitor player admissions, coaching batch assignments, 1:1 training schedules, and track operations in real-time.`
+                                    : (isCoach
+                                        ? "Manage your assigned batches, view enrolled players, record attendance, and monitor players with pending or partial fee dues."
+                                        : isAccountant
+                                        ? "Track player program fee invoices, monthly collection matrices, ground payments, and fee receipts in real-time."
+                                        : isBranchAdmin
+                                        ? "Manage your branch batches, players, ground bookings, and fee statuses seamlessly."
+                                        : "Monitor player admissions, coaching batch assignments, 1:1 training schedules, and track monthly fee collections in real-time.")}
                             </p>
                             <div className="d-flex flex-wrap gap-2">
                                 {isCoach ? (
@@ -221,10 +224,15 @@ export default function Dashboard() {
                             <div className="p-3 bg-white rounded-3 d-inline-block shadow" style={{ maxWidth: "200px" }}>
                                 <img
                                     src="/images/website/CSTCricketAcademyLogo.png"
-                                    alt="CST Pro"
+                                    alt={user?.academy_name || "CST Pro"}
                                     className="img-fluid"
                                     style={{ maxHeight: "75px" }}
                                 />
+                                {user?.academy_name && !user?.isSuperAdmin && (
+                                    <div className="text-dark small fw-bold mt-2 text-truncate" style={{ fontSize: "0.75rem" }}>
+                                        {user.academy_name}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

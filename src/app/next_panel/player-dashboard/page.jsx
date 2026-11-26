@@ -351,7 +351,7 @@ export default function PlayerDashboardPage() {
                                     <Lock size={12} /> Official Profile: Non-Editable
                                 </span>
                                 <span className="text-white-50" style={{ fontSize: "0.7rem", maxWidth: "230px" }}>
-                                    Player credentials and master data are managed by CST Cricket Academy.
+                                    Player credentials and master data are managed by {user?.academy_name || "CST Cricket Academy"}.
                                 </span>
                             </div>
                         </div>

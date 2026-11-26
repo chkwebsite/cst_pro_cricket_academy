@@ -60,28 +60,34 @@ export async function POST(request) {
         const [users] = await connection.query(
             `
             SELECT
-                id,
-                appointment_no,
-                academy_id,
-                branch_id,
-                first_name,
-                last_name,
-                email,
-                phone,
-                password,
-                profile_image,
-                user_type,
-                status,
-                is_deleted,
-                last_login_at,
-                created_at,
-                updated_at
-            FROM cst_users
+                u.id,
+                u.appointment_no,
+                u.academy_id,
+                u.branch_id,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.phone,
+                u.password,
+                u.profile_image,
+                u.user_type,
+                u.status,
+                u.is_deleted,
+                u.last_login_at,
+                u.created_at,
+                u.updated_at,
+                a.academy_name,
+                a.academy_code,
+                a.logo AS academy_logo,
+                b.branch_name
+            FROM cst_users u
+            LEFT JOIN cst_academy a ON a.id = u.academy_id
+            LEFT JOIN cst_branch b ON b.id = u.branch_id
             WHERE
                 (
-                    LOWER(email) = LOWER(?)
-                    OR appointment_no = ?
-                    OR phone = ?
+                    LOWER(u.email) = LOWER(?)
+                    OR u.appointment_no = ?
+                    OR u.phone = ?
                 )
             LIMIT 1
             `,
@@ -294,6 +300,10 @@ export async function POST(request) {
             appointment_no: user.appointment_no,
             academy_id: user.academy_id,
             branch_id: user.branch_id,
+            academy_name: user.academy_name || (isSuperAdmin ? "Super Admin Portal" : "CST Pro Cricket Academy"),
+            academy_code: user.academy_code || null,
+            academy_logo: user.academy_logo || null,
+            branch_name: user.branch_name || null,
             first_name: user.first_name,
             last_name: user.last_name,
             email: user.email,
@@ -605,6 +615,9 @@ export async function POST(request) {
                 appointment_no: user.appointment_no,
                 academy_id: user.academy_id ? Number(user.academy_id) : null,
                 branch_id: user.branch_id ? Number(user.branch_id) : null,
+                academy_name: userData.academy_name,
+                academy_code: userData.academy_code,
+                branch_name: userData.branch_name,
                 email: user.email,
                 user_type: user.user_type,
                 role: userRole,

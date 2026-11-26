@@ -35,6 +35,16 @@ export default function Header({ onToggleSidebar, isMobileOpen = false }) {
         ? user.profile_image.trimEnd()
         : "";
     const userRole = user?.user_type || "Admin";
+    const isSuperAdmin = Boolean(
+        user?.isSuperAdmin ||
+        userRole.toLowerCase().includes("super")
+    );
+    const academyTitle = isSuperAdmin
+        ? "CST Pro Cricket Academy"
+        : (user?.academy_name || "CST Pro Cricket Academy");
+    const portalTagTitle = isSuperAdmin
+        ? "Super Admin Portal"
+        : (user?.branch_name ? `${user.branch_name} • Management Panel` : "Management Panel");
 
     return (
         <header className={styles.header}>
@@ -51,17 +61,17 @@ export default function Header({ onToggleSidebar, isMobileOpen = false }) {
                 </button>
 
                 {/* Logo visible on Mobile / Tablet or header branding */}
-                <Link href="/next_panel/dashboard" className={styles.headerBrand} title="CST Pro Cricket Academy">
+                <Link href="/next_panel/dashboard" className={styles.headerBrand} title={academyTitle}>
                     <img
                         src="/images/website/CSTCricketAcademyLogo.png"
-                        alt="CST Pro Cricket Academy"
+                        alt={academyTitle}
                         className={styles.headerLogo}
                     />
                 </Link>
 
                 <div className={styles.headerTagline}>
-                    <span className={styles.academyName}>CST Pro Cricket Academy</span>
-                    <span className={styles.portalTag}>Management Panel</span>
+                    <span className={styles.academyName}>{academyTitle}</span>
+                    <span className={styles.portalTag}>{portalTagTitle}</span>
                 </div>
             </div>
 
@@ -96,6 +106,11 @@ export default function Header({ onToggleSidebar, isMobileOpen = false }) {
                         <div className={styles.userMeta}>
                             <span className={styles.userName}>{displayName}</span>
                             <span className={styles.userRoleBadge}>{userRole}</span>
+                            {user?.academy_name && !isSuperAdmin && (
+                                <span className={styles.userAcademyText} title={user.academy_name}>
+                                    {user.academy_name}
+                                </span>
+                            )}
                         </div>
                         <ChevronDown size={15} className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`} />
                     </button>
@@ -117,6 +132,13 @@ export default function Header({ onToggleSidebar, isMobileOpen = false }) {
                                         <Shield size={12} className="inline me-1" />
                                         {userRole}
                                     </span>
+                                    {user?.academy_name && (
+                                        <span className={styles.detailAcademy} title={user.academy_name}>
+                                            {isSuperAdmin
+                                                ? "🌐 All Academies (Super Admin)"
+                                                : `🏫 ${user.academy_name}${user?.branch_name ? ` (${user.branch_name})` : ""}`}
+                                        </span>
+                                    )}
                                 </div>
                                 <button
                                     type="button"
